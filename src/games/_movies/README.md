@@ -38,7 +38,7 @@ Naming conventions:
 - Export the game as camelCase (`frameByFrame`), the server module as `<camel>Server`, and the UI as
   `<Pascal>Ui`.
 - Moves are discriminated unions on `type` (`{ type: "guess", filmId }`, `{ type: "skip" }`).
-- Asset `kind`s are lowercase slugs (`frame`, `palette`, `graded`, `blurred`, `still`, `barcode`).
+- Asset `kind`s are lowercase slugs (`frame`, `palette`, `graded`, `blurred`, `still`, `barcode-level-1`).
 - Don't import from another game's folder. If two games need something, put it in `_movies/`.
 
 ## The move pipeline

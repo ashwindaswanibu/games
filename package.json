@@ -25,7 +25,7 @@
     "content:movies:stills": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/stills.mts",
     "content:movies:frame-by-frame": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/frame-by-frame.mts",
     "content:movies:color-grade": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/color-grade.mts",
-    "content:movies:barcodes": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/barcodes.mts",
+    "content:movies:barcode-levels": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/barcode-levels.mts",
     "content:movies:fixtures": "npm run content:fixtures -- --game degrees --game frame-by-frame --game color-grade --game color-barcode"
   },
   "dependencies": {

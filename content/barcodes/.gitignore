@@ -1,5 +1,0 @@
-# Input videos for scripts/content/movies/barcodes.mts. They're large and copyrighted: never commit
-# them. The extracted barcodes (<film-id>.barcode.json) are small derived data and may be kept.
-*
-!.gitignore
-!*.barcode.json

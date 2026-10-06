@@ -5,7 +5,7 @@ import type { AnyGame, PuzzleOf, SolutionOf } from "@/core/game";
 import { createRng, type Rng } from "@/core/random";
 import type { FilmRecord, GameServices } from "@/server/game-services";
 import type { ContentDb } from "./db.mjs";
-import { encodeImage, type EncodedImage, type EncodeOptions } from "./images.mjs";
+import { encodeImage, type EncodedImage, type EncodeOptions, type RawRgbImage } from "./images.mjs";
 
 /**
  * DEV FIXTURE generators: one module per game in `scripts/content/fixtures/<game-id>.mts`, default-
@@ -45,8 +45,8 @@ export interface AssetInput extends EncodeOptions {
   /** What the asset is to the game: 'frame', 'palette', 'barcode'… (lowercase slug). */
   kind: string;
   visibility: AssetVisibility;
-  /** Image bytes (any format sharp reads) or SVG markup. Re-encoded and metadata-stripped. */
-  image: Buffer | string;
+  /** Image bytes (any format sharp reads), SVG markup or raw RGB pixels. Re-encoded and metadata-stripped. */
+  image: Buffer | string | RawRgbImage;
 }
 
 export interface PendingAsset extends EncodedImage {

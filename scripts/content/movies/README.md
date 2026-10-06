@@ -23,7 +23,7 @@ Per-game real pipelines (each documents its flags in its header):
 ```bash
 npm run content:movies:frame-by-frame    # needs cached stills or TMDB_API_KEY
 npm run content:movies:color-grade       # needs cached stills or TMDB_API_KEY, and content/neutral/*.jpg
-npm run content:movies:barcodes          # needs local video files in content/barcodes/ and ffmpeg
+npm run content:movies:barcode-levels -- --film <id> --date <YYYY-MM-DD|next-free>   # frames from movie-screencaps.com (section 4)
 ```
 
 Run them in this order. Degrees and stills read the catalog; Frame by Frame and Color Grade read
@@ -33,7 +33,8 @@ at any time. A day someone has played is never replaced by anything. Otherwise, 
 | Script | A day that already has a puzzle |
 |---|---|
 | `degrees`, `frame-by-frame` | Skipped. With `--replace-fixtures`, a DEV FIXTURE puzzle nobody has played is replaced; a curated one never is |
-| `color-grade`, `barcodes` | Skipped. With `--replace`, any puzzle nobody has played is regenerated (DEV FIXTURE or curated: use it to redo a bad pick) |
+| `color-grade` | Skipped. With `--replace`, any puzzle nobody has played is regenerated (DEV FIXTURE or curated: use it to redo a bad pick) |
+| `barcode-levels` | Refused. With `--replace-fixtures`, a DEV FIXTURE nobody has played is replaced; a curated one never is |
 | `content:fixtures` (DEV FIXTURES) | Skipped. With `--replace`, only a DEV FIXTURE nobody has played is regenerated; a curated puzzle is never touched |
 | `stills`, `catalog` | Write no puzzles |
 
@@ -206,6 +207,63 @@ TMDB images are licensed for display only. They must not be redistributed, which
 cache is git-ignored and assets are served only through the authenticated `/api/assets/[id]`
 route. Wikidata (the catalog) is CC0 and needs no attribution, though crediting it is courteous.
 
+## 4. Color Barcode levels: `content:movies:barcode-levels`
+
+One film, one day: renders the film's ten levels and stores them as that day's `color-barcode`
+puzzle.
+
+```bash
+npm run content:movies:barcode-levels -- --film 483 --date 2026-10-06
+npm run content:movies:barcode-levels -- --film 483 --date next-free --pace slower
+npm run content:movies:barcode-levels -- --film 483 --dry-run --out design/barcode-tests/dune-part-two-2024/levels
+```
+
+**Frames.** From [movie-screencaps.com](https://movie-screencaps.com) (complete films as numbered
+screencaps in film order; free for non-commercial use). The script finds the film's gallery in the
+site's directory by normalised title and year (preferring a 4K gallery), or takes `--url`. It
+reads the gallery's first and last pages for the CDN image pattern and the number of caps, then
+downloads ~2,400 thumbnails (`?class=thumbnail`) and ~350 full-quality frames (`?width=…`, sized
+so a strip is sharp at the level height). The CDN needs the gallery page as Referer and a browser
+User-Agent. At most 6 requests in flight with a short pause after each, retries with backoff.
+Frames are cached in a temp directory during the run and deleted at the end; only the levels are
+kept. A run takes about two minutes.
+
+**Levels** (`lib/barcode-levels.mts`, unit-tested on synthetic images; the owner-approved
+"G+ edges-first" design, reference prototypes in `design/barcode-tests/dune-part-two-2024/reference/`):
+
+- Level 1: the squeezed-frame barcode. Frames sampled evenly across the whole film (the level width,
+  kept within 1,600–3,000), letterbox mattes cut away, each frame squeezed to one column in linear
+  light (its vertical structure survives), laid out left to right.
+- Levels 2–10: the film cut into N equal stretches (pace `normal`: 128, 88, 60, 42, 30, 21, 15,
+  10, 6; `slower` and `faster` are the other presets). Each stretch gives its middle frame (or a
+  nearby one, if that is near black) and a full-height strip one N-th of the canvas wide. Cuts
+  start at the frame edges, alternating left and right, and move toward the centre level by level
+  (crop position (i/8)^ease). Of 9 candidate windows near the target, the most informative wins
+  (mean gradient + 0.35 × contrast; near-black windows rejected), never crossing the centre.
+- Each level is a 2400 × 800 WebP by default (`--width`, `--height`), with its average and
+  dominant colour. The film's colourfulness (mean saturation) is measured too, and a black-and-white
+  film is flagged (and warned about).
+
+**Stored as** ten `puzzle_assets` (`barcode-level-1` … `barcode-level-10`). The public payload
+holds only level 1, `maxGuesses: 10` and the film's look; the solution holds the answer snapshot,
+all ten levels, the pace and the frame credit. A date that has a puzzle is refused unless it is an
+unplayed DEV FIXTURE and you pass `--replace-fixtures`; a played date is never touched. A film that
+is already another day's answer is refused unless `--allow-repeat`.
+
+| Flag | Default | |
+|---|---|---|
+| `--film` | (required) | Catalog id (`movie_films.id`) |
+| `--date` | (required unless `--dry-run`) | `YYYY-MM-DD`, or `next-free`: the first day from today (New York) without a puzzle |
+| `--url` | from the directory | The film's gallery URL |
+| `--pace` | `normal` | `normal`, `slower` or `faster` |
+| `--width`, `--height` | 2400, 800 | Level size |
+| `--samples` | the width, within 1,600–3,000 | Frames squeezed into level 1 |
+| `--quality` | 88 | WebP quality |
+| `--concurrency` | 6 | Requests in flight (1–6) |
+| `--replace-fixtures` | | Take a day that holds an unplayed DEV FIXTURE |
+| `--allow-repeat` | | Allow a film that is already another day's answer |
+| `--dry-run` | | Render and validate, write nothing; with `--out <dir>`, save `level-01.webp` … and `levels.json` for review |
+
 ## Shared utilities (`lib/`)
 
 | Module | What it gives you |
@@ -218,16 +276,20 @@ route. Wikidata (the catalog) is CC0 and needs no attribution, though crediting 
 | `tmdb.mts` | The TMDB client (`tmdbClient`, `fetchFilmStills`, `encodeStill`, `rankBackdrops`) |
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |
 | `film-stills.mts` | `stillsSource()`: a film's stills from the cache, else TMDB (what the image pipelines use) |
+| `barcode-levels.mts` | Pure Color Barcode level maths: mattes, squeezed columns, the edges-first schedule, dark-frame skipping, smart crop, colour data |
+| `barcode-render.mts` | `renderLevels(source, options)`: the ten levels from any `FrameSource` (the real pipeline and the DEV FIXTURE generator share it) |
+| `screencaps.mts` | movie-screencaps.com: directory resolver, gallery reader, and `ScreencapsSource` (polite downloads, temp cache deleted on `close()`) |
 
 Image encoding is shared with the fixture tooling in `scripts/content/lib/images.mts`
 (`encodeImage`: sharp, sRGB, metadata stripped, 4 MB cap).
 
 The other scripts in this folder belong to the image games and build on these utilities:
-`frame-by-frame.mts`, `color-grade.mts` and `barcodes.mts`. Each one documents its usage in its
+`frame-by-frame.mts`, `color-grade.mts` and `barcode-levels.mts`. Each one documents its usage in its
 header.
 
 ## Tests
 
 The pure parts are unit-tested with no network or database: the retry and backoff logic, Wikidata
 parsing, catalog rules, the graph and puzzle picker, TMDB ranking and re-encoding (including a
-check that metadata is stripped), and the Degrees schema. Run them with `npx vitest run scripts`.
+check that metadata is stripped), the Degrees schema, the Color Barcode level maths (on synthetic
+images) and the movie-screencaps.com page and directory parsing. Run them with `npx vitest run scripts`.

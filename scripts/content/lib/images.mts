@@ -12,6 +12,8 @@ export interface EncodeOptions {
   format?: "webp" | "jpeg" | "png";
   /** 1–100, for webp/jpeg. Default 82. */
   quality?: number;
+  /** webp only: sharper chroma on thin coloured lines (slower to encode). Default false. */
+  smartSubsample?: boolean;
 }
 
 export interface EncodedImage {
@@ -23,21 +25,34 @@ export interface EncodedImage {
 
 const MIME: Record<NonNullable<EncodeOptions["format"]>, AssetMime> = { webp: "image/webp", jpeg: "image/jpeg", png: "image/png" };
 
+/** Uncompressed pixels: packed 8-bit RGB, row-major (`width × height × 3` bytes). */
+export interface RawRgbImage {
+  width: number;
+  height: number;
+  data: Uint8Array;
+}
+
 /**
- * Re-encode any image (or SVG markup) for `puzzle_assets`: applies EXIF orientation, fits it inside
- * the size limits, converts to sRGB and strips every byte of metadata (sharp drops EXIF, XMP and
- * ICC unless asked to keep them), so nothing about the source travels with the asset.
+ * Re-encode any image (encoded bytes, SVG markup or raw RGB pixels) for `puzzle_assets`: applies
+ * EXIF orientation, fits it inside the size limits, converts to sRGB and strips every byte of
+ * metadata (sharp drops EXIF, XMP and ICC unless asked to keep them), so nothing about the source
+ * travels with the asset.
  */
-export async function encodeImage(input: Buffer | string, options: EncodeOptions = {}): Promise<EncodedImage> {
-  const { maxWidth = 1600, maxHeight = 1600, format = "webp", quality = 82 } = options;
-  const source = typeof input === "string" ? Buffer.from(input) : input;
-  let pipeline = sharp(source, { failOn: "error" })
+export async function encodeImage(input: Buffer | string | RawRgbImage, options: EncodeOptions = {}): Promise<EncodedImage> {
+  const { maxWidth = 1600, maxHeight = 1600, format = "webp", quality = 82, smartSubsample = false } = options;
+  const source =
+    typeof input === "string"
+      ? sharp(Buffer.from(input), { failOn: "error" })
+      : Buffer.isBuffer(input)
+        ? sharp(input, { failOn: "error" })
+        : sharp(input.data, { raw: { width: input.width, height: input.height, channels: 3 } });
+  let pipeline = source
     .rotate()
     .resize({ width: maxWidth, height: maxHeight, fit: "inside", withoutEnlargement: true })
     .toColorspace("srgb");
   pipeline =
     format === "webp"
-      ? pipeline.webp({ quality, effort: 5 })
+      ? pipeline.webp({ quality, effort: 5, smartSubsample })
       : format === "jpeg"
         ? pipeline.jpeg({ quality, mozjpeg: true })
         : pipeline.png({ compressionLevel: 9 });

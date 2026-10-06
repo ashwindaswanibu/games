@@ -24,9 +24,9 @@ import { today, type PuzzleDate } from "@/core/day";
 import type { AnyGame } from "@/core/game";
 import { attemptsScore } from "@/core/scoring";
 import { describeClue, spokenClues } from "@/games/_movies/clue-text";
-import { computeClues, decadeOf } from "@/games/_movies/hints";
+import { computeClues } from "@/games/_movies/hints";
 import type { ClueKind, FilmDetails, PersonRef } from "@/games/_movies/schemas";
-import { colorBarcode, CLUE_KINDS as BARCODE_CLUES, EDGE_CODE_AFTER_MISSES, MAX_GUESSES } from "@/games/color-barcode/logic";
+import { colorBarcode, CLUE_KINDS as BARCODE_CLUES, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES } from "@/games/color-barcode/logic";
 import { colorGrade, CLUE_KINDS as GRADE_CLUES, MAX_TRIES } from "@/games/color-grade/logic";
 import { chainScore, degrees, maxLinks } from "@/games/degrees/logic";
 import { FRAME_COUNT, frameByFrame, CLUE_KINDS as FRAME_CLUES } from "@/games/frame-by-frame/logic";
@@ -517,50 +517,58 @@ async function playColorBarcode(ctx: Ctx): Promise<void> {
   const loaded = await loadPuzzle(ctx.db, colorBarcode, ctx.date);
   const { puzzle, solution } = loaded;
   const answer = solution.answer;
+  const levels = solution.levels.map((l) => l.id);
   const secrets = [answer.title];
   report.note(`today's film: ${answer.title} (${answer.year})${puzzle.fixture ? " (DEV FIXTURE)" : ""}`);
-  report.equal("the barcode is drawn in the browser, so no assets are stored", (await assetIdsFor(ctx.db, colorBarcode.id, ctx.date)).size, 0);
+  report.equal(`the puzzle has ${LEVEL_COUNT} stored levels`, (await assetIdsFor(ctx.db, colorBarcode.id, ctx.date)).size, LEVEL_COUNT);
+  report.equal("level 1 is the puzzle's only image", puzzle.first.id, levels[0]);
 
   await openAndStart(ctx, colorBarcode, loaded, secrets);
-  const stripes = await page.$eval('svg[role="img"][aria-label^="Today\'s film as a color barcode"]', (svg) => svg.getAttribute("viewBox"));
-  report.equal("the barcode has every stripe", stripes, `0 0 ${puzzle.stripes.length} 1`);
-  await spoilerCheckpoint(ctx, colorBarcode, loaded, "before guessing", secrets);
+  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(levels[0]!));
+  report.check("level 1 is on screen", true);
+  await checkAssetAccess(ctx, "level 1", { shown: [levels[0]!], hidden: levels.slice(1) });
+  await spoilerCheckpoint(ctx, colorBarcode, loaded, "on level 1", secrets);
 
-  // --- Three wrong guesses: clues each time, then the edge code. ---
-  const decoys = await decoyFilms(ctx.db, EDGE_CODE_AFTER_MISSES, [answer.id]);
-  for (const [i, decoy] of decoys.entries()) {
-    await playMove(ctx, colorBarcode, i + 1, () =>
-      pickFromSearch(page, "Name the film", decoy.title, { primary: decoy.title, secondaryPrefix: String(decoy.year) }),
-    );
-    await checkLogRow(ctx, "Your guesses", i, { kind: "miss", film: decoy, chips: expectedChips(decoy, answer, BARCODE_CLUES) });
-    await checkLastGuess(ctx, "color barcode", decoy, answer, BARCODE_CLUES);
-    await spoilerCheckpoint(ctx, colorBarcode, loaded, `after wrong guess ${i + 1}`, secrets);
-    if (i < decoys.length - 1) {
-      const toGo = EDGE_CODE_AFTER_MISSES - (i + 1);
-      report.check(
-        `edge code still locked after ${i + 1} miss${i === 0 ? "" : "es"}`,
-        await hasText(page, "p", `The film's decade appears after ${toGo === 1 ? "one more miss" : `${toGo} more misses`}`),
-      );
-    }
-  }
-  await waitForText(page, "h3", `Edge code · the ${decadeOf(answer.year)}s`);
-  report.check(`the edge code appears after ${EDGE_CODE_AFTER_MISSES} misses`, true);
+  // --- A wrong guess: clues, and level 2 replaces level 1. ---
+  const [decoy] = await decoyFilms(ctx.db, 1, [answer.id]);
+  await playMove(ctx, colorBarcode, 1, () =>
+    pickFromSearch(page, "Name the film", decoy.title, { primary: decoy.title, secondaryPrefix: String(decoy.year) }),
+  );
+  await checkLogRow(ctx, "Your guesses", 0, { kind: "miss", film: decoy, chips: expectedChips(decoy, answer, BARCODE_CLUES) });
+  await checkLastGuess(ctx, "color barcode", decoy, answer, BARCODE_CLUES);
+  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(levels[1]!));
+  report.check("the miss reveals level 2", true);
+  await checkAssetAccess(ctx, "level 2", { shown: levels.slice(0, 2), hidden: levels.slice(2) });
+  await spoilerCheckpoint(ctx, colorBarcode, loaded, "after the wrong guess", secrets);
+  await waitForImages(page);
   await checkNoSidewaysScroll(ctx, "mid-play");
   await shot(ctx, "color-barcode-mid");
 
+  // --- A skip: level 3. ---
+  await playMove(ctx, colorBarcode, 2, () => clickButton(page, { pattern: "Skip to level 3$" }));
+  await checkLogRow(ctx, "Your guesses", 1, { kind: "skip" });
+  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(levels[2]!));
+  await checkAssetAccess(ctx, "level 3", { shown: [levels[2]!], hidden: levels.slice(3) });
+  await spoilerCheckpoint(ctx, colorBarcode, loaded, "after the skip", secrets);
+
   // --- The answer. ---
-  const tries = EDGE_CODE_AFTER_MISSES + 1;
-  const row = await playMove(ctx, colorBarcode, tries, () =>
-    pickFromSearch(page, "Name the film", answer.title, { primary: answer.title, secondaryPrefix: String(answer.year) }),
+  const row = await playMove(ctx, colorBarcode, 3, () =>
+    pickFromSearch(page, "Name the film", answer.title, { primary: answer.title, secondaryPrefix: answer.year === null ? null : String(answer.year) }),
   );
   report.equal("the play is won", row.status, "won");
-  await checkLogRow(ctx, "Your guesses", EDGE_CODE_AFTER_MISSES, { kind: "hit", film: answer });
-  const grid = `${decoys.map((d) => (decadeOf(d.year!) === decadeOf(answer.year) ? "🟨" : "⬛")).join("")}🟩`;
-  await checkResultCard(ctx, row, { score: attemptsScore(tries, MAX_GUESSES, true), label: `${tries}/${MAX_GUESSES}`, grid });
+  await checkLogRow(ctx, "Your guesses", 2, { kind: "hit", film: answer });
+  await checkResultCard(ctx, row, { score: attemptsScore(3, BARCODE_GUESSES, true), label: `3/${BARCODE_GUESSES}`, grid: "🟥⬛🟩" });
   await waitForText(page, "h3", answer.title);
-  report.check("the reveal card names the film", await hasText(page, "p", `✓ Solved in ${tries}`));
+  report.check("the reveal names the film", await hasText(page, "p", "✓ You named it on level 3"));
+  report.equal(
+    "every level can be viewed after finishing",
+    await page.$$eval('ol[aria-label="Levels"] > li', (items) => items.length),
+    LEVEL_COUNT,
+  );
+  await checkAssetAccess(ctx, "after finishing, every level", { shown: levels });
   await checkFriendsResults(ctx, row);
   await spoilerCheckpoint(ctx, colorBarcode, loaded, "after finishing");
+  await checkFinishedImages(ctx, "finished");
   await checkNoSidewaysScroll(ctx, "finished");
   await shot(ctx, "color-barcode-finished");
 }

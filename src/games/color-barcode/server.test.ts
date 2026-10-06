@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FILM_NOT_FOUND } from "@/games/_movies/server";
 import { advancePlay } from "@/server/move-pipeline";
 import { createFakeGameServices, film } from "@/server/game-services.fake";
-import { colorBarcode, type Puzzle, type Solution, type State } from "./logic";
+import { colorBarcode, LEVEL_COUNT, MAX_GUESSES, type Puzzle, type Solution, type State } from "./logic";
 import { colorBarcodeServer } from "./server";
 
 const heat = film({
@@ -20,10 +20,13 @@ const collateral = film({
   directors: ["Michael Mann"],
 });
 
+const level = (n: number) => ({ id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, width: 2400, height: 800, average: "#336699", dominant: "#224466" });
+const levels = Array.from({ length: LEVEL_COUNT }, (_, i) => level(i + 1));
 const puzzle: Puzzle = {
   fixture: true,
-  maxGuesses: 6,
-  stripes: Array.from({ length: 24 }, () => "#336699"),
+  maxGuesses: MAX_GUESSES,
+  first: levels[0]!,
+  look: { saturation: 0.3, monochrome: false },
 };
 const solution: Solution = {
   answer: {
@@ -33,6 +36,9 @@ const solution: Solution = {
     genres: ["thriller"],
     directors: ["Michael Mann"],
   },
+  levels,
+  pace: "normal",
+  credit: null,
 };
 const ctx = (filmId: number) => ({
   move: { type: "guess" as const, filmId },
@@ -67,18 +73,18 @@ describe("colorBarcodeServer.resolveMove", () => {
     expect(result).toEqual({ ok: false, error: FILM_NOT_FOUND });
   });
 
-  it("passes a give-up through without a lookup", async () => {
+  it("passes a skip through without a lookup", async () => {
     const services = createFakeGameServices({ films: [heat] });
     const result = await colorBarcodeServer.resolveMove(
       {
-        move: { type: "give-up" },
+        move: { type: "skip" },
         puzzle,
         solution,
         state: colorBarcode.initialState(puzzle),
       },
       services,
     );
-    expect(result).toEqual({ ok: true, move: { type: "give-up" } });
+    expect(result).toEqual({ ok: true, move: { type: "skip" } });
     expect(services.calls).toEqual([]);
   });
 
@@ -96,7 +102,7 @@ describe("the full move pipeline", () => {
     elapsedMs: 0,
   };
 
-  it("turns a wrong guess into clues from trusted facts", async () => {
+  it("turns a wrong guess into clues from trusted facts, and unlocks level 2", async () => {
     const step = await advancePlay({
       ...base,
       services: createFakeGameServices({ films: [heat, collateral] }),
@@ -105,29 +111,30 @@ describe("the full move pipeline", () => {
     });
     expect(step.ok && step.outcome).toBe("in_progress");
     if (!step.ok) throw new Error(step.error);
-    expect((step.state as State).guesses[0]).toMatchObject({
+    expect((step.state as State).turns[0]).toMatchObject({
       film: { id: 1, title: "Heat", year: 1995 },
       correct: false,
       clues: [
         { kind: "year", direction: "later" },
-        { kind: "decade", match: "different" },
         { kind: "genres", shared: ["thriller"] },
         { kind: "director", match: "same" },
       ],
     });
+    expect((step.state as State).unlocked).toEqual([levels[1]]);
   });
 
-  it("finishes a give-up as lost, for no points", async () => {
+  it("finishes a skip on the last level as lost, for no points", async () => {
+    const nineSkips: State = { turns: Array.from({ length: MAX_GUESSES - 1 }, () => ({ skipped: true as const })), unlocked: levels.slice(1) };
     const step = await advancePlay({
       ...base,
       services: createFakeGameServices({ films: [heat, collateral] }),
-      state: colorBarcode.initialState(puzzle),
-      move: { type: "give-up" },
+      state: nineSkips,
+      move: { type: "skip" },
     });
     expect(step).toMatchObject({
       ok: true,
       outcome: "lost",
-      result: { score: 0, label: "X/6" },
+      result: { score: 0, label: "X/10", shareGrid: "⬛".repeat(10) },
     });
   });
 
@@ -141,7 +148,7 @@ describe("the full move pipeline", () => {
     expect(step).toMatchObject({
       ok: true,
       outcome: "won",
-      result: { score: 100, label: "1/6", shareGrid: "🟩" },
+      result: { score: 100, label: "1/10", shareGrid: "🟩" },
     });
   });
 });

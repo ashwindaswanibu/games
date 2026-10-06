@@ -1,96 +1,157 @@
 import { z } from "zod";
+import { assetRefSchema } from "@/core/assets";
 import { defineGame } from "@/core/game";
 import { attemptsScore } from "@/core/scoring";
-import { computeClues, decadeOf } from "@/games/_movies/hints";
-import { filmDetailsSchema, filmGuessSchema, filmIdSchema, filmRefSchema, type ClueKind, type FilmGuess } from "@/games/_movies/schemas";
-import { hexColorSchema } from "./barcode";
+import { computeClues } from "@/games/_movies/hints";
+import { filmDetailsSchema, filmGuessSchema, filmIdSchema, type ClueKind, type FilmDetails, type FilmGuess } from "@/games/_movies/schemas";
 
 /**
- * Color Barcode: name the film from its color barcode, every moment of the film squeezed into one
- * stripe of its average color, start to finish. The barcode is on screen from the start; there are
- * six guesses. A wrong guess earns clues (release year higher or lower, decade, shared genres, same
- * director), and from the third miss the board gains an edge code: the answer's decade on a
- * timeline, with every year the clues have ruled out marked.
+ * Color Barcode: name the film from pictures of the whole film, start to finish, in ten levels.
  *
- * Moves are server-resolved (`./server.ts`): the browser sends a film id and the server attaches
- * the film's facts, so this logic compares facts it can trust.
+ * Level 1 is the squeezed-frame barcode: frames sampled across the film, each squeezed into one
+ * thin column. Levels 2–10 are full-height strips of real frames from equal stretches of the film,
+ * fewer and wider each level, cut first at the frames' edges and drifting toward their centres (so
+ * faces arrive late). A wrong guess or a skip reveals the next level, which replaces the current
+ * one on screen (earlier levels stay viewable). Ten attempts; solving on attempt N scores
+ * `attemptsScore(N, 10)`. Wrong guesses also earn clues: release year earlier or later, shared
+ * genres, same director.
+ *
+ * Secrecy: the puzzle carries only level 1. Levels 2–10 sit in the solution, and `applyMove` copies
+ * each into the state as it is earned, so `/api/assets/[id]` serves exactly the unlocked levels.
+ * The answer reaches the browser only as clues until the play ends and `reveal` hands over the
+ * film and every level. The pictures come from the content pipeline
+ * (`scripts/content/movies/barcode-levels.mts`) or, in development, the DEV FIXTURE generator.
  */
 
-export const MAX_GUESSES = 6;
-/** Misses before the edge code (the answer's decade on the timeline) appears. */
-export const EDGE_CODE_AFTER_MISSES = 3;
-/** Clues every wrong guess earns, in display order. */
-export const CLUE_KINDS: readonly ClueKind[] = ["year", "decade", "genres", "director"];
+export const LEVEL_COUNT = 10;
+/** One attempt per level: a miss or skip on level N reveals level N + 1; a miss on level 10 ends the play. */
+export const MAX_GUESSES = LEVEL_COUNT;
+/** What a wrong guess tells you, in the order the chips are shown. */
+export const CLUE_KINDS: readonly ClueKind[] = ["year", "genres", "director"];
 
-/** Barcodes come from the pipeline at a few hundred stripes; these bounds only reject nonsense. */
-export const MIN_STRIPES = 24;
-export const MAX_STRIPES = 2000;
+/** A colour as stored: lowercase `#rrggbb`. */
+export const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, "Expected a lowercase #rrggbb color");
+export type HexColor = z.infer<typeof hexColorSchema>;
 
-const yearSchema = z.number().int().min(1870).max(2100);
+/** One level's picture, plus colours the board may use around it (an ambient glow, a loading wash). */
+export const levelRefSchema = assetRefSchema.extend({
+  /** The picture's mean colour, averaged in linear light (what it blurs to). */
+  average: hexColorSchema,
+  /** Its most common colour (near black only when the picture mostly is). */
+  dominant: hexColorSchema,
+});
+export type LevelRef = z.infer<typeof levelRefSchema>;
 
-const puzzleSchema = z.object({
-  /** True for a DEV FIXTURE: a procedurally generated stand-in barcode, not the film's real one. */
+/** How colourful the film is, measured over the frames level 1 was made from. */
+export const filmLookSchema = z.strictObject({
+  /** Mean HSV saturation, 0–1, of the film's non-dark pixels. */
+  saturation: z.number().min(0).max(1),
+  /** Black and white, or as good as. */
+  monochrome: z.boolean(),
+});
+export type FilmLook = z.infer<typeof filmLookSchema>;
+
+/** Where the frames came from, credited in the reveal. */
+export const creditSchema = z.strictObject({ source: z.string().min(1).max(80), url: z.url() });
+
+export const PACES = ["normal", "slower", "faster"] as const;
+
+const puzzleSchema = z.strictObject({
+  /** True for DEV FIXTURE puzzles (procedural stand-in frames). */
   fixture: z.boolean(),
-  maxGuesses: z.number().int().min(1).max(10),
-  /** The barcode, first moment to last. Public: it is the puzzle. */
-  stripes: z.array(hexColorSchema).min(MIN_STRIPES).max(MAX_STRIPES),
+  maxGuesses: z.literal(MAX_GUESSES),
+  /** Level 1, the squeezed-frame barcode: on screen from the start. */
+  first: levelRefSchema,
+  look: filmLookSchema,
 });
 
-const solutionSchema = z.object({
-  /** A snapshot of the answer. Its year is required: the edge code is built from it. */
-  answer: filmDetailsSchema.extend({ year: yearSchema }),
-});
+const solutionSchema = z
+  .strictObject({
+    answer: filmDetailsSchema,
+    /** All ten levels in order; `levels[0]` is the puzzle's `first`. Each later one is copied into the state when earned. */
+    levels: z.array(levelRefSchema).length(LEVEL_COUNT),
+    /** The reveal pace the levels were rendered with (provenance). */
+    pace: z.enum(PACES),
+    /** Null for DEV FIXTURES. */
+    credit: creditSchema.nullable(),
+  })
+  .refine((s) => new Set(s.levels.map((l) => l.id.toLowerCase())).size === s.levels.length, "Levels must be distinct");
 
-const giveUpSchema = z.object({ type: z.literal("give-up") });
+const moveSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("guess"), filmId: filmIdSchema }),
+  z.strictObject({ type: z.literal("skip") }),
+]);
 
-const moveSchema = z.discriminatedUnion("type", [z.object({ type: z.literal("guess"), filmId: filmIdSchema }), giveUpSchema]);
+/** A guess with the guessed film's facts looked up on the server (see ./server.ts). */
+const resolvedMoveSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("guess"), film: filmDetailsSchema }),
+  z.strictObject({ type: z.literal("skip") }),
+]);
 
-/** The move after the server has looked the guessed film up. */
-const resolvedMoveSchema = z.discriminatedUnion("type", [z.object({ type: z.literal("guess"), film: filmDetailsSchema }), giveUpSchema]);
-
-const stateSchema = z.object({
-  guesses: z.array(filmGuessSchema).max(10),
-  /** The answer's decade (e.g. 1990), earned at the third miss; null until then. */
-  edgeDecade: yearSchema.nullable(),
-  /** The player gave up: the play is lost and the answer revealed. */
-  gaveUp: z.boolean(),
-});
-
-const revealSchema = z.object({
-  answer: filmRefSchema.extend({ directors: z.array(z.string()) }),
+const skippedTurnSchema = z.strictObject({ skipped: z.literal(true) });
+/** One attempt: a guess (with its clues) or a skip. Shaped like the kit's `GuessLogEntry`. */
+export const turnSchema = z.union([filmGuessSchema, skippedTurnSchema]);
+const stateSchema = z.strictObject({
+  turns: z.array(turnSchema).max(MAX_GUESSES),
+  /** Levels 2… earned so far, in order. Only ever copied from the solution by `applyMove`. */
+  unlocked: z.array(levelRefSchema).max(LEVEL_COUNT - 1),
 });
 
 export type Puzzle = z.infer<typeof puzzleSchema>;
 export type Solution = z.infer<typeof solutionSchema>;
 export type Move = z.infer<typeof moveSchema>;
 export type ResolvedMove = z.infer<typeof resolvedMoveSchema>;
+export type Turn = z.infer<typeof turnSchema>;
 export type State = z.infer<typeof stateSchema>;
-export type Reveal = z.infer<typeof revealSchema>;
+
+export interface Reveal {
+  film: FilmDetails;
+  /** All ten levels, level 1 first. */
+  levels: LevelRef[];
+  credit: z.infer<typeof creditSchema> | null;
+}
 
 export {
   puzzleSchema as colorBarcodePuzzleSchema,
   solutionSchema as colorBarcodeSolutionSchema,
   stateSchema as colorBarcodeStateSchema,
-  revealSchema as colorBarcodeRevealSchema,
 };
 
-const missesIn = (guesses: readonly FilmGuess[]) => guesses.filter((g) => !g.correct).length;
-
-function outcomeOf(puzzle: Puzzle, state: State) {
-  if (state.guesses.at(-1)?.correct) return "won" as const;
-  return state.gaveUp || state.guesses.length >= puzzle.maxGuesses ? ("lost" as const) : ("in_progress" as const);
+export function isSkip(turn: Turn): turn is { skipped: true } {
+  return "skipped" in turn;
 }
+
+export function isGuess(turn: Turn): turn is FilmGuess {
+  return !isSkip(turn);
+}
+
+/** Ids of the films guessed so far. */
+export function guessedFilmIds(state: State): number[] {
+  return state.turns.filter(isGuess).map((t) => t.film.id);
+}
+
+/** Every level the player may see right now, level 1 first. */
+export function levelsInView(puzzle: Puzzle, state: State): LevelRef[] {
+  return [puzzle.first, ...state.unlocked];
+}
+
+function outcomeOf(state: State) {
+  const last = state.turns.at(-1);
+  if (last && isGuess(last) && last.correct) return "won" as const;
+  return state.turns.length >= MAX_GUESSES ? ("lost" as const) : ("in_progress" as const);
+}
+
+const SHARE = { solved: "🟩", missed: "🟥", skipped: "⬛" } as const;
 
 export const colorBarcode = defineGame<Puzzle, Solution, State, Move, Reveal, ResolvedMove>({
   id: "color-barcode",
   name: "Color Barcode",
-  tagline: "Name the film from its color barcode",
+  tagline: "Name the film from its whole run, start to finish",
   rules: [
-    "Every stripe is one moment of a film, squeezed to its average color, from the opening shot to the end credits.",
-    `Name the film in ${MAX_GUESSES} guesses.`,
-    "A wrong guess tells you whether the film is older or newer, its decade, shared genres and whether the director matches.",
-    "After your third miss, the film's decade appears on a timeline under the barcode.",
-    "Stuck? You can give up and see the answer, for no points.",
+    "You see the whole film at once: every frame squeezed into a thin stripe, from the opening shot on the left to the end on the right.",
+    `A wrong guess or a skip reveals the next level: real frames, in wider strips that move toward the middle of the picture. There are ${LEVEL_COUNT} levels.`,
+    "Every wrong guess earns clues: whether the film came out earlier or later, shared genres, and whether it has the same director.",
+    "The fewer levels you need, the more points you score.",
   ],
   accent: "#8c8c8c",
   emoji: "📼",
@@ -102,138 +163,45 @@ export const colorBarcode = defineGame<Puzzle, Solution, State, Move, Reveal, Re
   moveSchema,
   resolvedMoveSchema,
 
-  initialState: () => ({ guesses: [], edgeDecade: null, gaveUp: false }),
+  initialState: () => ({ turns: [], unlocked: [] }),
 
-  applyMove({ puzzle, solution, state, move }) {
-    if (outcomeOf(puzzle, state) !== "in_progress") return { ok: false, error: "Today's barcode is already finished." };
-    if (move.type === "give-up") return { ok: true, state: { ...state, gaveUp: true } };
-    const { film } = move;
-    if (state.guesses.some((g) => g.film.id === film.id)) {
-      return { ok: false, error: `You already guessed ${film.title}.` };
+  applyMove({ solution, state, move }) {
+    if (outcomeOf(state) !== "in_progress") return { ok: false, error: "Today's barcode is already finished." };
+
+    let turn: Turn;
+    if (move.type === "skip") {
+      turn = { skipped: true };
+    } else {
+      const { film } = move;
+      if (guessedFilmIds(state).includes(film.id)) return { ok: false, error: `You already guessed ${film.title}.` };
+      const correct = film.id === solution.answer.id;
+      turn = {
+        film: { id: film.id, title: film.title, year: film.year },
+        correct,
+        clues: correct ? [] : computeClues(film, solution.answer, CLUE_KINDS),
+      };
     }
-    const { answer } = solution;
-    const correct = film.id === answer.id;
-    const guess: FilmGuess = {
-      film: { id: film.id, title: film.title, year: film.year },
-      correct,
-      clues: correct ? [] : computeClues(film, answer, CLUE_KINDS),
-    };
-    const guesses = [...state.guesses, guess];
-    const edgeDecade = state.edgeDecade ?? (!correct && missesIn(guesses) >= EDGE_CODE_AFTER_MISSES ? decadeOf(answer.year) : null);
-    return { ok: true, state: { ...state, guesses, edgeDecade } };
+
+    const turns = [...state.turns, turn];
+    // A miss on levels 1–9 earns the next level; a miss on level 10 ends the play with nothing new.
+    const earned = isGuess(turn) && turn.correct ? undefined : solution.levels[turns.length];
+    const unlocked = earned ? [...state.unlocked, earned] : state.unlocked;
+    return { ok: true, state: { turns, unlocked } };
   },
 
-  outcome: ({ puzzle, state }) => outcomeOf(puzzle, state),
+  outcome: ({ state }) => outcomeOf(state),
 
-  score({ puzzle, state, outcome }) {
-    const n = state.guesses.length;
+  score({ state, outcome }) {
     const won = outcome === "won";
+    const attempts = state.turns.length;
     return {
-      score: attemptsScore(n, puzzle.maxGuesses, won),
-      label: `${won ? n : "X"}/${puzzle.maxGuesses}`,
+      score: attemptsScore(attempts, MAX_GUESSES, won),
+      label: `${won ? attempts : "X"}/${MAX_GUESSES}`,
     };
   },
 
-  /** 🟩 solved, 🟨 a miss in the right decade, ⬛ any other miss. */
-  shareGrid: ({ state }) =>
-    state.guesses.map((g) => (g.correct ? "🟩" : g.clues.some((c) => c.kind === "decade" && c.match === "same") ? "🟨" : "⬛")).join(""),
+  /** One mark per attempt: 🟩 named it, 🟥 a wrong guess, ⬛ a skip. */
+  shareGrid: ({ state }) => state.turns.map((t) => (isSkip(t) ? SHARE.skipped : t.correct ? SHARE.solved : SHARE.missed)).join(""),
 
-  reveal: ({ solution }) => ({
-    answer: {
-      id: solution.answer.id,
-      title: solution.answer.title,
-      year: solution.answer.year,
-      directors: solution.answer.directors,
-    },
-  }),
+  reveal: ({ solution }) => ({ film: solution.answer, levels: solution.levels, credit: solution.credit }),
 });
-
-// ---------------------------------------------------------------------------------------------
-// The edge code: what the clues so far say about the release year, as a timeline. Pure, so the
-// UI only draws it.
-// ---------------------------------------------------------------------------------------------
-
-/** The years still possible given every clue in the state; null bounds are open. */
-export function yearWindow(state: State): {
-  low: number | null;
-  high: number | null;
-} {
-  let low: number | null = null;
-  let high: number | null = null;
-  const atLeast = (year: number) => (low = low === null ? year : Math.max(low, year));
-  const atMost = (year: number) => (high = high === null ? year : Math.min(high, year));
-  for (const { clues } of state.guesses) {
-    for (const clue of clues) {
-      if (clue.kind === "year" && clue.guessYear !== null) {
-        if (clue.direction === "later") atLeast(clue.guessYear + 1);
-        else if (clue.direction === "earlier") atMost(clue.guessYear - 1);
-        else if (clue.direction === "same") {
-          atLeast(clue.guessYear);
-          atMost(clue.guessYear);
-        }
-      } else if (clue.kind === "decade" && clue.match === "same" && clue.guessDecade !== null) {
-        atLeast(clue.guessDecade);
-        atMost(clue.guessDecade + 9);
-      }
-    }
-  }
-  if (state.edgeDecade !== null) {
-    atLeast(state.edgeDecade);
-    atMost(state.edgeDecade + 9);
-  }
-  return { low, high };
-}
-
-export type EdgeStatus = "open" | "ruled-out";
-
-export interface EdgeCode {
-  /** The answer's decade (the hint itself). */
-  decade: number;
-  /**
-   * Decades on the century rule, oldest first. Once the hint is given every other decade is ruled
-   * out, so the rule's job is context: where each guess fell relative to the answer's decade.
-   */
-  decades: { decade: number; isAnswer: boolean; guesses: number[] }[];
-  /** The ten years of the answer's decade. `guesses` holds the 1-based numbers of guesses from that year. */
-  years: { year: number; status: EdgeStatus; guesses: number[] }[];
-  /** First and last year still possible, for the spoken summary. */
-  window: { low: number; high: number };
-}
-
-/** First and last decade the century rule shows (widened to fit any guess or the answer). */
-export const EDGE_RULE_FIRST_DECADE = 1920;
-export const EDGE_RULE_LAST_DECADE = 2020;
-
-/** The edge code for the board, or null before it has been earned. */
-export function edgeCode(state: State): EdgeCode | null {
-  if (state.edgeDecade === null) return null;
-  const decade = state.edgeDecade;
-  const window = yearWindow(state);
-  const low = Math.max(decade, window.low ?? decade);
-  const high = Math.min(decade + 9, window.high ?? decade + 9);
-
-  const guessNumbersBy = (match: (year: number) => boolean) =>
-    state.guesses.flatMap((g, i) => (g.film.year !== null && match(g.film.year) ? [i + 1] : []));
-
-  const guessDecades = state.guesses.flatMap((g) => (g.film.year === null ? [] : [decadeOf(g.film.year)]));
-  const first = Math.min(EDGE_RULE_FIRST_DECADE, decade, ...guessDecades);
-  const last = Math.max(EDGE_RULE_LAST_DECADE, decade, ...guessDecades);
-  const decades: EdgeCode["decades"] = [];
-  for (let d = first; d <= last; d += 10) {
-    decades.push({
-      decade: d,
-      isAnswer: d === decade,
-      guesses: guessNumbersBy((y) => decadeOf(y) === d),
-    });
-  }
-
-  const years: EdgeCode["years"] = Array.from({ length: 10 }, (_, i) => {
-    const year = decade + i;
-    return {
-      year,
-      status: year >= low && year <= high ? "open" : "ruled-out",
-      guesses: guessNumbersBy((y) => y === year),
-    };
-  });
-  return { decade, decades, years, window: { low, high } };
-}
