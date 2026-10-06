@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { publicEnv } from "@/lib/public-env";
 import { displayNameSchema, passwordSchema, usernameSchema } from "@/lib/validation";
 import { emailForUsername, getProfile, isValidInviteCode, requireUser } from "@/server/auth";
 import { db } from "@/server/supabase/admin";
@@ -42,6 +43,7 @@ export async function signInWithPassword(_prev: FormState, formData: FormData): 
 }
 
 export async function signInWithGoogle(): Promise<void> {
+  if (!publicEnv.googleAuthEnabled) redirect("/login?error=google");
   const origin = (await headers()).get("origin");
   if (!origin) throw new Error("Missing Origin header");
 

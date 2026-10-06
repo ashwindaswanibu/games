@@ -15,4 +15,11 @@ export const publicEnv = {
   get supabasePublishableKey() {
     return required("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
   },
+  /**
+   * Google sign-in needs a Google OAuth client configured in Supabase. Off unless explicitly
+   * enabled, so the button never leads to Supabase's "provider is not enabled" error page.
+   */
+  get googleAuthEnabled() {
+    return process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
+  },
 };

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { publicEnv } from "@/lib/public-env";
 import { Divider, GoogleButton } from "../google-button";
 import { SignupForm } from "./signup-form";
 
@@ -8,8 +9,12 @@ export const metadata: Metadata = { title: "Create account" };
 export default function SignupPage() {
   return (
     <div className="grid gap-6">
-      <GoogleButton />
-      <Divider />
+      {publicEnv.googleAuthEnabled && (
+        <>
+          <GoogleButton />
+          <Divider />
+        </>
+      )}
       <SignupForm />
       <p className="text-center text-sm text-muted">
         Already playing?{" "}
