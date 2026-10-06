@@ -50,6 +50,14 @@ Guess the movie from its color grading, revealed in stages:
 - A thin full-film barcode stays pinned above the reel, with a bracket showing which stretch you're seeing.
 - Reel-opening animation: the chosen half slides out and stretches to fill the reel, then the slices widen and "develop" from color into image.
 - **Open:** which half to zoom into each guess (A: the player picks, B: we aim at an iconic moment, C: random daily, the same for everyone), and the exact number of guesses.
+- **SUPERSEDED (2026-10-06):** no zoom. Ashwin picked **strategy G: edges first**. Each guess shows real HQ frame strips across the whole film, getting wider, with cuts drifting from the frame edges to the center so faces arrive late. G+ adds the squeezed-frame barcode as guess 1 and smart edge cuts that skip black or flat strips. Pace (slower / normal / faster) still to be picked. Renders are in the scratchpad.
+- **Web app spec (Ashwin, 2026-10-06):**
+  - Must look immaculate and make people go "wow".
+  - After each guess, the more detailed render **replaces** the current one in place, with a transition that makes you go "wow".
+  - You can go back to view earlier levels.
+  - Shows the attempt number and attempts left. Nothing else is required.
+  - Fill the space creatively, laptop first.
+- **Film selection (Ashwin, 2026-10-06):** random daily film that is popular enough. Claude does the first pass on how to measure "popular"; Ashwin reviews.
 
 Guess the movie from its "barcode": every frame of the film reduced to its average color, lined up left to right as thin vertical stripes. The whole film's color arc reads at a glance, e.g. the warm-to-cold shift of a thriller or the green of The Matrix.
 
