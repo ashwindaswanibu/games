@@ -17,8 +17,10 @@ Show one frame from a movie and ask the player to guess the title. If they can't
 - Prior art to differentiate from: Framed (framed.wtf) uses the same core loop.
 - Content source: TMDB stills/backdrops (credit required, fine for non-commercial use). Each puzzle needs hand-picked frame ordering.
 
-### Color Grade (the "movie LUT" game)
-*Ashwin, 2026-10-05*
+### ~~Color Grade~~ (retired)
+> **Retired 2026-10-06.** This palette / re-graded-photo concept was Claude's misreading of Ashwin's "movie LUT" idea. His idea is the **Color Barcode** game below (reference: https://game.movieluts.com/). Kept here only as history.
+
+*Originally logged 2026-10-05*
 
 Guess the movie from its color grading, revealed in stages:
 1. A five-color palette
@@ -30,8 +32,24 @@ Guess the movie from its color grading, revealed in stages:
 - Pipeline: TMDB stills, k-means palette extraction, Reinhard color transfer onto a neutral photo. Hand-pick films with distinctive grades, since many films share the same teal-and-orange look.
 - Design note: the play area must be neutral gray, like a colorist's grading suite, so surrounding UI colors don't bias perception.
 
-### Color Barcode
-*Ashwin, 2026-10-06*
+### Color Barcode (Ashwin's "movie LUT" game)
+*Ashwin, 2026-10-05/06*
+
+**Reference:** https://game.movieluts.com/ (Movie LUTs Card Game): guess the film from its color barcode, the average color of every frame. This is the game. Build what that site has.
+
+**Ashwin's design (2026-10-06):**
+- Emulate that game closely, but **no multiple-choice options**: players type or search their guess.
+- **A wrong guess shows that film's own barcode** next to the target, so players can visually compare how close or far off they were.
+- **The barcode gains detail with each guess** (2026-10-06). The exact mechanic is still to be confirmed: (A) resolution sharpens, going from a few wide blocks to more and finer stripes, or (B) it zooms in so stripes get wider.
+- **A different barcode at each guess, up to the max guesses.** The max is configurable and grows as we add more barcode levels.
+- **A nice "reel opening" animation after each guess.** The design of the expanding barcode is still open.
+- **Sources (2026-10-06):** merge several sources, starting with **MovieNet** (1,100 complete films, pre-2019) and **movie-screencaps.com** (complete films in order, including current releases; free for non-commercial use). Generate the barcode, keep only the barcode, and delete the frames.
+- **Film selection:** random, from films that are well heard-of and popular. Not always the most mainstream, but never too obscure. Detailed selection logic comes later.
+- **First test:** *Dune: Part Two* (2024). Barcodes and a per-guess frame reveal live in `design/barcode-tests/dune-part-two-2024/`.
+- **Reveal model (approved 2026-10-06, "okay like this"):** each guess shows more real frame detail. Combine both ideas: each guess zooms into a half of the film's timeline AND shows fewer, wider slices of real HQ frames, while the reel stays the same width. With infinite guesses the end point would be the whole film, frame by frame. In practice there are about 10 guesses.
+- A thin full-film barcode stays pinned above the reel, with a bracket showing which stretch you're seeing.
+- Reel-opening animation: the chosen half slides out and stretches to fill the reel, then the slices widen and "develop" from color into image.
+- **Open:** which half to zoom into each guess (A: the player picks, B: we aim at an iconic moment, C: random daily, the same for everyone), and the exact number of guesses.
 
 Guess the movie from its "barcode": every frame of the film reduced to its average color, lined up left to right as thin vertical stripes. The whole film's color arc reads at a glance, e.g. the warm-to-cold shift of a thriller or the green of The Matrix.
 
