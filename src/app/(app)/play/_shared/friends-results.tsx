@@ -12,7 +12,10 @@ export function FriendsResults({ results, viewerId }: { results: FriendResult[];
             <div key={r.profile.id} className={`flex items-center gap-3 px-4 py-3 ${r.profile.id === viewerId ? "bg-accent/8" : ""}`}>
               <Avatar name={r.profile.display_name} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{r.profile.display_name}</p>
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                  <p className="truncate font-medium">{r.profile.display_name}</p>
+                  <span className="shrink-0 text-xs text-muted">@{r.profile.username}</span>
+                </div>
                 <p className="truncate text-sm tracking-wide text-muted">
                   {done ? r.shareGrid : r.status === "in_progress" ? "Playing…" : "Not played yet"}
                 </p>

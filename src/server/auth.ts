@@ -1,10 +1,8 @@
 import "server-only";
-import { createHash, timingSafeEqual } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "./supabase/admin";
 import { sessionClient } from "./supabase/session";
-import { serverEnv } from "./env";
 import type { ProfileRow } from "./database.types";
 
 /**
@@ -67,13 +65,16 @@ export async function requireProfile(): Promise<ProfileRow> {
   return profile;
 }
 
+/**
+ * An admin, re-verified with the auth server. Elsewhere the session JWT is checked locally
+ * (`getClaims`), which keeps accepting an access token until it expires even after sign-out or a
+ * password reset revoked its session; admin powers shouldn't outlive that, so this asks Supabase
+ * whether the session is still live.
+ */
 export async function requireAdmin(): Promise<ProfileRow> {
   const profile = await requireProfile();
   if (!profile.is_admin) notFound();
+  const { data, error } = await (await sessionClient()).auth.getUser();
+  if (error || data.user?.id !== profile.id) redirect("/login");
   return profile;
-}
-
-export function isValidInviteCode(candidate: string): boolean {
-  const digest = (s: string) => createHash("sha256").update(s.trim()).digest();
-  return timingSafeEqual(digest(candidate), digest(serverEnv().INVITE_CODE));
 }

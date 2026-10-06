@@ -17,7 +17,7 @@ export default async function OnboardingPage() {
         <BrandMark size={56} />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">One more step</h1>
-          <p className="text-sm text-muted">Pick a username and enter the invite code.</p>
+          <p className="text-sm text-muted">Pick a username and enter your invite code.</p>
         </div>
       </header>
       <OnboardingForm suggestedName={user.suggestedName ?? ""} />

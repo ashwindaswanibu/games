@@ -1,4 +1,7 @@
 import { CATALOG_MAX_LIMIT, catalogLimitSchema, catalogQuerySchema, filmIdSchema, personIdSchema } from "./schemas";
+import { catalogSearchKey } from "./search-key";
+
+export { catalogSearchKey };
 
 /**
  * Autocomplete within a small, known set: one person's filmography (`/api/catalog/filmography`) or
@@ -10,15 +13,6 @@ import { CATALOG_MAX_LIMIT, catalogLimitSchema, catalogQuerySchema, filmIdSchema
  * `search_people`, minus the typo-tolerant tier. Pure; safe on both sides of the wire.
  */
 
-/** Lowercase, accents stripped, every run of non-alphanumerics collapsed to one space, trimmed. */
-export function catalogSearchKey(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/\p{M}+/gu, "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-}
 
 /** 0 exact, 1 prefix of the text or of any word in it, 2 substring; null when it doesn't match. */
 export function matchTier(queryKey: string, textKey: string): 0 | 1 | 2 | null {

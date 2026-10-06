@@ -19,6 +19,7 @@ import {
 } from "@/games/_movies/ui";
 import styles from "./frame-by-frame.module.css";
 import { FRAME_COUNT, frameByFrame, framesInView, guessedFilmIds, isSkip, type State, type Turn } from "./logic";
+import { connectGameUi } from "../game-ui-context";
 
 type Props = GameUiProps<typeof frameByFrame>;
 
@@ -264,3 +265,6 @@ function ContactSheet(props: {
     </ol>
   );
 }
+
+/** What the play page renders for this game; the game host supplies the props. */
+export const FrameByFrameEntry = connectGameUi(FrameByFrameUi);

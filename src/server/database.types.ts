@@ -272,13 +272,67 @@ export type Database = {
         Update: { key?: string; window_start?: string; hits?: number };
         Relationships: [];
       };
+      invites: {
+        Row: {
+          id: string;
+          token_hash: string;
+          note: string;
+          created_by: string | null;
+          created_at: string;
+          expires_at: string;
+          used_by: string | null;
+          used_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          token_hash: string;
+          note: string;
+          created_by?: string | null;
+          created_at?: string;
+          expires_at: string;
+          used_by?: string | null;
+          used_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          token_hash?: string;
+          note?: string;
+          created_by?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          used_by?: string | null;
+          used_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "invites_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invites_used_by_fkey";
+            columns: ["used_by"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      password_change_grants: {
+        Row: { user_id: string; expires_at: string };
+        Insert: { user_id: string; expires_at: string };
+        Update: { user_id?: string; expires_at?: string };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
       leaderboard: {
-        Args: { p_from: string; p_to: string; p_game_ids: string[] };
+        Args: { p_from: string; p_to: string; p_game_ids: string[]; p_viewer: string; p_today: string };
         Returns: {
           user_id: string;
           username: string;
@@ -321,6 +375,25 @@ export type Database = {
           known_for: string | null;
         }[];
       };
+      orphan_auth_user_for_email: {
+        Args: { p_email: string };
+        Returns: {
+          id: string;
+          created_at: string;
+        }[];
+      };
+      allow_password_change: {
+        Args: { p_user_id: string };
+        Returns: undefined;
+      };
+      password_hash_scheme: {
+        Args: { p_hash: string };
+        Returns: string;
+      };
+      redeem_invite: {
+        Args: { p_token_hash: string; p_user_id: string; p_username: string; p_display_name: string };
+        Returns: boolean;
+      };
       take_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number };
         Returns: boolean;
@@ -344,4 +417,5 @@ export type PlayRow = Database["public"]["Tables"]["plays"]["Row"];
 export type PuzzleAssetRow = Database["public"]["Tables"]["puzzle_assets"]["Row"];
 export type MovieFilmRow = Database["public"]["Tables"]["movie_films"]["Row"];
 export type MoviePersonRow = Database["public"]["Tables"]["movie_people"]["Row"];
+export type InviteRow = Database["public"]["Tables"]["invites"]["Row"];
 export type MovieCreditRow = Database["public"]["Tables"]["movie_credits"]["Row"];

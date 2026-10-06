@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CATALOG_MIN_QUERY_KEY, catalogSearchKey } from "./search-key";
 
 /**
  * Shared shapes for Movies games. Pure zod, safe on both sides of the wire.
@@ -50,14 +51,22 @@ export type FilmDetails = z.infer<typeof filmDetailsSchema>;
 // Autocomplete (GET /api/catalog/films and /api/catalog/people)
 // ---------------------------------------------------------------------------------------------
 
-/** Search queries: trimmed, 2–80 characters. */
-export const catalogQuerySchema = z.string().trim().min(2).max(80);
+/**
+ * Search queries: trimmed, 2–80 characters, and at least 2 characters once normalized. Short keys
+ * match most of the catalog, so "e." (key "e") is refused rather than scanned.
+ */
+export const catalogQuerySchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .refine((q) => catalogSearchKey(q).length >= CATALOG_MIN_QUERY_KEY);
 export const CATALOG_DEFAULT_LIMIT = 8;
 export const CATALOG_MAX_LIMIT = 20;
 export const catalogLimitSchema = z.coerce.number().int().min(1).max(CATALOG_MAX_LIMIT).default(CATALOG_DEFAULT_LIMIT);
 export const catalogSearchParamsSchema = z.object({ q: catalogQuerySchema, limit: catalogLimitSchema });
 export type CatalogSearchParams = z.infer<typeof catalogSearchParamsSchema>;
-export const CATALOG_PARAMS_ERROR = `Search for 2–80 characters, with a limit of 1–${CATALOG_MAX_LIMIT}.`;
+export const CATALOG_PARAMS_ERROR = `Search for 2–80 characters (at least 2 letters or digits), with a limit of 1–${CATALOG_MAX_LIMIT}.`;
 
 /** A catalog route's query string → validated params, or null (respond 400 with CATALOG_PARAMS_ERROR). */
 export function parseCatalogSearchParams(search: URLSearchParams): CatalogSearchParams | null {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { formatPuzzleDate, today } from "@/core/day";
 import { canPlay, getGame } from "@/games/registry";
 import { requireProfile } from "@/server/auth";
@@ -9,13 +9,22 @@ import { getFriendsResults, getPlayView } from "@/server/plays";
 import { FriendsResults, LockedResults } from "./friends-results";
 import { GameHost } from "./game-host";
 
-export async function generateMetadata({ params }: PageProps<"/play/[gameId]">): Promise<Metadata> {
-  const { gameId } = await params;
-  return { title: getGame(gameId)?.name ?? "Game" };
+/*
+ * Every game has its own route, `play/<id>/page.tsx`, which renders `PlayScreen` with that game's
+ * UI. One page per game (rather than one `play/[gameId]` page) is what keeps games apart in the
+ * browser: client components are bundled per route, so a shared page would ship every game's UI,
+ * names and rules (including games still in testing) to every player.
+ */
+
+/** The play page's title; a game the viewer can't open stays unnamed. */
+export async function playMetadata(gameId: string): Promise<Metadata> {
+  const profile = await requireProfile();
+  const game = getGame(gameId);
+  return { title: game && canPlay(game, profile.is_admin) ? game.name : "Game" };
 }
 
-export default async function PlayPage({ params }: PageProps<"/play/[gameId]">) {
-  const { gameId } = await params;
+/** The play screen for `gameId`; `children` is that game's connected UI (see `connectGameUi`). */
+export async function PlayScreen({ gameId, children }: { gameId: string; children: ReactNode }) {
   const profile = await requireProfile();
   const game = getGame(gameId);
   if (!game || !canPlay(game, profile.is_admin)) notFound();
@@ -43,7 +52,9 @@ export default async function PlayPage({ params }: PageProps<"/play/[gameId]">) 
       </header>
 
       {/* Keyed so client state resets when switching games or when the day rolls over. */}
-      <GameHost key={`${game.id}:${date}`} gameId={game.id} gameName={game.name} emoji={game.emoji} rules={game.rules} date={date} initialView={view} />
+      <GameHost key={`${game.id}:${date}`} gameId={game.id} gameName={game.name} emoji={game.emoji} rules={game.rules} date={date} initialView={view}>
+        {children}
+      </GameHost>
 
       {friends ? <FriendsResults results={friends} viewerId={profile.id} /> : <LockedResults />}
     </div>

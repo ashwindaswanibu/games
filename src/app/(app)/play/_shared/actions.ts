@@ -8,6 +8,7 @@ import type { MoveResponse, PlayView } from "@/core/view";
 import { canPlay, getGame } from "@/games/registry";
 import { requireProfile } from "@/server/auth";
 import { applyMove, startPlay } from "@/server/plays";
+import { takeRateLimit } from "@/server/rate-limit";
 import { PuzzleUnavailableError } from "@/server/puzzles";
 
 // Server actions are public POST endpoints: validate every argument, trust nothing.
@@ -18,19 +19,23 @@ const argsSchema = z.object({
 });
 
 const DAY_OVER = "A new day has started — refresh for today's puzzles.";
+const TOO_FAST = "Slow down a little and try again.";
 
+/** The caller and the game, plus whether they're within the moves rate limit. */
 async function authorize(gameId: string) {
   const profile = await requireProfile();
   const game = getGame(gameId);
   if (!game || !canPlay(game, profile.is_admin)) notFound();
-  return { profile, game };
+  const withinLimit = await takeRateLimit(profile.id, "moves");
+  return { profile, game, withinLimit };
 }
 
 export type StartResponse = { ok: true; view: PlayView } | { ok: false; message: string };
 
 export async function startGame(gameId: string, date: string): Promise<StartResponse> {
   const args = argsSchema.pick({ gameId: true, date: true }).parse({ gameId, date });
-  const { profile, game } = await authorize(args.gameId);
+  const { profile, game, withinLimit } = await authorize(args.gameId);
+  if (!withinLimit) return { ok: false, message: TOO_FAST };
   const current = today();
   if (args.date !== current) return { ok: false, message: DAY_OVER };
 
@@ -44,7 +49,8 @@ export async function startGame(gameId: string, date: string): Promise<StartResp
 
 export async function submitMove(gameId: string, date: string, version: number, move: unknown): Promise<MoveResponse> {
   const args = argsSchema.parse({ gameId, date, version });
-  const { profile, game } = await authorize(args.gameId);
+  const { profile, game, withinLimit } = await authorize(args.gameId);
+  if (!withinLimit) return { ok: false, reason: "rate_limited", message: TOO_FAST };
   const current = today();
   if (args.date !== current) return { ok: false, reason: "day_over", message: DAY_OVER };
 

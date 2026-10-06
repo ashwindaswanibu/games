@@ -49,7 +49,7 @@ import {
   waitForText,
   PHONE_VIEWPORT,
 } from "./lib/browser.mjs";
-import { assetIdsFor, decoyFilms, degreesDetour, e2eDb, loadPlay, loadPuzzle, profileByUsername, resetPlays, waitForPlayVersion, type E2eDb } from "./lib/db.mjs";
+import { assetIdsFor, decoyFilms, degreesDetour, e2eDb, loadPlay, loadPuzzle, profileByUsername, resetAssetBurst, resetPlays, waitForPlayVersion, type E2eDb } from "./lib/db.mjs";
 import { e2eEnv } from "./lib/env.mjs";
 import { Report } from "./lib/report.mjs";
 import { SpoilerWatch } from "./lib/spoilers.mjs";
@@ -65,6 +65,7 @@ interface Ctx {
   baseUrl: string;
   shotsDir: string;
   userId: string;
+  username: string;
   displayName: string;
   date: PuzzleDate;
 }
@@ -108,6 +109,7 @@ async function assetStatus(ctx: Ctx, id: string, signedIn = true): Promise<{ sta
 
 /** `/api/assets/<id>` serves exactly the ids in the player's view: images for `shown`, 403/404 for `hidden`. */
 async function checkAssetAccess(ctx: Ctx, label: string, access: { shown?: readonly string[]; hidden?: readonly string[] }): Promise<void> {
+  await resetAssetBurst(ctx.db, ctx.userId);
   for (const id of access.shown ?? []) {
     const { status, type } = await assetStatus(ctx, id);
     ctx.report.check(`${label}: earned asset ${id.slice(0, 8)} is served`, status === 200 && type.startsWith("image/"), { status, type });
@@ -274,6 +276,7 @@ async function checkFriendsResults(ctx: Ctx, row: PlayRow): Promise<void> {
     return { rows: rows.length, text: own ? (own.textContent ?? "").replace(/\s+/g, " ") : null };
   }, ctx.displayName);
   report.check("friends' results list players", mine.rows > 0, mine);
+  report.check("friends' results show @username next to the display name", mine.text !== null && mine.text.includes(`@${ctx.username}`), mine.text);
   report.check(
     "friends' results show my score, label and grid",
     mine.text !== null && mine.text.includes(row.share_grid ?? "\0") && mine.text.includes(row.result_label ?? "\0") && mine.text.includes(String(row.score)),
@@ -623,7 +626,7 @@ async function main(): Promise<boolean> {
     await signIn(page, env.E2E_BASE_URL, env.E2E_TEST_USERNAME, env.E2E_TEST_PASSWORD);
     report.check("signed in as the test account", true);
 
-    const ctx: Ctx = { page, browser, db, report, watch, baseUrl: env.E2E_BASE_URL, shotsDir, userId: profile.id, displayName: profile.display_name, date };
+    const ctx: Ctx = { page, browser, db, report, watch, baseUrl: env.E2E_BASE_URL, shotsDir, userId: profile.id, username: profile.username, displayName: profile.display_name, date };
     await report.runSection("Today", () => checkToday(ctx));
     await report.runSection("Degrees of Separation", () => playDegrees(ctx));
     await report.runSection("Frame by Frame", () => playFrameByFrame(ctx));

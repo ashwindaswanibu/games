@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { AUTH_COOKIE_OPTIONS } from "@/lib/auth-cookies";
 import { publicEnv } from "@/lib/public-env";
 
 /** Routes reachable without a session. */
@@ -20,6 +21,7 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
+    cookieOptions: AUTH_COOKIE_OPTIONS,
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet, headers) {

@@ -19,6 +19,7 @@ import {
 import { hexToRgb, relativeLuminance } from "./imaging";
 import { colorGrade, guessedFilmIds, MAX_TRIES, STAGES, type Reveal, type Stage, type State, type Swatch, type Turn } from "./logic";
 import styles from "./color-grade.module.css";
+import { connectGameUi } from "../game-ui-context";
 
 const STAGE_LABEL: Record<Stage, string> = { palette: "Palette", graded: "Grade", blurred: "Blur", still: "Still", final: "Final" };
 
@@ -323,3 +324,6 @@ function PaletteBoard({ palette, allValues, compact = false }: { palette: readon
     </div>
   );
 }
+
+/** What the play page renders for this game; the game host supplies the props. */
+export const ColorGradeEntry = connectGameUi(ColorGradeUi);

@@ -73,6 +73,17 @@ export async function resetPlays(db: E2eDb, userId: string, gameIds: readonly st
 }
 
 /**
+ * Clears the test account's per-burst image counter (local database only). The suite fetches every
+ * stored asset of a puzzle on top of what the page itself loads, to prove which ones are refused;
+ * that is far more than a player's browser asks for, so without this the burst limit (correctly)
+ * starts answering 429 partway through a game.
+ */
+export async function resetAssetBurst(db: E2eDb, userId: string): Promise<void> {
+  const { error } = await db.from("rate_limits").delete().eq("key", `assets:${userId}`);
+  if (error) throw new Error(`Failed to reset the test account's image rate limit: ${error.message}`);
+}
+
+/**
  * Popular films to guess wrong with: a known year (so the year clue is meaningful and the search
  * hit can be told apart by it), none of `excludeIds`, and a title no other catalog film shares.
  */

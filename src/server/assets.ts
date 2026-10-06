@@ -45,10 +45,10 @@ export function decodeBytea(value: string): Buffer {
 }
 
 /**
- * The asset's bytes if `viewer` may see it, else null (also for ids that don't exist, so the two
- * cases are indistinguishable to the caller). The bytes are only read after authorization.
+ * The asset's metadata if `viewer` may see it, else null (also for ids that don't exist, so the two
+ * cases are indistinguishable to the caller). Read the bytes with `loadAssetBytes` only after this.
  */
-export async function loadAssetForViewer(viewer: AssetViewer, assetId: string): Promise<{ mime: AssetMime; bytes: Buffer } | null> {
+export async function authorizeAsset(viewer: AssetViewer, assetId: string): Promise<{ id: string; mime: AssetMime } | null> {
   const { data: meta, error } = await db().from("puzzle_assets").select("id, game_id, puzzle_date, mime").eq("id", assetId).maybeSingle();
   if (error) throw new Error(`Failed to load asset: ${error.message}`);
   if (!meta) return null;
@@ -58,9 +58,12 @@ export async function loadAssetForViewer(viewer: AssetViewer, assetId: string): 
     asset: { id: meta.id, gameId: meta.game_id, puzzleDate: meta.puzzle_date },
     loadView: (game, date) => getPlayView(viewer.id, game, date),
   });
-  if (!allowed) return null;
+  return allowed ? { id: meta.id, mime: meta.mime } : null;
+}
 
-  const { data, error: bytesError } = await db().from("puzzle_assets").select("bytes").eq("id", assetId).single();
-  if (bytesError) throw new Error(`Failed to load asset bytes: ${bytesError.message}`);
-  return { mime: meta.mime, bytes: decodeBytea(data.bytes) };
+/** An authorized asset's bytes (see `authorizeAsset`). */
+export async function loadAssetBytes(assetId: string): Promise<Buffer> {
+  const { data, error } = await db().from("puzzle_assets").select("bytes").eq("id", assetId).single();
+  if (error) throw new Error(`Failed to load asset bytes: ${error.message}`);
+  return decodeBytea(data.bytes);
 }

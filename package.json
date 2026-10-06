@@ -16,6 +16,8 @@
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > src/server/database.types.generated.ts",
     "test:db": "node --env-file=.env.local scripts/db-smoke.mts",
+    "invite": "tsx --conditions=react-server --env-file=.env.local scripts/create-invite.mts",
+    "test:bundles": "tsx scripts/check-client-bundles.mts",
     "test:e2e": "tsx --conditions=react-server --env-file=.env.local scripts/e2e/movies.mts",
     "content:fixtures": "tsx --conditions=react-server --env-file=.env.local scripts/content/fixtures.mts",
     "content:movies:catalog": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/catalog.mts",

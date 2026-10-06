@@ -11,7 +11,7 @@ import { guardRequest, jsonError } from "@/server/http";
  * Signed-in players who can open a Movies game, rate limited.
  */
 export async function GET(request: NextRequest) {
-  const guard = await guardRequest({ bucket: "catalog", signedOutMessage: "Sign in to search films.", allowed: canUseMoviesCatalog });
+  const guard = await guardRequest({ buckets: ["catalog"], signedOutMessage: "Sign in to search films.", allowed: canUseMoviesCatalog });
   if (!guard.ok) return guard.response;
 
   const params = parseScopedSearchParams(request.nextUrl.searchParams, "person");

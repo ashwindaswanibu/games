@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import type { GameUiProps } from "@/core/view";
 import { numberHunt, remainingRange, type Hint } from "./logic";
+import { connectGameUi } from "../game-ui-context";
 
 const HINT_STYLE: Record<Hint, { label: string; className: string }> = {
   higher: { label: "Higher ↑", className: "text-sky-600 dark:text-sky-400" },
@@ -102,3 +103,6 @@ export function NumberHuntUi({ view, submitMove, pending }: GameUiProps<typeof n
     </div>
   );
 }
+
+/** What the play page renders for this game; the game host supplies the props. */
+export const NumberHuntEntry = connectGameUi(NumberHuntUi);

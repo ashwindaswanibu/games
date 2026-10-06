@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { z } from "zod";
+import { CATALOG_MIN_QUERY_KEY, catalogSearchKey } from "../search-key";
 import { MOVIES_FONT_VARS } from "./fonts";
 import styles from "./movies.module.css";
 import { useMoviesVariant, type MoviesVariant } from "./variant";
@@ -36,7 +37,8 @@ interface ComboboxConfig<Hit extends { id: number }> extends CatalogSearchProps<
   noun: { one: string; many: string };
 }
 
-const MIN_CHARS = 2;
+/** Only queries the server accepts (see `catalogQuerySchema`): "e." is too short once normalized. */
+const searchable = (value: string) => catalogSearchKey(value).length >= CATALOG_MIN_QUERY_KEY;
 const DEBOUNCE_MS = 160;
 const LIMIT = 8;
 const CACHE_SIZE = 60;
@@ -132,7 +134,7 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
     const q = value.trim();
     // Scoped searches cache per scope, so switching actor or film never shows another list.
     const key = `${scopeKey}|${q.toLowerCase().replace(/\s+/g, " ")}`;
-    if (q.length < MIN_CHARS) {
+    if (!searchable(q)) {
       setResults([]);
       setStatus("idle");
       setOpen(false);
@@ -179,7 +181,7 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
       case "ArrowDown":
       case "ArrowUp":
         event.preventDefault();
-        if (!open && query.trim().length >= MIN_CHARS) {
+        if (!open && searchable(query)) {
           setOpen(true);
           return;
         }
@@ -266,7 +268,7 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
           }}
           onKeyDown={onKeyDown}
           onFocus={() => {
-            if (query.trim().length >= MIN_CHARS) setOpen(true);
+            if (searchable(query)) setOpen(true);
           }}
           onBlur={() => setOpen(false)}
         />

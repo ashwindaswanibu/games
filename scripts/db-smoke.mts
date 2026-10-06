@@ -1,13 +1,13 @@
 /**
  * Integration smoke test for the database contract the app relies on: auth with synthetic
- * username emails, RLS, puzzle upsert semantics, optimistic concurrency on plays, check
+ * username emails, RLS, the password-change guard, single-use invites, puzzle upsert semantics, optimistic concurrency on plays, check
  * constraints, the leaderboard/streak functions, puzzle assets, and the movie catalog search.
  *
  * Runs against a live Supabase (local by default) and cleans up after itself.
  *   npm run db:start && npm run test:db
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -28,19 +28,22 @@ function check(name: string, ok: boolean, detail?: unknown) {
   console.log(`${ok ? "✓" : "✗"} ${name}${!ok && detail !== undefined ? ` — ${JSON.stringify(detail)}` : ""}`);
 }
 
-async function makePlayer(name: string): Promise<{ id: string; client: SupabaseClient }> {
+/** Display names are unique (ignoring case), so tag them like usernames. */
+const displayNameFor = (name: string) => `${name} ${tag}`;
+
+async function makePlayer(name: string): Promise<{ id: string; client: SupabaseClient; email: string; password: string }> {
   const username = `smoke_${name}_${tag}`;
   const email = `${username}@users.daily.invalid`;
   const password = randomBytes(12).toString("hex");
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
   userIds.push(data.user.id);
-  const { error: profileError } = await admin.from("profiles").insert({ id: data.user.id, username, display_name: name });
+  const { error: profileError } = await admin.from("profiles").insert({ id: data.user.id, username, display_name: displayNameFor(name) });
   if (profileError) throw new Error(`profile insert failed: ${profileError.message}`);
   const client = createClient(url, publishableKey, opts);
   const { error: signInError } = await client.auth.signInWithPassword({ email, password });
   if (signInError) throw new Error(`signIn failed: ${signInError.message}`);
-  return { id: data.user.id, client };
+  return { id: data.user.id, client, email, password };
 }
 
 async function main() {
@@ -110,21 +113,43 @@ async function main() {
   for (const [n, s] of [[1, 50], [2, 60], [4, 70], [5, 80]] as const) await finish(alice.id, n, s);
   for (const [n, s] of [[3, 90], [4, 0]] as const) await finish(bob.id, n, s);
 
-  const { data: aliceSees } = await alice.client.from("plays").select("user_id").eq("game_id", GAME);
-  check("players can only see their own plays via the public key", (aliceSees ?? []).every((p) => p.user_id === alice.id) && (aliceSees ?? []).length === 4, aliceSees);
+  const { data: aliceSees, error: aliceSeesError } = await alice.client.from("plays").select("user_id").eq("game_id", GAME);
+  check("players cannot read plays directly, not even their own (42501)", aliceSeesError?.code === "42501" && !aliceSees, { aliceSees, aliceSeesError });
 
   // --- Leaderboard & streaks --------------------------------------------------------------
-  const { data: board, error: boardError } = await admin.rpc("leaderboard", { p_from: day(1), p_to: day(5), p_game_ids: [GAME] });
+  const board_ = (from: number, to: number, viewer: string, today: number) =>
+    admin.rpc("leaderboard", { p_from: day(from), p_to: day(to), p_game_ids: [GAME], p_viewer: viewer, p_today: day(today) });
+  const { data: board, error: boardError } = await board_(1, 5, alice.id, 5);
   const a = board?.find((r: { user_id: string }) => r.user_id === alice.id);
   const b = board?.find((r: { user_id: string }) => r.user_id === bob.id);
   check("leaderboard sums points and counts plays/wins", !boardError && a?.points === 260 && a?.games_played === 4 && a?.wins === 4 && b?.points === 90 && b?.wins === 1, { boardError, a, b });
   check("leaderboard ranks by points", Boolean(a && b && a.rank < b.rank), { a, b });
 
-  const { data: weekBoard } = await admin.rpc("leaderboard", { p_from: day(4), p_to: day(5), p_game_ids: [GAME] });
+  const { data: weekBoard } = await board_(4, 5, alice.id, 5);
   const aw = weekBoard?.find((r: { user_id: string }) => r.user_id === alice.id);
   check("leaderboard respects the date range", aw?.points === 150, aw);
 
-  const { error: rpcDenied } = await alice.client.rpc("leaderboard", { p_from: day(1), p_to: day(5), p_game_ids: [GAME] });
+  // Spoiler wall: on day 5 Bob hasn't played, so Alice's day-5 result (80, a win) is hidden from
+  // him, on every board that includes that day; earlier days and his own plays still count.
+  type BoardRow = { user_id: string; points: number; games_played: number; wins: number };
+  const { data: bobsView } = await board_(1, 5, bob.id, 5);
+  const aliceForBob = (bobsView as BoardRow[] | null)?.find((r) => r.user_id === alice.id);
+  const bobForBob = (bobsView as BoardRow[] | null)?.find((r) => r.user_id === bob.id);
+  check(
+    "leaderboard hides others' results for today until the viewer finishes that game",
+    aliceForBob?.points === 180 && aliceForBob.games_played === 3 && aliceForBob.wins === 3 && bobForBob?.points === 90,
+    { aliceForBob, bobForBob },
+  );
+  const { data: todayForBob } = await board_(5, 5, bob.id, 5);
+  check("today's board shows nothing of others' unfinished-for-viewer plays", (todayForBob as BoardRow[] | null)?.find((r) => r.user_id === alice.id)?.points === 0, todayForBob);
+  const { data: aliceDay4 } = await board_(4, 4, alice.id, 4);
+  check(
+    "once the viewer has finished today's game, others' results for it show",
+    (aliceDay4 as BoardRow[] | null)?.find((r) => r.user_id === bob.id)?.games_played === 1,
+    aliceDay4,
+  );
+
+  const { error: rpcDenied } = await alice.client.rpc("leaderboard", { p_from: day(1), p_to: day(5), p_game_ids: [GAME], p_viewer: alice.id, p_today: day(5) });
   check("players cannot call leaderboard() directly", Boolean(rpcDenied));
 
   const { data: streaks } = await admin.rpc("streaks", { p_today: day(5), p_game_ids: [GAME] });
@@ -134,8 +159,149 @@ async function main() {
   check("a streak ending yesterday is still current", sb?.current_streak === 2, sb);
   const { data: later } = await admin.rpc("streaks", { p_today: day(7), p_game_ids: [GAME] });
   check("a streak broken by a missed day resets to 0", later?.find((s: { user_id: string }) => s.user_id === alice.id)?.current_streak === 0, later);
+  await lockdownChecks(alice);
+  await passwordChecks(alice);
+  await inviteChecks(alice);
+  await profileChecks(alice);
   await assetChecks(alice.client);
   await catalogChecks(alice.client);
+}
+
+// --- Public roles: the publishable key and a user session reach nothing in `public` -----------
+async function lockdownChecks(alice: { id: string; client: SupabaseClient }) {
+  const anon = createClient(url, publishableKey, opts);
+  const tables = ["profiles", "plays", "puzzles", "puzzle_assets", "movie_films", "movie_people", "movie_credits", "rate_limits", "invites", "password_change_grants"];
+  for (const table of tables) {
+    const { error: userRead } = await alice.client.from(table).select("*").limit(1);
+    const { error: anonRead } = await anon.from(table).select("*").limit(1);
+    check(`neither a signed-in user nor anon can read ${table} (42501)`, userRead?.code === "42501" && anonRead?.code === "42501", { userRead, anonRead });
+  }
+  const { error: profileWrite } = await alice.client.from("profiles").update({ is_admin: true }).eq("id", alice.id);
+  check("a player cannot make themselves admin through the API", Boolean(profileWrite), profileWrite);
+  const { data: me } = await admin.from("profiles").select("is_admin").eq("id", alice.id).single();
+  check("…and the admin flag is unchanged", me?.is_admin === false, me);
+
+  for (const [fn, args] of [
+    ["catalog_search_key", { value: "Amélie" }],
+    ["orphan_auth_user_for_email", { p_email: `smoke_alice_${tag}@users.daily.invalid` }],
+    ["take_rate_limit", { p_key: "x", p_limit: 1, p_window_seconds: 1 }],
+    ["allow_password_change", { p_user_id: alice.id }],
+    ["redeem_invite", { p_token_hash: "0".repeat(64), p_user_id: alice.id, p_username: "x", p_display_name: "x" }],
+  ] as const) {
+    const { error: anonCall } = await anon.rpc(fn, args);
+    const { error: userCall } = await alice.client.rpc(fn, args);
+    check(`neither anon nor a player can call ${fn}()`, Boolean(anonCall) && Boolean(userCall), { anonCall, userCall });
+  }
+  const { data: key, error: keyError } = await admin.rpc("catalog_search_key", { value: "Amélie!" });
+  check("the server can still call catalog_search_key()", !keyError && key === "amelie", { key, keyError });
+
+  // The app creates players with the admin API; public sign-up would hand outsiders a session and
+  // let them squat <username>@users.daily.invalid. (supabase/config.toml: [auth] enable_signup.)
+  const { data: signup, error: signupError } = await anon.auth.signUp({ email: `smoke_squat_${tag}@users.daily.invalid`, password: randomBytes(12).toString("hex") });
+  if (signup?.user) userIds.push(signup.user.id);
+  check("public sign-up through Supabase Auth is disabled", Boolean(signupError) && !signup?.user, { signupError, user: signup?.user?.id });
+}
+
+// --- Passwords: only the server's admin reset can change one -------------------------------------
+async function passwordChecks(alice: { id: string; client: SupabaseClient; email: string; password: string }) {
+  // What a stolen session would do: call Supabase Auth directly with the player's access token.
+  const { data: session } = await alice.client.auth.getSession();
+  const stolen = await fetch(`${url}/auth/v1/user`, {
+    method: "PUT",
+    headers: { apikey: publishableKey, authorization: `Bearer ${session.session?.access_token}`, "content-type": "application/json" },
+    body: JSON.stringify({ password: randomBytes(12).toString("hex") }),
+  });
+  check("a session can't change its own password through Supabase Auth", !stolen.ok, stolen.status);
+  const { error: stillIn } = await alice.client.auth.refreshSession();
+  check("…and the player's session survives the attempt", !stillIn, stillIn);
+  const { error: oldPassword } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password: alice.password });
+  check("…and their password is unchanged", !oldPassword, oldPassword);
+
+  const newPassword = randomBytes(12).toString("hex");
+  const { error: unauthorised } = await admin.auth.admin.updateUserById(alice.id, { password: newPassword });
+  check("even the admin API can't change a password the server hasn't authorised", Boolean(unauthorised));
+
+  const { error: allowError } = await admin.rpc("allow_password_change", { p_user_id: alice.id });
+  const { error: authorised } = await admin.auth.admin.updateUserById(alice.id, { password: newPassword });
+  check("an authorised admin reset changes the password", !allowError && !authorised, { allowError, authorised });
+  const { error: newSignIn } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password: newPassword });
+  check("…and the new password works", !newSignIn, newSignIn);
+  const { error: reused } = await admin.auth.admin.updateUserById(alice.id, { password: randomBytes(12).toString("hex") });
+  check("an authorisation is good for one change only", Boolean(reused));
+
+  const { error: metadata } = await admin.auth.admin.updateUserById(alice.id, { user_metadata: { smoke: true } });
+  check("other account updates aren't affected", !metadata, metadata);
+  alice.password = newPassword;
+}
+
+// --- Invites: single use, expiring, and they create the profile atomically ---------------------
+async function inviteChecks(alice: { id: string }) {
+  const hash = (code: string) => createHash("sha256").update(code).digest("hex");
+  const newAuthUser = async (name: string) => {
+    const { data, error } = await admin.auth.admin.createUser({ email: `smoke_${name}_${tag}@users.daily.invalid`, password: randomBytes(12).toString("hex"), email_confirm: true });
+    if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
+    userIds.push(data.user.id);
+    return data.user.id;
+  };
+  const inviteFor = async (code: string, expiresInMs: number) => {
+    const now = Date.now();
+    const { error } = await admin.from("invites").insert({
+      token_hash: hash(code),
+      note: `smoke ${tag}`,
+      created_by: alice.id,
+      created_at: new Date(now - 60_000).toISOString(),
+      expires_at: new Date(now + expiresInMs).toISOString(),
+    });
+    if (error) throw new Error(`invite insert failed: ${error.message}`);
+  };
+  const redeem = (code: string, userId: string, name: string) =>
+    admin.rpc("redeem_invite", { p_token_hash: hash(code), p_user_id: userId, p_username: `smoke_${name}_${tag}`, p_display_name: displayNameFor(name) });
+
+  const code = `smoke-invite-${tag}`;
+  await inviteFor(code, 3_600_000);
+  const carol = await newAuthUser("carol");
+  const { data: first, error: firstError } = await redeem(code, carol, "carol");
+  const { data: carolProfile } = await admin.from("profiles").select("id").eq("id", carol).maybeSingle();
+  const { data: spent } = await admin.from("invites").select("used_by, used_at").eq("token_hash", hash(code)).single();
+  check("an invite creates its player's profile and records who used it", first === true && !firstError && Boolean(carolProfile) && spent?.used_by === carol && Boolean(spent.used_at), { first, firstError, spent });
+
+  const dave = await newAuthUser("dave");
+  const { data: second } = await redeem(code, dave, "dave");
+  const { data: daveProfile } = await admin.from("profiles").select("id").eq("id", dave).maybeSingle();
+  check("an invite works only once", second === false && !daveProfile, { second, daveProfile });
+
+  const expired = `smoke-expired-${tag}`;
+  await inviteFor(expired, -1_000);
+  const { data: late } = await redeem(expired, dave, "dave");
+  check("an expired invite doesn't work", late === false, late);
+
+  const taken = `smoke-taken-${tag}`;
+  await inviteFor(taken, 3_600_000);
+  const { error: dupName } = await admin.rpc("redeem_invite", { p_token_hash: hash(taken), p_user_id: dave, p_username: `smoke_carol_${tag}`, p_display_name: displayNameFor("dave") });
+  const { data: stillOpen } = await admin.from("invites").select("used_at").eq("token_hash", hash(taken)).single();
+  check("a taken username fails the redeem (23505) and leaves the invite unused", dupName?.code === "23505" && stillOpen?.used_at === null, { dupName, stillOpen });
+  await admin.from("invites").delete().eq("note", `smoke ${tag}`);
+}
+
+// --- Profiles: visible display names, unique ignoring case; orphan auth users can be found ------
+async function profileChecks(alice: { id: string }) {
+  const { error: hidden } = await admin.from("profiles").update({ display_name: "\u200B" }).eq("id", alice.id);
+  check("a display name can't be invisible (23514)", hidden?.code === "23514", hidden);
+  const { error: bidi } = await admin.from("profiles").update({ display_name: "\u202Enimda" }).eq("id", alice.id);
+  check("a display name can't contain a bidi override (23514)", bidi?.code === "23514", bidi);
+  const { error: emoji } = await admin.from("profiles").update({ display_name: `${displayNameFor("alice")} \u{1F469}\u200D\u{1F4BB}` }).eq("id", alice.id);
+  check("emoji (with joiners) are fine in display names", !emoji, emoji);
+  const { error: dupBob } = await admin.from("profiles").update({ display_name: displayNameFor("BOB") }).eq("id", alice.id);
+  check("display names are unique ignoring case (23505)", dupBob?.code === "23505" && dupBob.message.includes("profiles_display_name_lower_key"), dupBob);
+  await admin.from("profiles").update({ display_name: displayNameFor("alice") }).eq("id", alice.id);
+
+  const orphanEmail = `smoke_orphan_${tag}@users.daily.invalid`;
+  const { data: orphan } = await admin.auth.admin.createUser({ email: orphanEmail, password: randomBytes(12).toString("hex"), email_confirm: true });
+  if (orphan.user) userIds.push(orphan.user.id);
+  const { data: found } = await admin.rpc("orphan_auth_user_for_email", { p_email: orphanEmail.toUpperCase() });
+  check("an auth user without a profile is found by email", found?.length === 1 && found[0].id === orphan.user?.id, found);
+  const { data: notOrphan } = await admin.rpc("orphan_auth_user_for_email", { p_email: `smoke_alice_${tag}@users.daily.invalid` });
+  check("a player with a profile is never reported as an orphan", notOrphan?.length === 0, notOrphan);
 }
 
 // --- Puzzle assets: service-role only, bytes round-trip, tied to their puzzle -------------------

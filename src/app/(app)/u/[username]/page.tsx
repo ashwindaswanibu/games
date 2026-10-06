@@ -34,7 +34,7 @@ export default async function ProfilePage({ params }: PageProps<"/u/[username]">
 
   const date = today();
   const ids = liveGameIds();
-  const [history, streaks] = await Promise.all([getPlayerHistory(player.id, ids), getStreaks(ids, date)]);
+  const [history, streaks] = await Promise.all([getPlayerHistory(player.id, ids, viewer.id, date), getStreaks(ids, date)]);
   const streak = streaks.get(player.id) ?? { current: 0, best: 0 };
   const total = history.reduce((sum, p) => sum + (p.score ?? 0), 0);
   const isMe = viewer.id === player.id;

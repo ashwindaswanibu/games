@@ -3,18 +3,27 @@ import type { ProfileRow } from "./database.types";
 
 const mocks = vi.hoisted(() => ({
   profile: null as ProfileRow | null,
-  allow: true,
+  /** Buckets that refuse the request. */
+  exhausted: new Set<string>(),
   taken: [] as string[],
 }));
 
 vi.mock("./auth", () => ({ getCurrentProfile: async () => mocks.profile }));
-vi.mock("./rate-limit", () => ({
-  RATE_LIMITS: { catalog: { limit: 40, windowSeconds: 10 }, assets: { limit: 120, windowSeconds: 10 } },
-  takeRateLimit: async (profileId: string, bucket: string) => {
-    mocks.taken.push(`${bucket}:${profileId}`);
-    return mocks.allow;
-  },
-}));
+vi.mock("./rate-limit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./rate-limit")>();
+  const takeRateLimit = async (subject: string, bucket: string) => {
+    mocks.taken.push(`${bucket}:${subject}`);
+    return !mocks.exhausted.has(bucket);
+  };
+  return {
+    RATE_LIMITS: actual.RATE_LIMITS,
+    takeRateLimit,
+    takeRateLimits: async (checks: { subject: string; bucket: string }[]) => {
+      for (const { subject, bucket } of checks) if (!(await takeRateLimit(subject, bucket))) return bucket;
+      return null;
+    },
+  };
+});
 
 const { guardRequest } = await import("./http");
 const { canUseMoviesCatalog } = await import("./catalog");
@@ -24,14 +33,14 @@ const player: ProfileRow = { id: "u1", username: "ana", display_name: "Ana", is_
 
 beforeEach(() => {
   mocks.profile = player;
-  mocks.allow = true;
+  mocks.exhausted = new Set();
   mocks.taken = [];
 });
 
 describe("guardRequest", () => {
   it("refuses a signed-out caller with 401, before counting anything", async () => {
     mocks.profile = null;
-    const result = await guardRequest({ bucket: "catalog", signedOutMessage: "Sign in to search films." });
+    const result = await guardRequest({ buckets: ["catalog"], signedOutMessage: "Sign in to search films." });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.response.status).toBe(401);
@@ -40,25 +49,39 @@ describe("guardRequest", () => {
   });
 
   it("answers 404 when the caller isn't allowed, so the route isn't confirmed", async () => {
-    const result = await guardRequest({ bucket: "catalog", signedOutMessage: "x", allowed: () => false });
+    const result = await guardRequest({ buckets: ["catalog"], signedOutMessage: "x", allowed: () => false });
     expect(!result.ok && result.response.status).toBe(404);
     expect(mocks.taken).toEqual([]);
   });
 
   it("counts the request against the player's bucket and lets it through", async () => {
-    const result = await guardRequest({ bucket: "assets", signedOutMessage: "x" });
+    const result = await guardRequest({ buckets: ["assets", "assetsDaily"], signedOutMessage: "x" });
     expect(result).toEqual({ ok: true, profile: player });
-    expect(mocks.taken).toEqual(["assets:u1"]);
+    expect(mocks.taken).toEqual(["assets:u1", "assetsDaily:u1"]);
   });
 
   it("answers 429 with Retry-After once the limit is used up", async () => {
-    mocks.allow = false;
-    const result = await guardRequest({ bucket: "catalog", signedOutMessage: "x" });
+    mocks.exhausted.add("catalog");
+    const result = await guardRequest({ buckets: ["catalog"], signedOutMessage: "x" });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.response.status).toBe(429);
     expect(result.response.headers.get("Retry-After")).toBe("10");
     expect(result.response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("stops at the first used-up bucket and reports its window (the daily asset cap)", async () => {
+    mocks.exhausted.add("assetsDaily");
+    const result = await guardRequest({ buckets: ["assets", "assetsDaily"], signedOutMessage: "x" });
+    expect(!result.ok && result.response.status).toBe(429);
+    if (result.ok) return;
+    expect(result.response.headers.get("Retry-After")).toBe("86400");
+  });
+
+  it("doesn't charge later buckets once an earlier one refuses", async () => {
+    mocks.exhausted.add("assets");
+    await guardRequest({ buckets: ["assets", "assetsDaily"], signedOutMessage: "x" });
+    expect(mocks.taken).toEqual(["assets:u1"]);
   });
 });
 

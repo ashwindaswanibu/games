@@ -6,10 +6,14 @@ import { BUCKETS, groupByBucket } from "./buckets";
 import { GAMES } from "./registry";
 import { GAME_SERVERS } from "./server-registry";
 
-// The UI map imports React client components; read its keys from source instead of importing it.
-import { readFileSync } from "node:fs";
-const uiSource = readFileSync(new URL("./ui.ts", import.meta.url), "utf8");
-const uiIds = [...uiSource.matchAll(/^\s*"([a-z0-9-]+)":/gm)].map((m) => m[1]);
+// Each game has its own play route, so the browser loads only that game's UI (see play-screen.tsx).
+// Pages import React client components; read them from source instead of importing them.
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+const playDir = new URL("../app/(app)/play/", import.meta.url);
+const playRoutes = readdirSync(playDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
+  .map((entry) => entry.name);
+const pageSource = (id: string) => readFileSync(new URL(`${id}/page.tsx`, playDir), "utf8");
 
 describe("game registry", () => {
   it("has unique, well-formed ids", () => {
@@ -18,8 +22,16 @@ describe("game registry", () => {
     for (const id of ids) expect(id).toMatch(GAME_ID_PATTERN);
   });
 
-  it("has a UI registered for every game and nothing extra", () => {
-    expect([...uiIds].sort()).toEqual(GAMES.map((g) => g.id).sort());
+  it("has a play route for every game and nothing extra", () => {
+    expect([...playRoutes].sort()).toEqual(GAMES.map((g) => g.id).sort());
+  });
+
+  it.each(GAMES.map((g) => [g.id] as const))("%s's play route renders its own UI and no other game's", (id) => {
+    expect(existsSync(new URL(`${id}/page.tsx`, playDir))).toBe(true);
+    const source = pageSource(id);
+    expect(source).toContain(`const GAME_ID = "${id}";`);
+    const imported = [...source.matchAll(/from "@\/games\/([a-z0-9-]+)\//g)].map((m) => m[1]);
+    expect(imported).toEqual([id]);
   });
 
   it("puts every game in a known bucket", () => {

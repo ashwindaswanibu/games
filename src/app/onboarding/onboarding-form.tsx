@@ -13,7 +13,7 @@ export function OnboardingForm({ suggestedName }: { suggestedName: string }) {
       <FormMessage>{state.error}</FormMessage>
       <Field label="Username" name="username" autoCapitalize="none" required defaultValue={state.values?.username} error={err.username} hint="Your handle on the leaderboard. Can't be changed." />
       <Field label="Display name" name="displayName" required defaultValue={state.values?.displayName ?? suggestedName} error={err.displayName} />
-      <Field label="Invite code" name="inviteCode" autoCapitalize="none" required error={err.inviteCode} />
+      <Field label="Invite code" name="inviteCode" autoCapitalize="none" autoComplete="off" spellCheck={false} required error={err.inviteCode} hint="Your own code from an admin. It works once." />
       <SubmitButton pendingText="Saving…">Let&apos;s play</SubmitButton>
     </form>
   );

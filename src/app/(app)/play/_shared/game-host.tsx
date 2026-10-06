@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ShareButton } from "@/components/share-button";
 import { buttonClass, Card } from "@/components/ui";
 import { APP_NAME } from "@/config";
 import type { PuzzleDate } from "@/core/day";
 import { shareText } from "@/core/share";
 import type { PlayView } from "@/core/view";
-import { GAME_UIS } from "@/games/ui";
+import { GameUiProvider } from "@/games/game-ui-context";
 import { startGame, submitMove } from "./actions";
 
 /**
  * Platform side of the play screen: owns the authoritative `view`, talks to the server, and
- * renders the game's own UI plus the start and result panels around it.
+ * renders the game's own UI (`children`, chosen by the server page) plus the start and result
+ * panels around it. The UI gets its props from `GameUiProvider`.
  */
 export function GameHost(props: {
   gameId: string;
@@ -21,12 +22,13 @@ export function GameHost(props: {
   rules: readonly string[];
   date: PuzzleDate;
   initialView: PlayView | null;
+  /** The game's connected UI (see `connectGameUi`). */
+  children: ReactNode;
 }) {
   const { gameId, gameName, emoji, rules, date } = props;
   const [view, setView] = useState(props.initialView);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const GameUi = GAME_UIS[gameId];
 
   async function start() {
     setPending(true);
@@ -65,8 +67,6 @@ export function GameHost(props: {
     }
   }
 
-  if (!GameUi) return <Card className="p-6 text-sm text-bad">This game&apos;s UI isn&apos;t registered.</Card>;
-
   if (!view) {
     return (
       <Card className="grid gap-5 p-6">
@@ -93,7 +93,7 @@ export function GameHost(props: {
           {notice}
         </p>
       )}
-      <GameUi view={view} submitMove={move} pending={pending} />
+      <GameUiProvider value={{ view, submitMove: move, pending }}>{props.children}</GameUiProvider>
       {view.result && (
         <Card className="grid gap-4 p-5 text-center">
           <div>

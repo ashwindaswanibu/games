@@ -21,7 +21,8 @@ export type MoveFailureReason =
   | "stale" // another tab/device moved first; `view` carries the latest state
   | "finished" // the play is already over
   | "not_started"
-  | "day_over"; // the puzzle rolled over while the player was on the page
+  | "day_over" // the puzzle rolled over while the player was on the page
+  | "rate_limited"; // too many moves too fast; nothing changed
 
 export type MoveResponse =
   | { ok: true; view: PlayView }

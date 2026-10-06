@@ -25,6 +25,14 @@ describe("parseCatalogSearchParams", () => {
     expect(params(`q=${"a".repeat(81)}`)).toBeNull();
   });
 
+  it("rejects queries that are too short once normalized (they would match most of the catalog)", () => {
+    expect(params("q=e.")).toBeNull();
+    expect(params("q=a!")).toBeNull();
+    expect(params("q=%C3%A9%20%20-")).toBeNull();
+    expect(params("q=al")).toEqual({ q: "al", limit: CATALOG_DEFAULT_LIMIT });
+    expect(params("q=%C3%A9t")).toEqual({ q: "ét", limit: CATALOG_DEFAULT_LIMIT });
+  });
+
   it("rejects limits outside 1–max and non-integers", () => {
     for (const limit of ["0", "-1", String(CATALOG_MAX_LIMIT + 1), "2.5", "ten", "1e3"]) {
       expect(params(`q=heat&limit=${limit}`)).toBeNull();

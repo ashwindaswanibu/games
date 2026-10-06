@@ -14,7 +14,7 @@ export function SignupForm() {
       <Field label="Username" name="username" autoComplete="username" autoCapitalize="none" required defaultValue={state.values?.username} error={err.username} hint="How you sign in. Can't be changed." />
       <Field label="Display name" name="displayName" autoComplete="nickname" required defaultValue={state.values?.displayName} error={err.displayName} hint="What friends see on the leaderboard." />
       <Field label="Password" name="password" type="password" autoComplete="new-password" required minLength={8} error={err.password} />
-      <Field label="Invite code" name="inviteCode" autoCapitalize="none" required error={err.inviteCode} />
+      <Field label="Invite code" name="inviteCode" autoCapitalize="none" autoComplete="off" spellCheck={false} required error={err.inviteCode} hint="Your own code from an admin. It works once." />
       <SubmitButton pendingText="Creating account…">Create account</SubmitButton>
     </form>
   );

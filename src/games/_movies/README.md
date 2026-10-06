@@ -20,13 +20,13 @@ For a game with id `<id>`, a lowercase slug such as `frame-by-frame` (never rena
 | `src/games/<id>/logic.test.ts` | Unit tests for `applyMove`, `outcome`, `score`, `shareGrid` and `reveal`, written with plain resolved moves. |
 | `src/games/<id>/server.ts` | `import "server-only"` and `defineGameServer(game, { resolveMove })`. Only needed if moves need lookups. |
 | `src/games/<id>/server.test.ts` | Tests for `resolveMove`, using `createFakeGameServices` (no database). |
-| `src/games/<id>/ui.tsx` | `"use client"` component taking `GameUiProps<typeof yourGame>`, built from the kit in `./ui`. |
+| `src/games/<id>/ui.tsx` | `"use client"` component taking `GameUiProps<typeof yourGame>`, built from the kit in `./ui`, plus `export const YourEntry = connectGameUi(YourUi)`. |
 | `scripts/content/fixtures/<id>.mts` | DEV FIXTURE generator. The file name must equal the game id. |
 
 Then register it. These are the only shared files you touch, and each needs one line:
 
 - `src/games/registry.ts`: add the game to `GAMES`.
-- `src/games/ui.ts`: add `"<id>": YourUi`.
+- `src/app/(app)/play/<id>/page.tsx`: a copy of another game's play route, pointed at your id and entry (one route per game keeps testing games out of players' bundles).
 - `src/games/server-registry.ts`: add your server module to `GAME_SERVERS`, if you have one.
 
 `src/games/registry.test.ts` fails if these three disagree. Every Movies game uses

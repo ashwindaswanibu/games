@@ -44,9 +44,9 @@ export default async function LeaderboardPage({ searchParams }: PageProps<"/lead
   const date = today();
   const gameIds = scope.kind === "game" ? [scope.game.id] : scope.kind === "bucket" ? scope.games.map((g) => g.id) : liveGameIds();
   const [rows, streaks, labels] = await Promise.all([
-    getLeaderboard(gameIds, period, date),
+    getLeaderboard(gameIds, period, date, profile.id),
     getStreaks(gameIds, date),
-    scope.kind === "game" && period === "today" ? getDayLabels(scope.game.id, date) : Promise.resolve(undefined),
+    scope.kind === "game" && period === "today" ? getDayLabels(scope.game.id, date, profile.id) : Promise.resolve(undefined),
   ]);
 
   const href = (target: { bucket?: string; game?: string }, p: Period) => {

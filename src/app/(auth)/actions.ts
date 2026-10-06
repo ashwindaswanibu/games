@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { publicEnv } from "@/lib/public-env";
 import { displayNameSchema, passwordSchema, usernameSchema } from "@/lib/validation";
-import { emailForUsername, getProfile, isValidInviteCode, requireUser } from "@/server/auth";
+import { emailForUsername, getProfile, requireUser } from "@/server/auth";
+import { isOpenInvite, redeemInvite, takeInviteAttempt, TOO_MANY_INVITE_ATTEMPTS, type RedeemResult } from "@/server/invite";
+import { takeSignInAttempt, TOO_MANY_SIGN_IN_ATTEMPTS } from "@/server/sign-in-limit";
 import { db } from "@/server/supabase/admin";
 import { sessionClient } from "@/server/supabase/session";
 
@@ -17,6 +19,48 @@ export interface FormState {
 }
 
 const UNIQUE_VIOLATION = "23505";
+/** The unique index on `lower(display_name)` (see the display-name migration). */
+const DISPLAY_NAME_INDEX = "profiles_display_name_lower_key";
+const BAD_INVITE = "That invite code isn't right, or it was already used.";
+
+/** The field a unique violation on `profiles` is about: the display name, or else the username. */
+function takenField(error: { message?: string; details?: string }): Partial<Record<string, string>> {
+  return `${error.message ?? ""} ${error.details ?? ""}`.includes(DISPLAY_NAME_INDEX)
+    ? { displayName: "Someone already uses that display name." }
+    : { username: "That username is taken." };
+}
+
+/**
+ * An auth user that holds `email` but has no profile can't be a player: a sign-up never finishes
+ * without a profile (it deletes the auth user if the profile insert fails), so such a user was
+ * registered straight through Supabase Auth to squat the username, or is debris from a crash.
+ * Remove it so the real player can sign up. Very recent ones are left alone, since they may be a
+ * concurrent sign-up that is about to insert its profile. Returns whether one was removed.
+ */
+const ORPHAN_MIN_AGE_MS = 2 * 60 * 1000;
+async function removeOrphanAuthUser(email: string): Promise<boolean> {
+  const { data, error } = await db().rpc("orphan_auth_user_for_email", { p_email: email });
+  if (error) throw new Error(`Failed to look up auth user: ${error.message}`);
+  const orphan = data[0];
+  if (!orphan || Date.now() - new Date(orphan.created_at).getTime() < ORPHAN_MIN_AGE_MS) return false;
+  const { error: deleteError } = await db().auth.admin.deleteUser(orphan.id);
+  if (deleteError) throw new Error(`Failed to remove orphan auth user: ${deleteError.message}`);
+  console.warn(`signUp: removed profileless auth user ${orphan.id} holding ${email}`);
+  return true;
+}
+
+function createPasswordUser(username: string, password: string) {
+  // Admin API: creates a confirmed account without sending email (the address is synthetic). It
+  // works with public sign-ups disabled in Supabase Auth, which they should be.
+  return db().auth.admin.createUser({
+    email: emailForUsername(username),
+    password,
+    email_confirm: true,
+    user_metadata: { username },
+  });
+}
+
+const isEmailExists = (error: { code?: string; status?: number } | null) => error?.code === "email_exists" || error?.status === 422;
 
 function fieldErrors(error: z.ZodError): Partial<Record<string, string>> {
   const out: Partial<Record<string, string>> = {};
@@ -33,6 +77,7 @@ export async function signInWithPassword(_prev: FormState, formData: FormData): 
   const password = text(formData, "password");
   const values = { username: text(formData, "username") };
   if (!username.success || !password) return { error: "Wrong username or password.", values };
+  if (!(await takeSignInAttempt(username.data))) return { error: TOO_MANY_SIGN_IN_ATTEMPTS, values };
 
   const supabase = await sessionClient();
   const { error } = await supabase.auth.signInWithPassword({ email: emailForUsername(username.data), password });
@@ -58,12 +103,22 @@ export async function signInWithGoogle(): Promise<void> {
 
 // ---------------------------------------------------------------------------------------------
 
+const inviteCodeSchema = z.string().trim().min(1, "Ask an admin for an invite code.").max(64, "That invite code isn't right.");
+
 const signUpSchema = z.object({
   username: usernameSchema,
   displayName: displayNameSchema,
   password: passwordSchema,
-  inviteCode: z.string().min(1, "Ask a friend for the invite code."),
+  inviteCode: inviteCodeSchema,
 });
+
+/** The form's answer to a failed `redeemInvite`. */
+function redeemFailure(result: Exclude<RedeemResult, { ok: true }>, values: Record<string, string>): FormState {
+  if (result.reason === "invalid_invite") return { fieldErrors: { inviteCode: BAD_INVITE }, values };
+  return result.error.code === UNIQUE_VIOLATION
+    ? { fieldErrors: takenField(result.error), values }
+    : { error: "Couldn't create your account. Try again.", values };
+}
 
 export async function signUp(_prev: FormState, formData: FormData): Promise<FormState> {
   const values = { username: text(formData, "username"), displayName: text(formData, "displayName") };
@@ -71,33 +126,28 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values };
   const { username, displayName, password, inviteCode } = parsed.data;
 
-  if (!isValidInviteCode(inviteCode)) return { fieldErrors: { inviteCode: "That invite code isn't right." }, values };
+  if (!(await takeInviteAttempt())) return { error: TOO_MANY_INVITE_ATTEMPTS, values };
+  if (!(await isOpenInvite(inviteCode))) return { fieldErrors: { inviteCode: BAD_INVITE }, values };
 
   const { data: taken } = await db().from("profiles").select("id").eq("username", username).maybeSingle();
   if (taken) return { fieldErrors: { username: "That username is taken." }, values };
 
-  // Admin API: creates a confirmed account without sending email (the address is synthetic).
-  const { data: created, error: createError } = await db().auth.admin.createUser({
-    email: emailForUsername(username),
-    password,
-    email_confirm: true,
-    user_metadata: { username },
-  });
+  let { data: created, error: createError } = await createPasswordUser(username, password);
+  if (isEmailExists(createError) && (await removeOrphanAuthUser(emailForUsername(username)))) {
+    ({ data: created, error: createError } = await createPasswordUser(username, password));
+  }
   if (createError || !created.user) {
-    const exists = createError?.code === "email_exists" || createError?.status === 422;
-    return exists ? { fieldErrors: { username: "That username is taken." }, values } : { error: "Couldn't create your account. Try again.", values };
+    return isEmailExists(createError) ? { fieldErrors: { username: "That username is taken." }, values } : { error: "Couldn't create your account. Try again.", values };
   }
 
-  const { error: profileError } = await db()
-    .from("profiles")
-    .insert({ id: created.user.id, username, display_name: displayName });
-  if (profileError) {
+  // Spends the invite and creates the profile together; it fails if the invite was used meanwhile.
+  const redeemed = await redeemInvite(inviteCode, { id: created.user.id, username, displayName });
+  if (!redeemed.ok) {
     // Don't leave an auth user without a profile behind.
     await db().auth.admin.deleteUser(created.user.id);
-    return profileError.code === UNIQUE_VIOLATION
-      ? { fieldErrors: { username: "That username is taken." }, values }
-      : { error: "Couldn't create your account. Try again.", values };
+    return redeemFailure(redeemed, values);
   }
+  console.info(`signUp: new player ${created.user.id} (@${username})`);
 
   const supabase = await sessionClient();
   const { error: signInError } = await supabase.auth.signInWithPassword({ email: emailForUsername(username), password });
@@ -110,7 +160,7 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
 const onboardingSchema = z.object({
   username: usernameSchema,
   displayName: displayNameSchema,
-  inviteCode: z.string().min(1, "Ask a friend for the invite code."),
+  inviteCode: inviteCodeSchema,
 });
 
 /** Google users land here after their first sign-in to claim a username. */
@@ -123,14 +173,11 @@ export async function completeOnboarding(_prev: FormState, formData: FormData): 
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values };
   const { username, displayName, inviteCode } = parsed.data;
 
-  if (!isValidInviteCode(inviteCode)) return { fieldErrors: { inviteCode: "That invite code isn't right." }, values };
+  if (!(await takeInviteAttempt(user.id))) return { error: TOO_MANY_INVITE_ATTEMPTS, values };
 
-  const { error } = await db().from("profiles").insert({ id: user.id, username, display_name: displayName });
-  if (error) {
-    return error.code === UNIQUE_VIOLATION
-      ? { fieldErrors: { username: "That username is taken." }, values }
-      : { error: "Couldn't save your profile. Try again.", values };
-  }
+  const redeemed = await redeemInvite(inviteCode, { id: user.id, username, displayName });
+  if (!redeemed.ok) return redeemFailure(redeemed, values);
+  console.info(`onboarding: new player ${user.id} (@${username})`);
   redirect("/");
 }
 

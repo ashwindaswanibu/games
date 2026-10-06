@@ -29,13 +29,15 @@ export function LeaderboardTable({
           <li key={row.user_id} className={`flex items-center gap-3 px-4 py-3 ${row.user_id === viewerId ? "bg-accent/8" : ""}`}>
             <span className={`w-6 text-center text-sm font-semibold tabular-nums ${played ? "" : "text-muted"}`}>{played ? row.rank : "–"}</span>
             <Avatar name={row.display_name} />
-            <Link href={`/u/${row.username}`} className="min-w-0 flex-1">
+            {/* `w-0` keeps the truncated names out of the row's min-content width, so a long handle
+                can't widen the grid the table sits in (and the page) on a phone. */}
+            <Link href={`/u/${row.username}`} className="w-0 min-w-0 flex-1">
               <span className="block truncate font-medium">
                 {row.display_name}
                 {row.user_id === viewerId && <span className="ml-1.5 text-xs font-normal text-muted">you</span>}
               </span>
-              <span className="block text-xs text-muted">
-                {played ? `${row.games_played} played${row.avg_score !== null ? ` · avg ${row.avg_score}` : ""}` : "Hasn't played"}
+              <span className="block truncate text-xs text-muted">
+                @{row.username} · {played ? `${row.games_played} played${row.avg_score !== null ? ` · avg ${row.avg_score}` : ""}` : "Hasn't played"}
                 {streak > 1 && ` · 🔥 ${streak}`}
               </span>
             </Link>

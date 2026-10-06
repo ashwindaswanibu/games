@@ -6,6 +6,7 @@ import type { FilmSearchHit } from "@/games/_movies/schemas";
 import { FilmSearch, GuessLog, guessAnnouncement, IrisReveal, LastGuess, LiveStatus, MoviesButton, MoviesStage } from "@/games/_movies/ui";
 import { colorBarcode, edgeCode, EDGE_CODE_AFTER_MISSES, type EdgeCode, type Reveal } from "./logic";
 import styles from "./color-barcode.module.css";
+import { connectGameUi } from "../game-ui-context";
 
 /**
  * Color Barcode's board, on the kit's neutral-gray stage (a colorist's suite: R = G = B around the
@@ -258,3 +259,6 @@ function RevealCard({ reveal, won, gaveUp, guesses }: { reveal: Reveal; won: boo
     </section>
   );
 }
+
+/** What the play page renders for this game; the game host supplies the props. */
+export const ColorBarcodeEntry = connectGameUi(ColorBarcodeUi);

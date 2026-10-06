@@ -20,7 +20,7 @@ export default async function TodayPage() {
   const [plays, counts, board, streaks] = await Promise.all([
     loadPlaysForDay(profile.id, date),
     finishedCounts(date),
-    getLeaderboard(liveIds, "today", date),
+    getLeaderboard(liveIds, "today", date, profile.id),
     getStreaks(liveIds, date),
   ]);
 

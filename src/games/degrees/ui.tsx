@@ -6,6 +6,7 @@ import type { FilmRef, FilmSearchHit, PersonRef } from "@/games/_movies/schemas"
 import { FilmSearch, LiveStatus, MoviesButton, MoviesStage, PersonSearch } from "@/games/_movies/ui";
 import { chainPersonIds, currentActor, degrees, maxLinks, type DegreesLink } from "./logic";
 import styles from "./degrees.module.css";
+import { connectGameUi } from "../game-ui-context";
 
 type Props = GameUiProps<typeof degrees>;
 
@@ -300,3 +301,6 @@ function FilmSplice({ film, index, draft = false, action }: { film: FilmRef; ind
     </div>
   );
 }
+
+/** What the play page renders for this game; the game host supplies the props. */
+export const DegreesEntry = connectGameUi(DegreesUi);
