@@ -130,7 +130,11 @@ async function main() {
   console.log(`▸ ${film.title}${film.year ? ` (${film.year})` : ""}, catalog id ${film.id}`);
 
   const used = (await datesWithAnswer(db, film.id)).filter((d) => d !== args.date);
-  if (used.length > 0 && !args["allow-repeat"]) throw new Error(`${film.title} is already the answer on ${used.join(", ")} (pass --allow-repeat to use it again)`);
+  if (used.length > 0 && !args["allow-repeat"]) {
+    const message = `${film.title} is already the answer on ${used.join(", ")}`;
+    if (!dryRun) throw new Error(`${message} (pass --allow-repeat to use it again)`);
+    console.warn(`  ⚠ ${message}`);
+  }
 
   let date: PuzzleDate | null = null;
   if (!dryRun || args.date) date = await pickDate(db);
