@@ -57,6 +57,7 @@ Guess the movie from its color grading, revealed in stages:
   - You can go back to view earlier levels.
   - Shows the attempt number and attempts left. Nothing else is required.
   - Fill the space creatively, laptop first.
+- **Wrong guesses (Ashwin, 2026-10-06):** NO comparison barcode for the guessed film. The game is simply the reel unreeling, or decompressing, a bit more after each wrong guess.
 - **Film selection (Ashwin, 2026-10-06):** random daily film that is popular enough. Claude does the first pass on how to measure "popular"; Ashwin reviews.
 
 Guess the movie from its "barcode": every frame of the film reduced to its average color, lined up left to right as thin vertical stripes. The whole film's color arc reads at a glance, e.g. the warm-to-cold shift of a thriller or the green of The Matrix.
