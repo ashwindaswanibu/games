@@ -47,3 +47,6 @@ next-env.d.ts
 # Intermediate review screenshots/frames from design iterations (regenerable; keep the repo lean)
 /design/home/shots/
 /design/home/frames/
+
+# Supabase CLI link state (project ref, pooler URL)
+/supabase/.temp/
