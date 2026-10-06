@@ -191,7 +191,8 @@ enable_manual_linking = false
 minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
-password_requirements = ""
+# Matches the hosted project (Auth > Passwords) and the app's own `passwordSchema`.
+password_requirements = "letters_digits"
 
 # Configure passkey sign-ins.
 # [auth.passkey]
@@ -283,7 +284,12 @@ otp_expiry = 3600
 # Allow/disallow new user signups via SMS to your project.
 enable_signup = false
 # If enabled, users need to confirm their phone number before signing in.
-enable_confirmations = false
+# Keep this on even though phone sign-up is off: Supabase Auth only hides whether an email is
+# already registered (answering a repeat sign-up like a new one) when neither email nor phone
+# sign-ups are auto-confirmed. Off, `POST /auth/v1/signup` with a player's sign-in email answers
+# "User already registered", telling anyone with the publishable key who is a member. Hosted:
+# Auth > Providers > Phone > "Confirm phone" on.
+enable_confirmations = true
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.

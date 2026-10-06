@@ -17,6 +17,10 @@ import { GAMES } from "@/games/registry";
 const NEXT_DIR = path.resolve(".next");
 const SERVER_APP = path.join(NEXT_DIR, "server", "app");
 if (!existsSync(SERVER_APP)) throw new Error("No production build found; run `npm run build` first");
+// The manifests' shape below is Turbopack's (what `next build` uses); a webpack build differs.
+if (existsSync(path.join(NEXT_DIR, "server", "webpack-runtime.js"))) {
+  throw new Error(".next holds a webpack build (`next build --webpack`); this check reads Turbopack's manifests. Run `npm run build` first");
+}
 
 interface RscManifest {
   entryJSFiles: Record<string, string[]>;
@@ -35,6 +39,9 @@ function routeChunks(): Map<string, Set<string>> {
         const sandbox = { __RSC_MANIFEST: {} as Record<string, RscManifest> };
         new Function("globalThis", "self", readFileSync(file, "utf8"))(sandbox, sandbox);
         for (const [route, manifest] of Object.entries(sandbox.__RSC_MANIFEST)) {
+          if (!manifest.entryJSFiles || !manifest.clientModules) {
+            throw new Error(`${path.relative(NEXT_DIR, file)} isn't a client reference manifest this check understands (from a Turbopack \`next build\`)`);
+          }
           const chunks = new Set<string>();
           const add = (chunk: string) => chunks.add(chunk.replace(/^\/?_next\//, ""));
           for (const files of Object.values(manifest.entryJSFiles)) files.forEach(add);

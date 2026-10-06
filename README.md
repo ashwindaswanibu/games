@@ -185,8 +185,12 @@ rename to that name deletes it (`reclaimSignInEmail` in `src/server/profiles.ts`
 Providers → Email → **Confirm email** and **Secure email change** on in the hosted project (both
 are on in `supabase/config.toml`): they stop that endpoint from producing a signed-in account, or
 an email change, for an address its caller doesn't control, and stop a pre-registered password
-surviving a friend's first Google sign-in with the same address. Don't turn the Email provider off:
-username/password sign-in goes through it.
+surviving a friend's first Google sign-in with the same address. Also keep **Confirm phone** on
+(Providers → Phone; on in `config.toml` too, even though phone sign-in is off): Supabase only
+answers a sign-up for an already registered email like any other sign-up when neither email nor
+phone sign-ups are auto-confirmed, and otherwise says "User already registered", which tells anyone
+whether a Gmail address belongs to a player. Don't turn the Email provider off: username/password
+sign-in goes through it.
 
 ## Deploying
 
@@ -197,13 +201,17 @@ username/password sign-in goes through it.
    Supabase → Authentication → Users).
 3. In Supabase → Auth → URL Configuration, set the Site URL to your Vercel domain.
 4. In Supabase → Auth, match `supabase/config.toml`: "Allow new users to sign up" **on** (Google),
-   Email provider on with "Confirm email" and "Secure email change" on, and "Secure password
-   change" on. The password-change trigger is what actually stops a stolen session from changing a
-   password; secure password change only covers sessions older than a day.
-5. Recommended, in Supabase → Auth: turn on leaked-password protection and stronger password
-   requirements if your plan has them, since anyone can call Supabase Auth directly with the public
-   key. Leave the sign-in rate limit at its default: every sign-in through the app reaches Auth
-   from Vercel's addresses, so a lower limit would lock friends out.
+   Email provider on with "Confirm email" and "Secure email change" on, "Secure password change"
+   on, and phone confirmations on. The password-change trigger is what actually stops a stolen
+   session from changing a password; secure password change only covers sessions older than a day.
+   `curl -s https://<ref>.supabase.co/auth/v1/settings -H "apikey: <publishable key>"` should show
+   `mailer_autoconfirm: false` and `phone_autoconfirm: false`.
+5. In Supabase → Auth → Passwords: require letters and digits (`password_requirements` in
+   `config.toml`; the app's sign-up and admin reset check the same rule first), and turn on
+   leaked-password protection if your plan has it, since anyone can call Supabase Auth directly
+   with the public key. A password Supabase still refuses is reported on the password field. Leave
+   the sign-in rate limit at its default: every sign-in through the app reaches Auth from Vercel's
+   addresses, so a lower limit would lock friends out.
 
 ## Accounts
 

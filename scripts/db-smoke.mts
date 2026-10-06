@@ -21,6 +21,8 @@ const opts = { auth: { persistSession: false, autoRefreshToken: false } };
 const admin = createClient(url, secretKey, opts);
 const GAME = "smoke-test";
 const tag = randomBytes(3).toString("hex");
+/** Random, and always meets the hosted password rule (at least one letter and one digit). */
+const randomPassword = () => `pw1-${randomBytes(12).toString("hex")}`;
 const userIds: string[] = [];
 const filmIds: number[] = [];
 const personIds: number[] = [];
@@ -46,7 +48,7 @@ interface Player {
 async function makePlayer(name: string): Promise<Player> {
   const username = `smoke_${name}_${tag}`;
   const email = emailFor(username);
-  const password = randomBytes(12).toString("hex");
+  const password = randomPassword();
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
   userIds.push(data.user.id);
@@ -263,7 +265,7 @@ async function passwordChecks(alice: Player) {
   const stolen = await fetch(`${url}/auth/v1/user`, {
     method: "PUT",
     headers: { apikey: publishableKey, authorization: `Bearer ${session.session?.access_token}`, "content-type": "application/json" },
-    body: JSON.stringify({ password: randomBytes(12).toString("hex") }),
+    body: JSON.stringify({ password: randomPassword() }),
   });
   check("a session can't change its own password through Supabase Auth", !stolen.ok, stolen.status);
   const { error: stillIn } = await alice.client.auth.refreshSession();
@@ -271,7 +273,7 @@ async function passwordChecks(alice: Player) {
   const { error: oldPassword } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password: alice.password });
   check("…and their password is unchanged", !oldPassword, oldPassword);
 
-  const newPassword = randomBytes(12).toString("hex");
+  const newPassword = randomPassword();
   const { error: unauthorised } = await admin.auth.admin.updateUserById(alice.id, { password: newPassword });
   check("even the admin API can't change a password the server hasn't authorised", Boolean(unauthorised));
 
@@ -280,7 +282,7 @@ async function passwordChecks(alice: Player) {
   check("an authorised admin reset changes the password", !allowError && !authorised, { allowError, authorised });
   const { error: newSignIn } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password: newPassword });
   check("…and the new password works", !newSignIn, newSignIn);
-  const { error: reused } = await admin.auth.admin.updateUserById(alice.id, { password: randomBytes(12).toString("hex") });
+  const { error: reused } = await admin.auth.admin.updateUserById(alice.id, { password: randomPassword() });
   check("an authorisation is good for one change only", Boolean(reused));
 
   const { error: metadata } = await admin.auth.admin.updateUserById(alice.id, { user_metadata: { smoke: true } });
@@ -298,17 +300,28 @@ async function publicSignUpChecks(alice: Player) {
   const settings = (await (await fetch(`${url}/auth/v1/settings`, { headers: { apikey: publishableKey } })).json()) as {
     disable_signup: boolean;
     mailer_autoconfirm: boolean;
+    phone_autoconfirm: boolean;
   };
   const signUpOpen = !settings.disable_signup;
-  console.log(`  · this Supabase: public sign-up ${signUpOpen ? "open" : "closed"}, Confirm email ${settings.mailer_autoconfirm ? "off" : "on"}`);
+  const confirms = (autoconfirm: boolean) => (autoconfirm ? "off" : "on");
+  console.log(
+    `  · this Supabase: public sign-up ${signUpOpen ? "open" : "closed"}, Confirm email ${confirms(settings.mailer_autoconfirm)}, Confirm phone ${confirms(settings.phone_autoconfirm)}`,
+  );
   check("public sign-up is closed, or open with Confirm email on (never a session for an unproven address)", !signUpOpen || !settings.mailer_autoconfirm, settings);
+  // Supabase Auth answers a sign-up for an existing email like a new one only when neither email
+  // nor phone sign-ups are auto-confirmed; otherwise it says "User already registered".
+  check("public sign-up is closed, or open with Confirm phone on too (doesn't reveal who is registered)", !signUpOpen || !settings.phone_autoconfirm, settings);
 
   const outsider = createClient(url, publishableKey, opts);
-  const password = randomBytes(12).toString("hex");
+  const password = randomPassword();
 
   // (a) Can't take over or sign in as an existing player by registering their sign-in email.
-  const { data: copy } = await outsider.auth.signUp({ email: alice.email, password });
+  const { data: copy, error: copyError } = await outsider.auth.signUp({ email: alice.email, password });
   check("signing up with a player's sign-in email gives no session", !copy?.session, { session: Boolean(copy?.session) });
+  if (signUpOpen) {
+    // A 422 `user_already_exists` here would make the endpoint an oracle for who is a member.
+    check("…and is answered like any new sign-up, so it doesn't reveal that the player exists", !copyError && Boolean(copy?.user), copyError);
+  }
   const { error: theirPassword } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password });
   check("…and the outsider's password doesn't open the player's account", Boolean(theirPassword));
   const { error: ownPassword } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password: alice.password });
@@ -359,7 +372,7 @@ async function profileChecks(alice: Player) {
   await admin.from("profiles").update({ display_name: displayNameFor("alice") }).eq("id", alice.id);
 
   const orphanEmail = `smoke_orphan_${tag}@users.daily.invalid`;
-  const { data: orphan } = await admin.auth.admin.createUser({ email: orphanEmail, password: randomBytes(12).toString("hex"), email_confirm: true });
+  const { data: orphan } = await admin.auth.admin.createUser({ email: orphanEmail, password: randomPassword(), email_confirm: true });
   if (orphan.user) userIds.push(orphan.user.id);
   const { data: found } = await admin.rpc("orphan_auth_user_for_email", { p_email: orphanEmail.toUpperCase() });
   check("an auth user without a profile is found by email", found?.length === 1 && found[0].id === orphan.user?.id, found);
