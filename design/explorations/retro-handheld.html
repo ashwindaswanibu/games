@@ -1,0 +1,1331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handheld ’89 — Daily</title>
+<meta name="description" content="Daily style exploration, retro-stylized variant: a 1989 pocket console with a four-shade LCD, a plastic shell and segmented digits.">
+<script>(function(){var h=location.hash.slice(1);if(h==='light'||h==='dark'){document.documentElement.dataset.theme=h;}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Pixelify+Sans:wght@400..700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   HANDHELD '89 — tokens
+   LCD is a strict 4-shade world (0 = pixels off … 3 = pixels fully on).
+   The shell is the only place colour lives.
+   ========================================================================== */
+:root{
+  --f-shell:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-px:"Silkscreen","Courier New",ui-monospace,monospace;
+  --f-lcd:"Pixelify Sans","Trebuchet MS",system-ui,sans-serif;
+  --notch:polygon(0 2px,2px 2px,2px 0,calc(100% - 2px) 0,calc(100% - 2px) 2px,100% 2px,100% calc(100% - 2px),calc(100% - 2px) calc(100% - 2px),calc(100% - 2px) 100%,2px 100%,2px calc(100% - 2px),0 calc(100% - 2px));
+  --notch4:polygon(0 4px,2px 4px,2px 2px,4px 2px,4px 0,calc(100% - 4px) 0,calc(100% - 4px) 2px,calc(100% - 2px) 2px,calc(100% - 2px) 4px,100% 4px,100% calc(100% - 4px),calc(100% - 2px) calc(100% - 4px),calc(100% - 2px) calc(100% - 2px),calc(100% - 4px) calc(100% - 2px),calc(100% - 4px) 100%,4px 100%,4px calc(100% - 2px),2px calc(100% - 2px),2px calc(100% - 4px),0 calc(100% - 4px));
+
+  /* board (the instruction-booklet page) */
+  --board:#E3E3DE; --board-dot:rgba(28,27,34,.10); --panel:#ECECE7;
+  --board-ink:#1C1B22; --board-mute:#55535F; --board-line:#C4C3BA;
+  --accent:#8E2753; --accent-2:#2B2D5C; --title:#2B2D5C; --title-shadow:#A3B067;
+  --focus:#8E2753;
+
+  /* shell (putty plastic) */
+  --shell:#D3CFC5; --shell-hi:#E7E4DD; --shell-lo:#BCB7AB; --shell-edge:#9C9689;
+  --shell-gloss:linear-gradient(118deg,rgba(255,255,255,.22) 0 13%,transparent 13.2%);
+  --shell-print:#2B2D5C; --shell-groove:rgba(0,0,0,.16); --shell-ridge:rgba(255,255,255,.65);
+  --bezel:#54535F; --bezel-lo:#46454F; --bezel-print:#D6D4DE;
+  --stripe-a:#8E2753; --stripe-b:#3B4396;
+  --btn-ab:#8E2753; --btn-ab-hi:#B9507F; --btn-ab-lo:#5E1636; --btn-ab-ink:#F6E9EF;
+  --dpad:#2A2930; --pill:#8B8894; --pill-well:rgba(0,0,0,.08); --pill-act:#8E2753;
+  --grille:rgba(40,36,30,.34); --led:#E0384F; --led-glow:rgba(224,56,79,.6);
+  --dev-shadow:0 26px 40px -18px rgba(28,27,34,.45);
+
+  /* LCD — "Pea" day panel */
+  --lcd-0:#C8D19A; --lcd-1:#94A35F; --lcd-2:#44542A; --lcd-3:#1D2712;
+  --lcd-bg:linear-gradient(168deg,#CCD59F 0%,#C8D19A 50%,#C3CC93 100%);
+  --lcd-grid:rgba(29,39,18,.055);
+  --lcd-ts:1px 1px 0 rgba(29,39,18,.17);
+  --lcd-ds:drop-shadow(1px 1px 0 rgba(29,39,18,.17));
+  --lcd-inset:inset 0 0 0 2px rgba(0,0,0,.28),inset 5px 5px 0 rgba(0,0,0,.07);
+  --seg-off:rgba(29,39,18,.085); --seg-off-inv:rgba(200,209,154,.14);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --board:#121117; --board-dot:rgba(236,232,243,.07); --panel:#1A1921;
+    --board-ink:#ECE8F3; --board-mute:#A7A2B5; --board-line:#2E2C38;
+    --accent:#E26C9F; --accent-2:#8E97E8; --title:#CBC2E6; --title-shadow:#2F5640;
+    --focus:#F08BB8;
+    --shell:#2A2533; --shell-hi:#3B3447; --shell-lo:#1C1824; --shell-edge:#0B0910;
+    --shell-gloss:linear-gradient(118deg,rgba(214,196,255,.075) 0 22%,transparent 22.2%);
+    --shell-print:#CBC2E6; --shell-groove:rgba(0,0,0,.5); --shell-ridge:rgba(255,255,255,.07);
+    --bezel:#0F0D13; --bezel-lo:#08070B; --bezel-print:#9C95AF;
+    --stripe-a:#C2477E; --stripe-b:#5D6BD0;
+    --btn-ab:#A3346A; --btn-ab-hi:#D2629A; --btn-ab-lo:#4F1632; --btn-ab-ink:#FBEFF5;
+    --dpad:#0C0B10; --pill:#4A4458; --pill-well:rgba(0,0,0,.32); --pill-act:#F08BB8;
+    --grille:rgba(0,0,0,.6); --led:#6CF2A6; --led-glow:rgba(108,242,166,.75);
+    --dev-shadow:0 26px 50px -16px rgba(0,0,0,.8);
+    --lcd-0:#0B1510; --lcd-1:#2F5640; --lcd-2:#63A57B; --lcd-3:#C2F7CF;
+    --lcd-bg:radial-gradient(130% 90% at 50% 30%,#11211A 0%,#0B1510 62%,#08100C 100%);
+    --lcd-grid:rgba(0,0,0,.2);
+    --lcd-ts:0 0 6px rgba(194,247,207,.42);
+    --lcd-ds:drop-shadow(0 0 3px rgba(194,247,207,.5));
+    --lcd-inset:inset 0 0 0 2px rgba(0,0,0,.65),inset 0 0 26px rgba(0,0,0,.55);
+    --seg-off:rgba(194,247,207,.075); --seg-off-inv:rgba(11,21,16,.13);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --board:#121117; --board-dot:rgba(236,232,243,.07); --panel:#1A1921;
+  --board-ink:#ECE8F3; --board-mute:#A7A2B5; --board-line:#2E2C38;
+  --accent:#E26C9F; --accent-2:#8E97E8; --title:#CBC2E6; --title-shadow:#2F5640;
+  --focus:#F08BB8;
+  --shell:#2A2533; --shell-hi:#3B3447; --shell-lo:#1C1824; --shell-edge:#0B0910;
+  --shell-gloss:linear-gradient(118deg,rgba(214,196,255,.075) 0 22%,transparent 22.2%);
+  --shell-print:#CBC2E6; --shell-groove:rgba(0,0,0,.5); --shell-ridge:rgba(255,255,255,.07);
+  --bezel:#0F0D13; --bezel-lo:#08070B; --bezel-print:#9C95AF;
+  --stripe-a:#C2477E; --stripe-b:#5D6BD0;
+  --btn-ab:#A3346A; --btn-ab-hi:#D2629A; --btn-ab-lo:#4F1632; --btn-ab-ink:#FBEFF5;
+  --dpad:#0C0B10; --pill:#4A4458; --pill-well:rgba(0,0,0,.32); --pill-act:#F08BB8;
+  --grille:rgba(0,0,0,.6); --led:#6CF2A6; --led-glow:rgba(108,242,166,.75);
+  --dev-shadow:0 26px 50px -16px rgba(0,0,0,.8);
+  --lcd-0:#0B1510; --lcd-1:#2F5640; --lcd-2:#63A57B; --lcd-3:#C2F7CF;
+  --lcd-bg:radial-gradient(130% 90% at 50% 30%,#11211A 0%,#0B1510 62%,#08100C 100%);
+  --lcd-grid:rgba(0,0,0,.2);
+  --lcd-ts:0 0 6px rgba(194,247,207,.42);
+  --lcd-ds:drop-shadow(0 0 3px rgba(194,247,207,.5));
+  --lcd-inset:inset 0 0 0 2px rgba(0,0,0,.65),inset 0 0 26px rgba(0,0,0,.55);
+  --seg-off:rgba(194,247,207,.075); --seg-off-inv:rgba(11,21,16,.13);
+  color-scheme:dark;
+}
+
+/* ==========================================================================
+   Base / board
+   ========================================================================== */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--board); color:var(--board-ink);
+  background-image:radial-gradient(var(--board-dot) 1px,transparent 1.4px);
+  background-size:16px 16px;
+  font:400 15px/1.55 var(--f-shell);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:clip;
+}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.sheet{max-width:1560px;margin:0 auto;padding:22px 32px 72px}
+@media (max-width:600px){.sheet{padding:14px 16px 56px}}
+
+/* ==========================================================================
+   Masthead — box-art / instruction booklet
+   ========================================================================== */
+.mast-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 18px;
+  font:400 12px/1.2 var(--f-px);letter-spacing:.04em;color:var(--board-mute);
+  padding-bottom:10px;border-bottom:2px solid var(--board-ink)}
+.mast-top b{color:var(--board-ink);font-weight:400}
+.mast-main{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px 48px;align-items:end;padding:30px 0 34px}
+@media (max-width:900px){.mast-main{grid-template-columns:minmax(0,1fr)}}
+.kicker{margin:0 0 14px;font:400 12px/1.2 var(--f-px);color:var(--accent);letter-spacing:.06em}
+.mast h1{margin:0;font-family:var(--f-shell);font-weight:900;font-style:italic;font-stretch:125%;
+  font-size:clamp(46px,9.4vw,138px);line-height:.84;letter-spacing:-.025em;text-transform:uppercase;
+  color:var(--title);text-shadow:.05em .05em 0 var(--title-shadow);overflow-wrap:anywhere}
+.mast h1 .yr{color:var(--accent)}
+.bandline{display:flex;align-items:center;gap:12px;margin:22px 0 18px;max-width:880px}
+.bandline .bars{flex:1;display:grid;gap:3px;min-width:24px}
+.bandline .bars i{display:block;height:4px;background:var(--stripe-a)}
+.bandline .bars i+i{background:var(--stripe-b)}
+.bandline span{font:700 italic 11px/1 var(--f-shell);letter-spacing:.22em;text-transform:uppercase;color:var(--board-mute);white-space:nowrap}
+@media (max-width:520px){.bandline span{white-space:normal;letter-spacing:.14em}}
+.concept{margin:0;max-width:62ch;font-size:clamp(16px,1.5vw,19px);line-height:1.5}
+.concept em{font-style:normal;background:linear-gradient(transparent 62%,color-mix(in srgb,var(--title-shadow) 70%,transparent) 0)}
+
+.mast-side{display:flex;flex-direction:column;gap:18px;align-items:flex-start;min-width:260px}
+.power{display:grid;grid-template-columns:auto auto;align-items:center;gap:6px 14px;padding:12px 14px 12px 16px;
+  background:var(--panel);border:2px solid var(--board-ink);cursor:pointer;clip-path:var(--notch4);text-align:left}
+.power .pw-l{font:400 12px/1 var(--f-px);letter-spacing:.06em;grid-column:1/-1;color:var(--board-mute)}
+.pw-track{position:relative;width:76px;height:26px;border-radius:13px;background:var(--shell-lo);
+  box-shadow:inset 0 2px 3px rgba(0,0,0,.35),0 1px 0 var(--shell-ridge)}
+.pw-knob{position:absolute;top:3px;left:4px;width:34px;height:20px;border-radius:10px;
+  background:repeating-linear-gradient(90deg,var(--shell-hi) 0 3px,var(--shell) 3px 5px);
+  box-shadow:0 2px 0 var(--shell-edge),0 3px 5px rgba(0,0,0,.3);transition:transform .18s steps(3,end)}
+.power[data-state="dark"] .pw-knob{transform:translateX(34px)}
+.pw-opts{display:flex;gap:10px;font:400 12px/1 var(--f-px)}
+.pw-opts span{color:var(--board-mute)}
+.power[data-state="light"] .pw-opts .o-day,.power[data-state="dark"] .pw-opts .o-night{color:var(--board-ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+.pw-led{width:9px;height:9px;border-radius:50%;background:var(--led);box-shadow:0 0 8px var(--led-glow);margin-left:auto}
+.spec{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.spec dt{font:400 12px/1.5 var(--f-px);color:var(--board-mute)}
+.spec dd{margin:0}
+
+/* section header — booklet chapter tab */
+.sec{margin-top:26px}
+.sec-h{display:flex;align-items:center;gap:12px;margin:0 0 26px;flex-wrap:wrap}
+.sec-n{font:400 12px/1 var(--f-px);background:var(--board-ink);color:var(--board);padding:6px 8px 5px;clip-path:var(--notch)}
+.sec-t{font:900 italic 30px/1 var(--f-shell);font-stretch:125%;text-transform:uppercase;letter-spacing:-.01em}
+.sec-r{flex:1;height:2px;background:var(--board-ink);min-width:30px}
+.sec-d{font:400 12px/1.3 var(--f-px);color:var(--board-mute)}
+
+/* ==========================================================================
+   Phones = handheld shells
+   ========================================================================== */
+.phones{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:44px 20px}
+@media (min-width:800px){.phones{grid-template-columns:repeat(2,auto);justify-content:center}}
+@media (min-width:1400px){.phones{grid-template-columns:repeat(4,auto);--pz:.88}}
+@media (min-width:1620px){.phones{--pz:1}}
+@media (max-width:400px){.phones{--pz:.86}}
+.dev{margin:0;display:flex;flex-direction:column;align-items:center;gap:16px;zoom:var(--pz,1)}
+.dev figcaption{display:flex;align-items:baseline;gap:10px;font:400 12px/1.3 var(--f-px);color:var(--board-mute);text-align:center;max-width:340px}
+.dev figcaption b{font-weight:400;color:var(--board);background:var(--board-ink);padding:3px 6px 2px;clip-path:var(--notch)}
+
+.shell{position:relative;width:360px;height:760px;padding:10px 14px 0;
+  border-radius:18px 18px 78px 18px;
+  background:var(--shell-gloss),linear-gradient(158deg,var(--shell-hi) 0%,var(--shell) 30%,var(--shell) 72%,var(--shell-lo) 100%);
+  box-shadow:inset 2px 2px 0 var(--shell-ridge),inset -3px -4px 0 rgba(0,0,0,.10),0 3px 0 var(--shell-edge),var(--dev-shadow)}
+.shell-top{display:flex;align-items:center;gap:8px;height:14px;margin:0 2px 6px}
+.shell-top span{font:700 italic 8px/1 var(--f-shell);letter-spacing:.16em;color:var(--shell-print);white-space:nowrap}
+.shell-top i{flex:1;height:5px;border-top:1px solid var(--shell-groove);border-bottom:1px solid var(--shell-ridge);
+  box-shadow:inset 0 -1px 0 var(--shell-groove)}
+.bezel{background:linear-gradient(180deg,var(--bezel) 0%,var(--bezel-lo) 100%);border-radius:10px 10px 34px 10px;padding:5px 12px 14px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 1px 0 var(--shell-ridge)}
+.bz-top{display:flex;align-items:center;gap:7px;height:17px}
+.bz-top .led{width:7px;height:7px;border-radius:50%;background:var(--led);box-shadow:0 0 6px var(--led-glow);flex:none}
+.bz-top .bars{flex:1;display:grid;gap:2px}
+.bz-top .bars i{height:2px;background:var(--stripe-a)} .bz-top .bars i+i{background:var(--stripe-b)}
+.bz-top span{font:700 italic 7.5px/1 var(--f-shell);letter-spacing:.17em;color:var(--bezel-print);white-space:nowrap}
+
+/* the LCD itself */
+.lcd{position:relative;width:308px;height:500px;overflow:hidden;border-radius:3px;
+  background:var(--lcd-bg);color:var(--lcd-3);box-shadow:var(--lcd-inset);
+  font:400 13px/1.25 var(--f-lcd);text-shadow:var(--lcd-ts);font-variant-numeric:tabular-nums}
+.lcd::after,.lcds::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
+  background:linear-gradient(90deg,var(--lcd-grid) 1px,transparent 1px) 0 0/3px 3px,linear-gradient(var(--lcd-grid) 1px,transparent 1px) 0 0/3px 3px}
+.lcd::before{content:"";position:absolute;inset:0;z-index:5;pointer-events:none;background:var(--lcd-3);opacity:0;
+  animation:boot .52s steps(4,end) var(--bd,0s) backwards}
+@keyframes boot{from{opacity:1}to{opacity:0}}
+.lcd [data-spr] svg,.lcds [data-spr] svg{filter:var(--lcd-ds);display:block}
+
+.brand{display:flex;align-items:baseline;gap:9px;margin:9px 4px 0;height:26px}
+.brand b{font:900 italic 24px/1 var(--f-shell);font-stretch:125%;color:var(--shell-print);letter-spacing:-.015em}
+.brand span{font:700 italic 8.5px/1 var(--f-shell);letter-spacing:.24em;color:var(--shell-print);text-transform:uppercase}
+.brand small{margin-left:auto;font:400 8px/1 var(--f-px);color:var(--shell-print);opacity:.9}
+
+/* control deck */
+.deck{position:absolute;left:14px;right:14px;bottom:0;height:166px}
+.dpad{position:absolute;left:4px;top:8px;width:92px;height:92px;border-radius:50%;
+  background:radial-gradient(circle,var(--pill-well) 0 64%,transparent 66%)}
+.dpad::before,.dpad::after{content:"";position:absolute;background:var(--dpad);border-radius:4px;
+  box-shadow:0 3px 0 rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.14)}
+.dpad::before{left:10px;right:10px;top:34px;height:24px}
+.dpad::after{top:10px;bottom:10px;left:34px;width:24px}
+.dpad i{position:absolute;z-index:1;width:0;height:0;border:4px solid transparent}
+.dpad .u{left:42px;top:14px;border-bottom-color:rgba(255,255,255,.22)}
+.dpad .d{left:42px;bottom:14px;border-top-color:rgba(255,255,255,.22)}
+.dpad .l{top:42px;left:14px;border-right-color:rgba(255,255,255,.22)}
+.dpad .r{top:42px;right:14px;border-left-color:rgba(255,255,255,.22)}
+.dpad .c{left:40px;top:40px;width:12px;height:12px;border:0;border-radius:50%;background:radial-gradient(circle at 45% 40%,rgba(255,255,255,.1),rgba(0,0,0,.35))}
+.ab{position:absolute;right:6px;top:4px;width:116px;height:96px}
+.ab::before{content:"";position:absolute;left:-2px;top:22px;width:118px;height:50px;border-radius:25px;background:var(--pill-well);transform:rotate(-24deg)}
+.abb{position:absolute;width:42px;height:42px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  background:radial-gradient(circle at 36% 30%,var(--btn-ab-hi),var(--btn-ab) 58%);
+  box-shadow:0 3px 0 var(--btn-ab-lo),0 6px 8px rgba(0,0,0,.25)}
+.abb:active{transform:translateY(2px);box-shadow:0 1px 0 var(--btn-ab-lo),0 2px 4px rgba(0,0,0,.25)}
+.abb.b{left:8px;top:40px} .abb.a{left:64px;top:14px}
+.abl{position:absolute;display:flex;align-items:baseline;gap:4px;color:var(--shell-print);white-space:nowrap}
+.abl b{font:900 italic 13px/1 var(--f-shell)}
+.abl small{font:700 italic 8px/1 var(--f-shell);letter-spacing:.12em;text-transform:uppercase}
+.abl.b{left:14px;top:88px} .abl.a{left:70px;top:62px}
+.pills{position:absolute;left:84px;top:110px;display:flex;gap:14px;align-items:flex-start}
+.pill{display:flex;flex-direction:column;align-items:center;gap:9px;background:none;border:0;padding:2px 0;cursor:pointer;
+  font:700 italic 8.5px/1 var(--f-shell);letter-spacing:.12em;text-transform:uppercase;color:var(--shell-print)}
+.pill i{display:block;width:34px;height:11px;border-radius:6px;background:var(--pill);transform:rotate(-22deg);
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.28),0 0 0 3px var(--pill-well)}
+.pill[aria-current="page"]{color:var(--pill-act)}
+.pill[aria-current="page"] i{background:var(--btn-ab);box-shadow:inset 0 2px 2px rgba(0,0,0,.35),0 0 0 3px var(--pill-well)}
+.pill[aria-current="page"] span{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.grille{position:absolute;right:20px;bottom:20px;display:flex;gap:6px;transform:rotate(-30deg)}
+.grille i{display:block;width:5px;height:40px;border-radius:3px;background:var(--grille);box-shadow:inset 1px 1px 2px rgba(0,0,0,.5),0 1px 0 var(--shell-ridge)}
+
+/* ==========================================================================
+   LCD app UI
+   ========================================================================== */
+.app{position:absolute;inset:0;padding:9px 12px 12px;display:flex;flex-direction:column;gap:10px}
+.px{font-family:var(--f-px);font-weight:400}
+.hud{display:flex;justify-content:space-between;align-items:center;flex:none;height:22px;padding-bottom:6px;
+  font:400 12px/1 var(--f-px);
+  background:linear-gradient(90deg,var(--lcd-1) 50%,transparent 0) left bottom/4px 2px repeat-x}
+.hud>span{display:inline-flex;align-items:center;gap:6px}
+.dim{color:var(--lcd-2)}
+.inv{background:var(--lcd-3);color:var(--lcd-0);text-shadow:none;--seg-on:var(--lcd-0);--seg-off:var(--seg-off-inv)}
+.inv [data-spr] svg{filter:none}
+.nt{clip-path:var(--notch)}
+
+/* pixel badge "A" */
+.abadge{display:inline-grid;place-items:center;width:16px;height:16px;flex:none;font:400 8px/1 var(--f-px);
+  background:var(--lcd-3);color:var(--lcd-0);text-shadow:none;
+  clip-path:polygon(4px 0,12px 0,12px 2px,14px 2px,14px 4px,16px 4px,16px 12px,14px 12px,14px 14px,12px 14px,12px 16px,4px 16px,4px 14px,2px 14px,2px 12px,0 12px,0 4px,2px 4px,2px 2px,4px 2px)}
+.inv .abadge,.lbtn-pri .abadge{background:var(--lcd-0);color:var(--lcd-3)}
+
+/* game accent patterns — strict 4-shade dithers */
+.acc-check{--pat:conic-gradient(var(--lcd-3) 25%,var(--lcd-1) 0 50%,var(--lcd-3) 0 75%,var(--lcd-1) 0) 0 0/4px 4px}
+.acc-scan{--pat:repeating-linear-gradient(180deg,var(--lcd-3) 0 2px,var(--lcd-1) 2px 4px)}
+.acc-dots{--pat:conic-gradient(at 2px 2px,var(--lcd-1) 75%,var(--lcd-3) 0) 0 0/5px 5px}
+
+/* Today */
+.greet{display:flex;flex-direction:column;gap:3px;flex:none}
+.g-date{margin:0;color:var(--lcd-2);font-size:13px}
+.g-hello{margin:0;font:400 24px/1 var(--f-px);letter-spacing:-.01em}
+.stats{display:grid;grid-template-columns:1fr 1fr;border:2px solid var(--lcd-3);clip-path:var(--notch);flex:none}
+.st-cell{padding:7px 9px 8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.st-cell+.st-cell{background:linear-gradient(var(--lcd-1) 50%,transparent 0) left top/2px 4px repeat-y}
+.st-txt{font-size:13px;line-height:1.15}
+.pips{display:inline-flex;gap:4px}
+.pips i{display:block;width:12px;height:12px;border:2px solid var(--lcd-3)}
+.pips i.on{background:var(--lcd-3)}
+.pips.sm i{width:10px;height:10px}
+.flames{display:inline-flex;gap:3px;height:12px;align-items:flex-end}
+.st-next{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:7px 9px}
+.st-next>span:first-child{font:400 12px/1.1 var(--f-px)}
+.games{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.gc{display:flex;background:var(--lcd-0);border:2px solid var(--lcd-3);clip-path:var(--notch);min-height:84px}
+.gc.is-live{box-shadow:inset 0 0 0 2px var(--lcd-0),inset 0 0 0 4px var(--lcd-3)}
+.gc-strip{width:10px;flex:none;background:var(--pat);border-right:2px solid var(--lcd-3)}
+.gc-body{flex:1;min-width:0;padding:7px 9px 8px 10px;display:flex;flex-direction:column;gap:5px}
+.gc.is-live .gc-body{padding:9px 11px 9px 10px}
+.gc-top{display:flex;align-items:center;gap:8px;height:24px}
+.gc-top h4{margin:0;font:400 16px/1 var(--f-px);letter-spacing:-.01em}
+.gc-desc{margin:0;font-size:13px;line-height:1.15;color:var(--lcd-2)}
+.gc-prog{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.15}
+.gc-foot{display:flex;justify-content:space-between;align-items:center;font:400 12px/1 var(--f-px);margin-top:auto}
+.tag{display:inline-flex;align-items:center;gap:5px;padding:3px 5px 3px;border:2px solid var(--lcd-3)}
+.tag.inv{border-color:var(--lcd-3)}
+.tag.ghost{border-color:var(--lcd-1);color:var(--lcd-2)}
+.cta{display:inline-flex;align-items:center;gap:6px}
+.blink svg{animation:blink 1s steps(1,end) infinite}
+@keyframes blink{50%{color:var(--lcd-1)}}
+.num{font-family:var(--f-px);font-size:.86em;letter-spacing:.02em}
+
+/* Five Letters board */
+.wb{display:grid;gap:6px;justify-content:center;flex:none;position:relative}
+.wrow{display:grid;grid-template-columns:repeat(5,44px);gap:6px}
+.tile{position:relative;width:44px;height:44px;display:grid;place-items:center;
+  font:400 24px/1 var(--f-px);text-transform:uppercase;padding-top:1px;
+  background:var(--lcd-0);color:var(--lcd-3);border:2px solid var(--lcd-1);clip-path:var(--notch)}
+.tile::after{content:"";position:absolute;top:4px;right:4px;width:6px;height:6px}
+.s-typed{border-color:var(--lcd-3)}
+.s-correct{background:var(--lcd-3);border-color:var(--lcd-3);color:var(--lcd-0);text-shadow:none}
+.s-correct::after{background:var(--lcd-0)}
+.s-present{background:var(--lcd-1);border-color:var(--lcd-1);color:var(--lcd-3)}
+.s-present::after{box-shadow:inset 0 0 0 2px var(--lcd-3)}
+.s-absent{border-color:var(--lcd-1);color:var(--lcd-2)}
+.s-absent::after{top:6px;height:2px;background:var(--lcd-2)}
+.tile[data-ph]::after{display:none}
+.tile[data-ph="1"]{background:var(--lcd-1);border-color:var(--lcd-1);color:var(--lcd-3)}
+.tile[data-ph="2"]{background:var(--lcd-2);border-color:var(--lcd-2);color:var(--lcd-0);text-shadow:none}
+.tile[data-ph="3"]{background:var(--lcd-3);border-color:var(--lcd-3);color:var(--lcd-0);text-shadow:none}
+.tile.land{animation:hop .16s steps(1,end)}
+@keyframes hop{from{transform:translateY(-4px)}to{transform:none}}
+.tile.pop{animation:pop .1s steps(1,end)}
+@keyframes pop{from{transform:scale(1.1)}to{transform:none}}
+.wrow.shake{animation:shake .36s steps(1,end)}
+@keyframes shake{0%{transform:translateX(-4px)}20%{transform:translateX(4px)}40%{transform:translateX(-4px)}60%{transform:translateX(4px)}80%{transform:translateX(-2px)}100%{transform:none}}
+.legend-mini{display:flex;justify-content:center;gap:12px;font-size:11px;color:var(--lcd-2);flex:none}
+.legend-mini span{display:inline-flex;align-items:center;gap:5px}
+.pip{display:inline-block;width:7px;height:7px;flex:none}
+.pip.p-c{background:var(--lcd-3)} .pip.p-p{box-shadow:inset 0 0 0 2px var(--lcd-3)} .pip.p-a{height:2px;background:var(--lcd-2)}
+.toast{position:absolute;left:50%;top:-4px;transform:translateX(-50%);z-index:3;padding:6px 10px;font:400 12px/1 var(--f-px);
+  background:var(--lcd-3);color:var(--lcd-0);text-shadow:none;clip-path:var(--notch);white-space:nowrap}
+.toast[hidden]{display:none}
+
+/* keyboard */
+.kb{display:flex;flex-direction:column;gap:5px;margin-top:auto;flex:none}
+.kr{display:flex;gap:4px}
+.kr .sp{flex:.5}
+.key{flex:1;height:37px;min-width:0;padding:0;display:grid;place-items:center;cursor:pointer;
+  font:400 12px/1 var(--f-px);text-transform:uppercase;color:var(--lcd-3);background:var(--lcd-0);
+  border:2px solid var(--lcd-3);border-bottom-width:4px;clip-path:var(--notch);text-shadow:var(--lcd-ts)}
+.key.wide{flex:1.7;font-size:10px;letter-spacing:-.02em}
+.key:active{border-bottom-width:2px;padding-top:2px}
+.key.k-correct{background:var(--lcd-3);color:var(--lcd-0);border-color:var(--lcd-3);border-bottom-color:var(--lcd-2);text-shadow:none}
+.key.k-present{background:var(--lcd-1);border-color:var(--lcd-3)}
+.key.k-absent{color:var(--lcd-2);border-color:var(--lcd-1);border-bottom-width:2px}
+.lcd button:focus-visible,.lcds button:focus-visible{outline:none;box-shadow:inset 0 0 0 3px var(--lcd-0),inset 0 0 0 5px var(--lcd-3)}
+
+/* Result */
+.rhero{position:relative;display:grid;grid-template-columns:1fr auto;align-items:end;gap:8px;
+  border:2px solid var(--lcd-3);clip-path:var(--notch);padding:20px 12px 12px;flex:none}
+.rhero::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--pat);border-bottom:2px solid var(--lcd-3)}
+.rscore{display:flex;align-items:flex-end;gap:8px}
+.rscore .u{font:400 12px/1 var(--f-px);padding-bottom:4px}
+.rside{display:flex;flex-direction:column;align-items:flex-end;gap:4px;padding-bottom:2px}
+.rside b{font:400 24px/1 var(--f-px)}
+.rside span{font-size:12px;color:var(--lcd-2)}
+.sgrid{display:flex;justify-content:center;gap:10px;flex:none}
+.sg{display:flex;flex-direction:column;align-items:center;gap:5px;font:400 8px/1 var(--f-px);color:var(--lcd-2);width:52px}
+.sg i{display:grid;place-items:center;width:38px;height:38px;clip-path:var(--notch);border:2px solid var(--lcd-1);background:var(--lcd-1);color:var(--lcd-3)}
+.sg.ok i{background:var(--lcd-3);border-color:var(--lcd-3);color:var(--lcd-0)}
+.sg.ok i svg{filter:none}
+.lbtn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;height:38px;flex:none;cursor:pointer;
+  font:400 12px/1 var(--f-px);letter-spacing:.03em;text-transform:uppercase;
+  border:2px solid var(--lcd-3);border-bottom-width:4px;clip-path:var(--notch);background:var(--lcd-0);color:var(--lcd-3);text-shadow:var(--lcd-ts)}
+.lbtn-pri{background:var(--lcd-3);color:var(--lcd-0);border-bottom-color:var(--lcd-2);text-shadow:none}
+.lbtn:active{border-bottom-width:2px;padding-top:2px}
+.lbtn[disabled]{cursor:not-allowed;color:var(--lcd-2);border-color:var(--lcd-1);border-bottom-width:2px;background:var(--lcd-0)}
+.lst-h{margin:2px 0 -4px;font:400 12px/1 var(--f-px);display:flex;justify-content:space-between}
+.fr{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.fr li{display:grid;grid-template-columns:1fr 34px 30px;align-items:center;gap:6px;height:28px;padding:0 6px;font-size:14px}
+.fr .nm{display:flex;align-items:center;gap:6px;min-width:0}
+.fr .nm::after{content:"";flex:1;height:2px;margin-top:6px;background:linear-gradient(90deg,var(--lcd-1) 50%,transparent 0) 0 0/4px 2px repeat-x}
+.fr .g,.fr .p{font:400 12px/1 var(--f-px);text-align:right}
+.fr .p{font-size:12px}
+.fr li.me{background:var(--lcd-3);color:var(--lcd-0);text-shadow:none;clip-path:var(--notch)}
+.fr li.me .nm::after{background-image:linear-gradient(90deg,var(--lcd-1) 50%,transparent 0)}
+.fr li.me small{font-size:11px;color:var(--lcd-1)}
+.fr .st{grid-column:2/-1;display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;font-size:12px;color:var(--lcd-2);white-space:nowrap}
+.fr li.ghost .nm{color:var(--lcd-2)}
+
+/* Leaderboard */
+.ttl{display:flex;align-items:center;gap:8px;margin:0;font:400 16px/1 var(--f-px);flex:none}
+.lbt{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;flex:none}
+.lbt button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:50px;padding:2px;cursor:pointer;
+  border:2px solid var(--lcd-3);background:var(--lcd-0);clip-path:var(--notch);font:400 11px/1.05 var(--f-lcd);text-align:center;color:var(--lcd-3);text-shadow:var(--lcd-ts)}
+.lbt button[aria-selected="true"]{background:var(--lcd-3);color:var(--lcd-0);text-shadow:none}
+.lbt button[aria-selected="true"] svg{filter:none}
+.per{display:flex;border:2px solid var(--lcd-3);clip-path:var(--notch);flex:none}
+.per button{flex:1;height:26px;border:0;background:none;cursor:pointer;font:400 12px/1 var(--f-px);color:var(--lcd-3);padding:0;text-shadow:var(--lcd-ts)}
+.per button+button{background:linear-gradient(var(--lcd-1) 50%,transparent 0) left top/2px 4px repeat-y}
+.per button[aria-pressed="true"]{background:var(--lcd-3);color:var(--lcd-0);text-shadow:none}
+.ranks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.rk{display:grid;grid-template-columns:20px 1fr auto;grid-template-areas:"n nm pts" "n sub bar";column-gap:8px;row-gap:4px;align-items:center;padding:8px 7px}
+.rk .n{grid-area:n;font:400 16px/1 var(--f-px);text-align:center}
+.rk .nm{grid-area:nm;display:flex;align-items:center;gap:6px;font-size:15px;font-weight:500;line-height:1}
+.rk .nm small{font-size:11px;font-weight:400}
+.rk .pts{grid-area:pts;justify-self:end;font:400 16px/1 var(--f-px)}
+.rk .pts small{font-size:8px;margin-left:3px}
+.rk .sub{grid-area:sub;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--lcd-2);line-height:1}
+.rk .bar{grid-area:bar;justify-self:end;height:6px;width:calc(var(--v) * 5px);
+  background:repeating-linear-gradient(90deg,var(--lcd-3) 0 3px,transparent 3px 5px)}
+.rk.me{background:var(--lcd-3);color:var(--lcd-0);text-shadow:none;clip-path:var(--notch)}
+.rk.me .sub{color:var(--lcd-1)}
+.rk.me .bar{background:repeating-linear-gradient(90deg,var(--lcd-0) 0 3px,transparent 3px 5px)}
+.rk.me svg{filter:none}
+.rk.ghost{color:var(--lcd-2)}
+.rk.ghost .nm{font-weight:400}
+.rk + .rk:not(.me):not(.after-me){background-image:linear-gradient(90deg,var(--lcd-1) 50%,transparent 0);background-size:4px 2px;background-repeat:repeat-x;background-position:left top}
+.lb-foot{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:7px;font:400 12px/1 var(--f-px);
+  padding:7px;border:2px solid var(--lcd-1);clip-path:var(--notch)}
+
+/* seven-segment readouts */
+.seg{display:inline-flex;align-items:flex-end;gap:.09em;height:1em;transform:skewX(-7deg);line-height:1}
+.seg svg{display:block;height:1em;overflow:visible}
+.seg .sd{width:.5833em} .seg .sc{width:.21em}
+.seg .on{fill:var(--seg-on,var(--lcd-3))} .seg .off{fill:var(--seg-off)}
+.seg.blinkc .sc .on{animation:colon 1s steps(1,end) infinite}
+@keyframes colon{50%{fill-opacity:.28}}
+.lcd .seg,.lcds .seg{filter:var(--lcd-ds)}
+.inv .seg{filter:none}
+.seg-xl{font-size:68px}
+.seg-md{font-size:22px}
+
+/* ==========================================================================
+   System section
+   ========================================================================== */
+.sys{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:22px}
+@media (min-width:800px){.span2{grid-column:span 2}}
+.spanall{grid-column:1/-1}
+.pnl{background:var(--panel);border:2px solid var(--board-ink);clip-path:var(--notch4);min-width:0;display:flex;flex-direction:column}
+.pnl>h3{margin:0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 12px 7px;
+  font:400 12px/1.25 var(--f-px);letter-spacing:.04em;background:var(--board-ink);color:var(--board)}
+.pnl>h3 span{opacity:.9}
+.pbody{padding:16px;display:flex;flex-direction:column;gap:14px;flex:1}
+.cap{margin:0;font-size:13px;color:var(--board-mute);line-height:1.45}
+.lcds{position:relative;background:var(--lcd-bg);color:var(--lcd-3);text-shadow:var(--lcd-ts);
+  font:400 13px/1.25 var(--f-lcd);box-shadow:var(--lcd-inset);padding:16px;border-radius:3px;overflow:hidden;font-variant-numeric:tabular-nums}
+.lcds.bezelled{outline:10px solid var(--bezel);outline-offset:0;margin:10px}
+
+/* swatches */
+.swg{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px 12px}
+.sw{display:grid;grid-template-columns:38px 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center}
+.sw .chip{grid-row:1/3;width:38px;height:38px;clip-path:var(--notch);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--board-ink) 24%,transparent)}
+.sw .rl{font-size:13px;line-height:1.2}
+.sw code{font:400 12px/1.2 var(--f-px);color:var(--board-mute)}
+.sw-sub{margin:4px 0 -2px;font:400 12px/1 var(--f-px);color:var(--board-mute);grid-column:1/-1}
+
+/* accents */
+.acc-list{display:flex;flex-direction:column;gap:12px}
+.acc-row{display:grid;grid-template-columns:44px 30px 1fr;gap:12px;align-items:center}
+.acc-row .pat{height:36px;background:var(--pat);border:2px solid var(--lcd-3);clip-path:var(--notch)}
+.acc-row b{font:400 12px/1.2 var(--f-px);display:block}
+.acc-row span{font-size:12px;color:var(--lcd-2)}
+
+/* type */
+.tspec{display:flex;flex-direction:column}
+.trow{display:grid;grid-template-columns:200px minmax(0,1fr);gap:8px 20px;align-items:center;padding:14px 0;border-top:2px solid var(--board-line)}
+.trow:first-child{border-top:0;padding-top:2px}
+@media (max-width:640px){.trow{grid-template-columns:minmax(0,1fr)}}
+.trow .meta b{display:block;font:400 12px/1.3 var(--f-px);letter-spacing:.03em}
+.trow .meta span{font-size:12.5px;color:var(--board-mute);line-height:1.35;display:block}
+.trow .smp{min-width:0;overflow-wrap:anywhere}
+.smp-shell{font:900 italic 46px/1 var(--f-shell);font-stretch:125%;color:var(--title);letter-spacing:-.02em}
+.smp-px{font:400 24px/1.1 var(--f-px)}
+.smp-px.s16{font-size:16px}
+.smp-px.s12{font-size:12px;color:var(--board-mute)}
+.smp-lcd{font:400 16px/1.3 var(--f-lcd)}
+.smp-body{font:400 16px/1.5 var(--f-shell);max-width:52ch}
+.smp-seg{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;color:var(--board-ink);--seg-on:var(--board-ink);--seg-off:color-mix(in srgb,var(--board-ink) 9%,transparent)}
+
+/* tiles panel */
+.tstates{display:flex;flex-wrap:wrap;gap:12px 14px;justify-content:space-between}
+.kstates{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-start}
+.kstates .key{cursor:default}
+.sheetspr{display:flex;flex-direction:column;gap:12px;padding:12px 14px}
+.sprs{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-end}
+.tstate{display:flex;flex-direction:column;align-items:center;gap:7px;font:400 8px/1 var(--f-px);text-transform:uppercase;color:var(--lcd-3)}
+.legend{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.legend li{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:center;font-size:13px;line-height:1.3}
+.legend .mini{width:22px;height:22px;position:relative;clip-path:var(--notch);border:2px solid var(--lcd-1);background:var(--lcd-0)}
+.legend .mini::after{content:"";position:absolute;top:3px;right:3px;width:5px;height:5px}
+.legend .mini.s-correct::after{background:var(--lcd-0)}
+.legend .mini.s-present::after{box-shadow:inset 0 0 0 2px var(--lcd-3)}
+.legend .mini.s-absent::after{top:5px;height:2px;background:var(--lcd-2)}
+.legend .mini.s-typed{border-color:var(--lcd-3)}
+.legend b{font:400 12px/1 var(--f-px)}
+
+/* buttons */
+.btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 14px}
+.bcell{display:flex;flex-direction:column;gap:7px;min-width:0}
+.bcell>span{font:400 8px/1 var(--f-px);text-transform:uppercase;color:var(--lcd-3)}
+.pbtn{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:38px;padding:0 18px;border:0;border-radius:19px;cursor:pointer;
+  background:radial-gradient(120% 140% at 30% 20%,var(--btn-ab-hi),var(--btn-ab) 55%);color:var(--btn-ab-ink);text-shadow:none;
+  font:800 italic 12px/1 var(--f-shell);letter-spacing:.14em;text-transform:uppercase;box-shadow:0 3px 0 var(--btn-ab-lo),0 5px 8px rgba(0,0,0,.25)}
+.pbtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--btn-ab-lo)}
+.btn-note{grid-column:1/-1;font-size:12px;color:var(--lcd-2);margin:0}
+
+/* components */
+.comps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px}
+.comp{display:flex;flex-direction:column;gap:8px;min-width:0}
+.comp>.lbl{font:400 12px/1 var(--f-px);color:var(--board-mute)}
+.comp .lcds{padding:12px}
+.badge-streak{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 8px;border:2px solid var(--lcd-3);clip-path:var(--notch)}
+.badge-streak b{font:400 16px/1 var(--f-px)}
+.badge-streak span{font:400 12px/1 var(--f-px)}
+.cd{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.cd .px{font-size:12px}
+.spoil{position:relative;border:2px solid var(--lcd-3);clip-path:var(--notch);padding:10px;display:grid;gap:7px}
+.spoil .ghost-row{display:grid;grid-template-columns:1fr 34px 30px;gap:8px;height:14px}
+.spoil .ghost-row i{display:block;background:conic-gradient(var(--lcd-1) 25%,transparent 0 50%,var(--lcd-1) 0 75%,transparent 0) 0 0/4px 4px}
+.spoil .lockcard{position:absolute;inset:14px 18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+  background:var(--lcd-0);border:2px solid var(--lcd-3);clip-path:var(--notch);padding:10px}
+.spoil .lockcard p{margin:0;font:400 12px/1.35 var(--f-px)}
+.spoil .lockcard span{font-size:12px;color:var(--lcd-2)}
+.share-txt{margin:0;font:400 12px/1.6 var(--f-px);white-space:pre;overflow-x:auto}
+.share-txt .gl{font-family:ui-monospace,"Menlo","Consolas",monospace;font-size:15px;letter-spacing:.2em}
+
+/* motion */
+.motion{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center}
+@media (max-width:560px){.motion{grid-template-columns:minmax(0,1fr)}}
+.mrow{display:grid;grid-template-columns:repeat(5,44px);gap:6px;justify-content:center}
+.mscore{display:flex;align-items:flex-end;gap:6px;justify-content:center}
+.mscore .u{font:400 12px/1 var(--f-px);padding-bottom:3px}
+.replay{display:inline-flex;align-items:center;gap:10px}
+.frames{display:flex;gap:4px;align-items:center;font:400 8px/1 var(--f-px);color:var(--lcd-2);flex-wrap:wrap}
+.frames i{display:block;width:16px;height:16px;clip-path:var(--notch)}
+
+/* notes */
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:22px}
+.nlist{list-style:none;margin:0;padding:0;counter-reset:n}
+.nlist li{position:relative;padding:14px 0 14px 46px;border-top:2px solid var(--board-line);counter-increment:n}
+.nlist li:first-child{border-top:0;padding-top:4px}
+.nlist li::before{content:counter(n,decimal-leading-zero);position:absolute;left:0;top:14px;font:400 12px/1 var(--f-px);
+  background:var(--board-ink);color:var(--board);padding:5px 6px 4px;clip-path:var(--notch)}
+.nlist li:first-child::before{top:4px}
+.nlist b{display:block;font:800 italic 15px/1.3 var(--f-shell);font-stretch:112%;margin-bottom:3px;text-transform:uppercase;letter-spacing:.02em}
+.nlist p{margin:0;font-size:14.5px;line-height:1.5}
+.knobs li::before{content:"";width:20px;height:20px;border-radius:50%;padding:0;clip-path:none;
+  background:conic-gradient(from var(--k,200deg),var(--board-ink) 0 14deg,transparent 0),radial-gradient(circle,var(--panel) 0 50%,var(--board-ink) 52% 62%,transparent 64%)}
+.knobs li:first-child::before{top:4px}
+.knobs .rng{display:inline-block;font:400 12px/1 var(--f-px);color:var(--accent);margin-left:4px}
+.foot{margin-top:56px;padding-top:12px;border-top:2px solid var(--board-ink);display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;
+  font:400 12px/1.4 var(--f-px);color:var(--board-mute)}
+
+/* reduced motion: everything lands in its final state */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<!-- ======================= MASTHEAD ======================= -->
+<header class="mast">
+  <div class="mast-top">
+    <span><b>DAILY</b> / Style exploration</span>
+    <span>Variant R-89 · Retro, highly stylised</span>
+    <span>Rev. Mon 10·05</span>
+  </div>
+  <div class="mast-main">
+    <div>
+      <p class="kicker">▶ Exploration — the pocket console</p>
+      <h1>Handheld <span class="yr">’89</span></h1>
+      <div class="bandline" aria-hidden="true">
+        <span class="bars"><i></i><i></i></span>
+        <span>Dot matrix · four shades · one daily cartridge</span>
+        <span class="bars"><i></i><i></i></span>
+      </div>
+      <p class="concept">Daily as a 1989 pocket console: a four-shade pea LCD inside a chunky plastic shell, sprite icons, scores on segmented digits, and one rule that runs everything — <em>the more right you are, the more pixels turn on.</em></p>
+    </div>
+    <div class="mast-side">
+      <button class="power" id="themeBtn" type="button" data-state="light" aria-label="Switch theme">
+        <span class="pw-l">Backlight</span>
+        <span class="pw-track" aria-hidden="true"><span class="pw-knob"></span></span>
+        <span class="pw-opts"><span class="o-day">Day</span><span class="o-night">Night</span><i class="pw-led" aria-hidden="true"></i></span>
+      </button>
+      <dl class="spec">
+        <dt>Display</dt><dd>4-shade LCD, 308 × 500 viewport</dd>
+        <dt>Input</dt><dd>D-pad · A · B · three soft keys</dd>
+        <dt>Type</dt><dd>Silkscreen · Pixelify Sans · Archivo</dd>
+        <dt>Digits</dt><dd>SEG-7, drawn in SVG</dd>
+      </dl>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= SCREENS ======================= -->
+<section class="sec" aria-labelledby="h-screens">
+  <h2 class="sec-h" id="h-screens"><span class="sec-n">01</span><span class="sec-t">Screens</span><span class="sec-r" aria-hidden="true"></span><span class="sec-d">The shell is the app chrome. Soft keys = bottom nav.</span></h2>
+
+  <div class="phones">
+
+    <!-- (a) TODAY -->
+    <figure class="dev">
+      <div class="shell">
+        <div class="shell-top" aria-hidden="true"><span>◀ OFF · ON ▶</span><i></i></div>
+        <div class="bezel">
+          <div class="bz-top" aria-hidden="true"><i class="led"></i><span class="bars"><i></i><i></i></span><span>DOT MATRIX · DAILY</span><span class="bars"><i></i><i></i></span></div>
+          <div class="lcd" style="--bd:.0s">
+            <div class="app">
+              <div class="hud"><span><i data-spr="diamond" data-px="2"></i>Daily</span><span><span class="dim">Mon 10·05</span><i data-spr="batt" data-px="1"></i></span></div>
+              <div class="greet">
+                <p class="g-date">Monday, October 5</p>
+                <h3 class="g-hello">Hey Ashwin</h3>
+              </div>
+              <div class="stats">
+                <div class="st-cell">
+                  <span class="pips" aria-hidden="true"><i class="on"></i><i></i><i></i></span>
+                  <span class="st-txt">1 of 3 done today</span>
+                </div>
+                <div class="st-cell">
+                  <span class="flames" aria-hidden="true"><i data-spr="flame" data-px="1"></i><i data-spr="flame" data-px="1"></i><i data-spr="flame" data-px="1"></i><i data-spr="flame" data-px="1"></i><i data-spr="flame" data-px="1"></i></span>
+                  <span class="st-txt">5-day streak</span>
+                </div>
+                <div class="st-next inv">
+                  <span>Next puzzles in</span>
+                  <span class="seg seg-md blinkc" data-countdown></span>
+                </div>
+              </div>
+              <ul class="games">
+                <li class="gc is-done acc-check">
+                  <span class="gc-strip" aria-hidden="true"></span>
+                  <div class="gc-body">
+                    <div class="gc-top"><i data-spr="target" data-px="2"></i><h4>Number Hunt</h4></div>
+                    <p class="gc-desc">Find the number 1–100 in 7 guesses</p>
+                    <div class="gc-foot"><span class="tag inv"><i data-spr="check" data-px="1"></i>Done</span><span>3/7 · 80 pts</span></div>
+                  </div>
+                </li>
+                <li class="gc is-live acc-scan">
+                  <span class="gc-strip" aria-hidden="true"></span>
+                  <div class="gc-body">
+                    <div class="gc-top"><i data-spr="tile" data-px="2"></i><h4>Five Letters</h4></div>
+                    <div class="gc-prog"><span class="pips sm" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span><span>2 of 6 guesses used</span></div>
+                    <div class="gc-foot"><span class="tag">In progress</span><span class="cta">Continue<i class="blink" data-spr="cursor" data-px="2"></i></span></div>
+                  </div>
+                </li>
+                <li class="gc is-new acc-dots">
+                  <span class="gc-strip" aria-hidden="true"></span>
+                  <div class="gc-body">
+                    <div class="gc-top"><i data-spr="grid" data-px="2"></i><h4>Grid Lock</h4></div>
+                    <p class="gc-desc">Logic grid · fresh board today</p>
+                    <div class="gc-foot"><span class="tag ghost">Not started</span><span class="cta"><span class="abadge">A</span>Start</span></div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="brand"><b>Daily</b><span>Pocket puzzle system</span><small>3 carts</small></div>
+        <div class="deck">
+          <div class="dpad" aria-hidden="true"><i class="u"></i><i class="r"></i><i class="d"></i><i class="l"></i><i class="c"></i></div>
+          <div class="ab">
+            <button class="abb b" type="button" aria-label="B button: back"></button>
+            <button class="abb a" type="button" aria-label="A button: select"></button>
+            <span class="abl b" aria-hidden="true"><b>B</b><small>Back</small></span>
+            <span class="abl a" aria-hidden="true"><b>A</b><small>Select</small></span>
+          </div>
+          <nav class="pills" aria-label="Main">
+            <button class="pill" type="button" aria-current="page"><i></i><span>Today</span></button>
+            <button class="pill" type="button"><i></i><span>Leaderboard</span></button>
+            <button class="pill" type="button"><i></i><span>Me</span></button>
+          </nav>
+          <div class="grille" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+      <figcaption><b>A</b>Today — status, streak &amp; three cartridges</figcaption>
+    </figure>
+
+    <!-- (b) PLAY -->
+    <figure class="dev">
+      <div class="shell">
+        <div class="shell-top" aria-hidden="true"><span>◀ OFF · ON ▶</span><i></i></div>
+        <div class="bezel">
+          <div class="bz-top" aria-hidden="true"><i class="led"></i><span class="bars"><i></i><i></i></span><span>DOT MATRIX · DAILY</span><span class="bars"><i></i><i></i></span></div>
+          <div class="lcd" style="--bd:.12s">
+            <div class="app">
+              <div class="hud"><span><i data-spr="back" data-px="2"></i>Five Letters</span><span id="wbUsed">2/6 used</span></div>
+              <div class="wb" id="wb" role="grid" aria-label="Five Letters board">
+                <div class="toast" id="wbToast" role="status" hidden></div>
+                <div class="wrow" role="row">
+                  <span class="tile s-absent" role="gridcell" aria-label="C, not in word">C</span>
+                  <span class="tile s-present" role="gridcell" aria-label="R, in word, wrong spot">R</span>
+                  <span class="tile s-present" role="gridcell" aria-label="A, in word, wrong spot">A</span>
+                  <span class="tile s-absent" role="gridcell" aria-label="N, not in word">N</span>
+                  <span class="tile s-absent" role="gridcell" aria-label="E, not in word">E</span>
+                </div>
+                <div class="wrow" role="row">
+                  <span class="tile s-present" role="gridcell" aria-label="T, in word, wrong spot">T</span>
+                  <span class="tile s-correct" role="gridcell" aria-label="A, correct">A</span>
+                  <span class="tile s-correct" role="gridcell" aria-label="R, correct">R</span>
+                  <span class="tile s-absent" role="gridcell" aria-label="D, not in word">D</span>
+                  <span class="tile s-correct" role="gridcell" aria-label="Y, correct">Y</span>
+                </div>
+                <div class="wrow" role="row">
+                  <span class="tile s-typed" role="gridcell" aria-label="P, typed">P</span>
+                  <span class="tile s-typed" role="gridcell" aria-label="A, typed">A</span>
+                  <span class="tile s-typed" role="gridcell" aria-label="R, typed">R</span>
+                  <span class="tile s-empty" role="gridcell" aria-label="empty"></span>
+                  <span class="tile s-empty" role="gridcell" aria-label="empty"></span>
+                </div>
+                <div class="wrow" role="row"><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span></div>
+                <div class="wrow" role="row"><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span></div>
+                <div class="wrow" role="row"><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span><span class="tile s-empty" role="gridcell"></span></div>
+              </div>
+              <div class="legend-mini" aria-hidden="true"><span><i class="pip p-c"></i>Right spot</span><span><i class="pip p-p"></i>In word</span><span><i class="pip p-a"></i>Not in word</span></div>
+              <div class="kb" id="kb" aria-label="Keyboard">
+                <div class="kr"><button class="key" data-k="Q">Q</button><button class="key" data-k="W">W</button><button class="key k-absent" data-k="E">E</button><button class="key k-correct" data-k="R">R</button><button class="key k-present" data-k="T">T</button><button class="key k-correct" data-k="Y">Y</button><button class="key" data-k="U">U</button><button class="key" data-k="I">I</button><button class="key" data-k="O">O</button><button class="key" data-k="P">P</button></div>
+                <div class="kr"><span class="sp"></span><button class="key k-correct" data-k="A">A</button><button class="key" data-k="S">S</button><button class="key k-absent" data-k="D">D</button><button class="key" data-k="F">F</button><button class="key" data-k="G">G</button><button class="key" data-k="H">H</button><button class="key" data-k="J">J</button><button class="key" data-k="K">K</button><button class="key" data-k="L">L</button><span class="sp"></span></div>
+                <div class="kr"><button class="key wide" data-k="ENTER">Enter</button><button class="key" data-k="Z">Z</button><button class="key" data-k="X">X</button><button class="key k-absent" data-k="C">C</button><button class="key" data-k="V">V</button><button class="key" data-k="B">B</button><button class="key k-absent" data-k="N">N</button><button class="key" data-k="M">M</button><button class="key wide" data-k="DEL">Del</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="brand"><b>Daily</b><span>Pocket puzzle system</span><small>Cart 2</small></div>
+        <div class="deck">
+          <div class="dpad" aria-hidden="true"><i class="u"></i><i class="r"></i><i class="d"></i><i class="l"></i><i class="c"></i></div>
+          <div class="ab">
+            <button class="abb b" type="button" data-k="DEL" aria-label="B button: delete letter"></button>
+            <button class="abb a" type="button" data-k="ENTER" aria-label="A button: enter guess"></button>
+            <span class="abl b" aria-hidden="true"><b>B</b><small>Del</small></span>
+            <span class="abl a" aria-hidden="true"><b>A</b><small>Enter</small></span>
+          </div>
+          <nav class="pills" aria-label="Main">
+            <button class="pill" type="button" aria-current="page"><i></i><span>Today</span></button>
+            <button class="pill" type="button"><i></i><span>Leaderboard</span></button>
+            <button class="pill" type="button"><i></i><span>Me</span></button>
+          </nav>
+          <div class="grille" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+      <figcaption><b>B</b>Play — Five Letters, guess 3 (try the keys)</figcaption>
+    </figure>
+
+    <!-- (c) RESULT -->
+    <figure class="dev">
+      <div class="shell">
+        <div class="shell-top" aria-hidden="true"><span>◀ OFF · ON ▶</span><i></i></div>
+        <div class="bezel">
+          <div class="bz-top" aria-hidden="true"><i class="led"></i><span class="bars"><i></i><i></i></span><span>DOT MATRIX · DAILY</span><span class="bars"><i></i><i></i></span></div>
+          <div class="lcd" style="--bd:.24s">
+            <div class="app" style="gap:12px">
+              <div class="hud"><span><i data-spr="back" data-px="2"></i>Number Hunt</span><span><i data-spr="check" data-px="1"></i>Solved</span></div>
+              <div class="rhero acc-check">
+                <div class="rscore"><span class="seg seg-xl" data-seg="80" data-countup aria-label="80 points"></span><span class="u">pts</span></div>
+                <div class="rside"><b>3/7</b><span>guesses</span></div>
+              </div>
+              <div class="sgrid" role="img" aria-label="Share grid: lower, higher, correct">
+                <span class="sg"><i data-spr="down" data-px="3"></i>Lower</span>
+                <span class="sg"><i data-spr="up" data-px="3"></i>Higher</span>
+                <span class="sg ok"><i data-spr="star" data-px="3"></i>Correct</span>
+              </div>
+              <button class="lbtn lbtn-pri" type="button"><span class="abadge">A</span>Share result</button>
+              <h4 class="lst-h"><span>How everyone did</span><span class="dim">Guess · Pts</span></h4>
+              <ul class="fr">
+                <li><span class="nm">Priya</span><span class="g">2/7</span><span class="p">87</span></li>
+                <li class="me"><span class="nm">Ashwin <small>(you)</small></span><span class="g">3/7</span><span class="p">80</span></li>
+                <li><span class="nm">Marco</span><span class="g">5/7</span><span class="p">60</span></li>
+                <li><span class="nm">Jess</span><span class="g">X/7</span><span class="p">0</span></li>
+                <li class="ghost"><span class="nm">Dev</span><span class="st"><i data-spr="hourglass" data-px="1"></i>Playing…</span></li>
+                <li class="ghost"><span class="nm">Sam</span><span class="st">Not played yet</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="brand"><b>Daily</b><span>Pocket puzzle system</span><small>Cart 1</small></div>
+        <div class="deck">
+          <div class="dpad" aria-hidden="true"><i class="u"></i><i class="r"></i><i class="d"></i><i class="l"></i><i class="c"></i></div>
+          <div class="ab">
+            <button class="abb b" type="button" aria-label="B button: back"></button>
+            <button class="abb a" type="button" aria-label="A button: share result"></button>
+            <span class="abl b" aria-hidden="true"><b>B</b><small>Back</small></span>
+            <span class="abl a" aria-hidden="true"><b>A</b><small>Share</small></span>
+          </div>
+          <nav class="pills" aria-label="Main">
+            <button class="pill" type="button" aria-current="page"><i></i><span>Today</span></button>
+            <button class="pill" type="button"><i></i><span>Leaderboard</span></button>
+            <button class="pill" type="button"><i></i><span>Me</span></button>
+          </nav>
+          <div class="grille" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+      <figcaption><b>C</b>Result — score latch, share marks, friends</figcaption>
+    </figure>
+
+    <!-- (d) LEADERBOARD -->
+    <figure class="dev">
+      <div class="shell">
+        <div class="shell-top" aria-hidden="true"><span>◀ OFF · ON ▶</span><i></i></div>
+        <div class="bezel">
+          <div class="bz-top" aria-hidden="true"><i class="led"></i><span class="bars"><i></i><i></i></span><span>DOT MATRIX · DAILY</span><span class="bars"><i></i><i></i></span></div>
+          <div class="lcd" style="--bd:.36s">
+            <div class="app">
+              <div class="hud"><span><i data-spr="trophy" data-px="1"></i>Leaderboard</span><span class="dim">6 players</span></div>
+              <div class="lbt" role="tablist" aria-label="Board">
+                <button role="tab" aria-selected="true"><i data-spr="trophy" data-px="2"></i>Overall</button>
+                <button role="tab" aria-selected="false"><i data-spr="target" data-px="1"></i>Number Hunt</button>
+                <button role="tab" aria-selected="false"><i data-spr="tile" data-px="1"></i>Five Letters</button>
+                <button role="tab" aria-selected="false"><i data-spr="grid" data-px="1"></i>Grid Lock</button>
+              </div>
+              <div class="per" role="group" aria-label="Period">
+                <button type="button" aria-pressed="false">Today</button>
+                <button type="button" aria-pressed="true">This week</button>
+                <button type="button" aria-pressed="false">All time</button>
+              </div>
+              <ol class="ranks">
+                <li class="rk" style="--v:20"><span class="n">1</span><span class="nm">Priya <i data-spr="crown" data-px="1"></i></span><span class="pts">247<small>pts</small></span><span class="sub">6 played · <i data-spr="flame" data-px="1"></i>12</span><span class="bar" aria-hidden="true"></span></li>
+                <li class="rk me" style="--v:19"><span class="n">2</span><span class="nm">Ashwin <small>(you)</small></span><span class="pts">231<small>pts</small></span><span class="sub"><i data-spr="flame" data-px="1"></i>5-day streak</span><span class="bar" aria-hidden="true"></span></li>
+                <li class="rk after-me" style="--v:16"><span class="n">3</span><span class="nm">Marco</span><span class="pts">198<small>pts</small></span><span class="sub">&nbsp;</span><span class="bar" aria-hidden="true"></span></li>
+                <li class="rk" style="--v:13"><span class="n">4</span><span class="nm">Jess</span><span class="pts">156<small>pts</small></span><span class="sub">&nbsp;</span><span class="bar" aria-hidden="true"></span></li>
+                <li class="rk" style="--v:11"><span class="n">5</span><span class="nm">Dev</span><span class="pts">140<small>pts</small></span><span class="sub">&nbsp;</span><span class="bar" aria-hidden="true"></span></li>
+                <li class="rk ghost" style="--v:0"><span class="n">–</span><span class="nm">Sam</span><span class="pts">0<small>pts</small></span><span class="sub">Hasn’t played</span><span class="bar" aria-hidden="true"></span></li>
+              </ol>
+              <div class="lb-foot"><i data-spr="up" data-px="1"></i>16 pts behind Priya</div>
+            </div>
+          </div>
+        </div>
+        <div class="brand"><b>Daily</b><span>Pocket puzzle system</span><small>Hi-score</small></div>
+        <div class="deck">
+          <div class="dpad" aria-hidden="true"><i class="u"></i><i class="r"></i><i class="d"></i><i class="l"></i><i class="c"></i></div>
+          <div class="ab">
+            <button class="abb b" type="button" aria-label="B button: back"></button>
+            <button class="abb a" type="button" aria-label="A button: open player"></button>
+            <span class="abl b" aria-hidden="true"><b>B</b><small>Back</small></span>
+            <span class="abl a" aria-hidden="true"><b>A</b><small>Open</small></span>
+          </div>
+          <nav class="pills" aria-label="Main">
+            <button class="pill" type="button"><i></i><span>Today</span></button>
+            <button class="pill" type="button" aria-current="page"><i></i><span>Leaderboard</span></button>
+            <button class="pill" type="button"><i></i><span>Me</span></button>
+          </nav>
+          <div class="grille" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+      <figcaption><b>D</b>Leaderboard — arcade hi-score table</figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ======================= SYSTEM ======================= -->
+<section class="sec" aria-labelledby="h-system" style="margin-top:64px">
+  <h2 class="sec-h" id="h-system"><span class="sec-n">02</span><span class="sec-t">System</span><span class="sec-r" aria-hidden="true"></span><span class="sec-d">Four shades on the glass. Colour only on the plastic.</span></h2>
+
+  <div class="sys">
+
+    <!-- palette: day -->
+    <article class="pnl">
+      <h3>Palette — Day <span>pea LCD · putty shell</span></h3>
+      <div class="pbody">
+        <div class="swg">
+          <p class="sw-sub">LCD · 4 shades</p>
+          <div class="sw"><span class="chip" style="background:#C8D19A"></span><span class="rl">0 · Pixels off</span><code>#C8D19A</code></div>
+          <div class="sw"><span class="chip" style="background:#94A35F"></span><span class="rl">1 · Low / present</span><code>#94A35F</code></div>
+          <div class="sw"><span class="chip" style="background:#44542A"></span><span class="rl">2 · High / muted text</span><code>#44542A</code></div>
+          <div class="sw"><span class="chip" style="background:#1D2712"></span><span class="rl">3 · Ink / correct</span><code>#1D2712</code></div>
+          <p class="sw-sub">Shell</p>
+          <div class="sw"><span class="chip" style="background:#D3CFC5"></span><span class="rl">Putty plastic</span><code>#D3CFC5</code></div>
+          <div class="sw"><span class="chip" style="background:#54535F"></span><span class="rl">Bezel slate</span><code>#54535F</code></div>
+          <div class="sw"><span class="chip" style="background:#2B2D5C"></span><span class="rl">Print navy</span><code>#2B2D5C</code></div>
+          <div class="sw"><span class="chip" style="background:#8E2753"></span><span class="rl">A/B plum · accent</span><code>#8E2753</code></div>
+          <div class="sw"><span class="chip" style="background:#E0384F"></span><span class="rl">Power LED</span><code>#E0384F</code></div>
+          <div class="sw"><span class="chip" style="background:#E3E3DE"></span><span class="rl">Board paper</span><code>#E3E3DE</code></div>
+        </div>
+        <p class="cap">Checked pairs: ink on pixels-off 9.6:1 · ink on low 5.7:1 · high on pixels-off 5.1:1 · navy on putty 8.3:1 · bezel print 5.2:1.</p>
+      </div>
+    </article>
+
+    <!-- palette: night -->
+    <article class="pnl">
+      <h3>Palette — Night <span>backlit negative LCD · smoke shell</span></h3>
+      <div class="pbody">
+        <div class="swg">
+          <p class="sw-sub">LCD · 4 shades (inverted: lit = on)</p>
+          <div class="sw"><span class="chip" style="background:#0B1510"></span><span class="rl">0 · Pixels off</span><code>#0B1510</code></div>
+          <div class="sw"><span class="chip" style="background:#2F5640"></span><span class="rl">1 · Low / present</span><code>#2F5640</code></div>
+          <div class="sw"><span class="chip" style="background:#63A57B"></span><span class="rl">2 · High / muted text</span><code>#63A57B</code></div>
+          <div class="sw"><span class="chip" style="background:#C2F7CF"></span><span class="rl">3 · Lit / correct</span><code>#C2F7CF</code></div>
+          <p class="sw-sub">Shell</p>
+          <div class="sw"><span class="chip" style="background:#2A2533"></span><span class="rl">Smoke plastic</span><code>#2A2533</code></div>
+          <div class="sw"><span class="chip" style="background:#0F0D13"></span><span class="rl">Bezel black</span><code>#0F0D13</code></div>
+          <div class="sw"><span class="chip" style="background:#CBC2E6"></span><span class="rl">Print lilac</span><code>#CBC2E6</code></div>
+          <div class="sw"><span class="chip" style="background:#A3346A"></span><span class="rl">A/B plum · accent</span><code>#A3346A</code></div>
+          <div class="sw"><span class="chip" style="background:#6CF2A6"></span><span class="rl">Backlight LED</span><code>#6CF2A6</code></div>
+          <div class="sw"><span class="chip" style="background:#121117"></span><span class="rl">Board night</span><code>#121117</code></div>
+        </div>
+        <p class="cap">Checked pairs: lit on off 15.5:1 · lit on low 6.9:1 · high on off 6.4:1 · lilac on smoke 8.8:1 · plum key label 5.8:1.</p>
+      </div>
+    </article>
+
+    <!-- game accents -->
+    <article class="pnl">
+      <h3>Game accents <span>dither, not hue</span></h3>
+      <div class="pbody">
+        <div class="lcds">
+          <div class="acc-list">
+            <div class="acc-row acc-check"><span class="pat"></span><i data-spr="target" data-px="2"></i><div><b>Number Hunt</b><span>Checker 50% · 2px</span></div></div>
+            <div class="acc-row acc-scan"><span class="pat"></span><i data-spr="tile" data-px="2"></i><div><b>Five Letters</b><span>Scanline 50% · 2/2</span></div></div>
+            <div class="acc-row acc-dots"><span class="pat"></span><i data-spr="grid" data-px="2"></i><div><b>Grid Lock</b><span>Dot 16% · 5px pitch</span></div></div>
+          </div>
+        </div>
+        <div class="lcds sheetspr">
+          <span class="px" style="font-size:12px">Sprite sheet · 1-bit, 1px grid</span>
+          <div class="sprs"><i data-spr="target" data-px="2"></i><i data-spr="tile" data-px="2"></i><i data-spr="grid" data-px="2"></i><i data-spr="flame" data-px="2"></i><i data-spr="crown" data-px="2"></i><i data-spr="trophy" data-px="2"></i><i data-spr="check" data-px="2"></i><i data-spr="lock" data-px="2"></i><i data-spr="down" data-px="2"></i><i data-spr="up" data-px="2"></i><i data-spr="star" data-px="2"></i><i data-spr="hourglass" data-px="2"></i><i data-spr="cursor" data-px="2"></i><i data-spr="back" data-px="2"></i><i data-spr="batt" data-px="2"></i></div>
+        </div>
+        <p class="cap">Each cartridge owns a dither pattern and a sprite. They live on the label strip of its card and the top of its result screen. A new game ships with a new pattern, never a new colour.</p>
+      </div>
+    </article>
+
+    <!-- type -->
+    <article class="pnl span2">
+      <h3>Type <span>three faces + one drawn display</span></h3>
+      <div class="pbody">
+        <div class="tspec">
+          <div class="trow"><div class="meta"><b>Shell print</b><span>Archivo 900 italic, width 125 · 24–46px. Only on plastic.</span></div><div class="smp"><span class="smp-shell">Daily</span></div></div>
+          <div class="trow"><div class="meta"><b>LCD display</b><span>Silkscreen 400 · 24 / 16px (whole-pixel multiples)</span></div><div class="smp"><div class="smp-px">Hey Ashwin</div><div class="smp-px s16">Five Letters</div></div></div>
+          <div class="trow"><div class="meta"><b>LCD label</b><span>Silkscreen 400 · 12px, the HUD and button voice</span></div><div class="smp"><span class="smp-px s12">Next puzzles in · Share result · This week</span></div></div>
+          <div class="trow"><div class="meta"><b>LCD body</b><span>Pixelify Sans 400–600 · 13–15px, sentences &amp; names. Numerals inside it always switch to Silkscreen.</span></div><div class="smp"><span class="smp-lcd">Find the number 1–100 in 7 guesses</span></div></div>
+          <div class="trow"><div class="meta"><b>Score digits</b><span>SEG-7, drawn inline · unlit segments stay as ghosts</span></div><div class="smp smp-seg"><span class="seg" style="font-size:56px" data-seg="80" aria-label="80"></span><span class="seg" style="font-size:30px" data-seg="7:42:10" aria-label="7:42:10"></span></div></div>
+          <div class="trow"><div class="meta"><b>Board / docs</b><span>Archivo 400 · 15–16px, never on the LCD</span></div><div class="smp"><span class="smp-body">Pixels are the reward. Text that explains stays off the glass.</span></div></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- tiles -->
+    <article class="pnl">
+      <h3>Tile states <span>value + pip</span></h3>
+      <div class="pbody">
+        <div class="lcds">
+          <div class="tstates">
+            <div class="tstate"><span class="tile s-empty"></span>Empty</div>
+            <div class="tstate"><span class="tile s-typed">P</span>Typed</div>
+            <div class="tstate"><span class="tile s-correct">A</span>Correct</div>
+            <div class="tstate"><span class="tile s-present">T</span>Present</div>
+            <div class="tstate"><span class="tile s-absent">D</span>Absent</div>
+          </div>
+        </div>
+        <ul class="legend">
+          <li><span class="lcds" style="padding:2px;display:grid;place-items:center"><span class="mini s-correct" style="background:var(--lcd-3);border-color:var(--lcd-3)"></span></span><span><b>Correct</b> — fully lit, solid ■ pip. Right letter, right spot.</span></li>
+          <li><span class="lcds" style="padding:2px;display:grid;place-items:center"><span class="mini s-present" style="background:var(--lcd-1);border-color:var(--lcd-1)"></span></span><span><b>Present</b> — half lit, hollow ▢ pip. In the word, wrong spot.</span></li>
+          <li><span class="lcds" style="padding:2px;display:grid;place-items:center"><span class="mini s-absent"></span></span><span><b>Absent</b> — pixels off, dash ▬ pip, letter dimmed.</span></li>
+          <li><span class="lcds" style="padding:2px;display:grid;place-items:center"><span class="mini s-typed"></span></span><span><b>Typed</b> — ink frame, no pip. <b>Empty</b> — faint frame.</span></li>
+        </ul>
+        <div class="lcds">
+          <div class="kstates">
+            <div class="tstate"><span class="key" style="width:30px;flex:none">Q</span>Unused</div>
+            <div class="tstate"><span class="key k-correct" style="width:30px;flex:none">A</span>Correct</div>
+            <div class="tstate"><span class="key k-present" style="width:30px;flex:none">T</span>Present</div>
+            <div class="tstate"><span class="key k-absent" style="width:30px;flex:none">C</span>Absent</div>
+            <p class="btn-note" style="flex:1 1 120px;margin:0;align-self:center">Keys mirror tiles. Absent keys lose their 4px travel, so they look pressed flat and spent.</p>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- buttons -->
+    <article class="pnl">
+      <h3>Buttons <span>on glass &amp; on plastic</span></h3>
+      <div class="pbody">
+        <div class="lcds">
+          <div class="btns">
+            <div class="bcell"><span>Primary</span><button class="lbtn lbtn-pri" type="button"><span class="abadge">A</span>Share</button></div>
+            <div class="bcell"><span>Secondary</span><button class="lbtn" type="button">View board</button></div>
+            <div class="bcell"><span>Accent · physical</span><button class="pbtn" type="button">Play</button></div>
+            <div class="bcell"><span>Disabled</span><button class="lbtn" type="button" disabled><i data-spr="lock" data-px="1"></i>Locked</button></div>
+            <p class="btn-note">Glass buttons have a 4px "key travel" bottom edge that collapses on press. The plum accent is reserved for real, physical actions.</p>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- components -->
+    <article class="pnl span2">
+      <h3>Components <span>cards, rows, badges, readouts, walls</span></h3>
+      <div class="pbody">
+        <div class="comps">
+          <div class="comp">
+            <span class="lbl">Game card · in progress (selected)</span>
+            <div class="lcds">
+              <ul class="games"><li class="gc is-live acc-scan">
+                <span class="gc-strip" aria-hidden="true"></span>
+                <div class="gc-body">
+                  <div class="gc-top"><i data-spr="tile" data-px="2"></i><h4>Five Letters</h4></div>
+                  <div class="gc-prog"><span class="pips sm" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span><span>2 of 6 guesses used</span></div>
+                  <div class="gc-foot"><span class="tag">In progress</span><span class="cta">Continue<i class="blink" data-spr="cursor" data-px="2"></i></span></div>
+                </div>
+              </li></ul>
+            </div>
+          </div>
+          <div class="comp">
+            <span class="lbl">Leaderboard row · you</span>
+            <div class="lcds">
+              <ol class="ranks">
+                <li class="rk" style="--v:20"><span class="n">1</span><span class="nm">Priya <i data-spr="crown" data-px="1"></i></span><span class="pts">247<small>pts</small></span><span class="sub">6 played · <i data-spr="flame" data-px="1"></i>12</span><span class="bar" aria-hidden="true"></span></li>
+                <li class="rk me" style="--v:19"><span class="n">2</span><span class="nm">Ashwin <small>(you)</small></span><span class="pts">231<small>pts</small></span><span class="sub"><i data-spr="flame" data-px="1"></i>5-day streak</span><span class="bar" aria-hidden="true"></span></li>
+              </ol>
+            </div>
+          </div>
+          <div class="comp">
+            <span class="lbl">Streak badge · countdown</span>
+            <div class="lcds" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+              <span class="badge-streak"><i data-spr="flame" data-px="2"></i><span><b>5</b>-day streak</span></span>
+              <div class="cd"><span class="px">Next puzzles in</span><span class="seg seg-md blinkc" style="font-size:28px" data-countdown></span></div>
+            </div>
+          </div>
+          <div class="comp">
+            <span class="lbl">Spoiler wall · locked</span>
+            <div class="lcds">
+              <div class="spoil">
+                <div class="ghost-row" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="ghost-row" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="ghost-row" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="ghost-row" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="ghost-row" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="ghost-row" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="lockcard"><i data-spr="lock" data-px="3"></i><p>Finish to see how your friends did</p><span>Their rows stay unlit until your last guess.</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="comp">
+            <span class="lbl">Share output · plain glyphs, no emoji</span>
+            <div class="lcds">
+<pre class="share-txt">DAILY · MON 10/05
+NUMBER HUNT 3/7
+<span class="gl">▼▲■</span>
+80 PTS · STREAK 5</pre>
+            </div>
+          </div>
+          <div class="comp">
+            <span class="lbl">Share marks · lower / higher / correct</span>
+            <div class="lcds" style="display:grid;place-items:center">
+              <div class="sgrid" role="img" aria-label="Share grid: lower, higher, correct">
+                <span class="sg"><i data-spr="down" data-px="3"></i>Lower</span>
+                <span class="sg"><i data-spr="up" data-px="3"></i>Higher</span>
+                <span class="sg ok"><i data-spr="star" data-px="3"></i>Correct</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- motion -->
+    <article class="pnl spanall">
+      <h3>Motion — pixel-latch reveal <span>stepped, 4 frames per tile, ~14 fps</span></h3>
+      <div class="pbody">
+        <div class="lcds">
+          <div class="motion">
+            <div style="display:flex;flex-direction:column;gap:14px;align-items:center">
+              <div class="mrow" id="mrow">
+                <span class="tile s-present" data-s="present">T</span>
+                <span class="tile s-correct" data-s="correct">A</span>
+                <span class="tile s-correct" data-s="correct">R</span>
+                <span class="tile s-absent" data-s="absent">D</span>
+                <span class="tile s-correct" data-s="correct">Y</span>
+              </div>
+              <div class="frames" aria-hidden="true">
+                <span>Frames</span>
+                <i style="background:var(--lcd-0);box-shadow:inset 0 0 0 2px var(--lcd-3)"></i>→
+                <i style="background:var(--lcd-1)"></i>→
+                <i style="background:var(--lcd-2)"></i>→
+                <i style="background:var(--lcd-3)"></i>→
+                <span>settle to truth</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+              <div class="mscore"><span class="seg" style="font-size:52px" id="mscore" data-seg="80" aria-label="80 points"></span><span class="u">pts</span></div>
+              <button class="lbtn lbtn-pri replay" type="button" id="replay" style="width:auto;padding:0 16px"><span class="abadge">A</span>Replay</button>
+            </div>
+          </div>
+        </div>
+        <p class="cap">Every tile flashes fully on, then settles to how true it is: correct stays lit, present drops to half, absent switches off. The score latches up on the segment display in the same stepped cadence. Hard frames and no easing, like a real 1989 LCD. With reduced motion on, tiles and digits jump straight to their final state.</p>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ======================= NOTES ======================= -->
+<section class="sec" aria-labelledby="h-notes" style="margin-top:64px">
+  <h2 class="sec-h" id="h-notes"><span class="sec-n">03</span><span class="sec-t">Notes</span><span class="sec-r" aria-hidden="true"></span><span class="sec-d">Signature moments &amp; tweak knobs</span></h2>
+  <div class="notes">
+    <article class="pnl">
+      <h3>Signature moments <span>Day &amp; Night both designed</span></h3>
+      <div class="pbody">
+        <ol class="nlist">
+          <li><b>Result reveal: power-on latch</b><p>The LCD blanks for one frame, then the score counts up on the segment display (00 → 80) with the unlit ghost 8s still visible behind it. The share marks then drop in one per beat.</p></li>
+          <li><b>Share: the A button</b><p>Sharing is a physical press. The output is plain geometric glyphs (▼ ▲ ■), not emoji, so it looks the same in every group chat. The glass flashes inverted for a single frame to confirm.</p></li>
+          <li><b>Daily rollover: LCD self-test</b><p>At 0:00:00 every segment lights (8:88:88), the power LED blinks twice and the new cartridges scan in top to bottom, one row of pixels per frame.</p></li>
+          <li><b>Rank change: hard swap</b><p>Rows trade places in two hard frames with no tween, and the moved row blinks inverted twice. A small ▲ sprite stays beside your rank for the rest of the day.</p></li>
+          <li><b>Spoiler wall: pixels off</b><p>Friends' rows show as unlit checker dither under a padlock sprite. Finishing dissolves the dither in four steps, one row at a time. Nobody gets a spoiler, and the screen never looks empty.</p></li>
+        </ol>
+      </div>
+    </article>
+    <article class="pnl">
+      <h3>Tweak knobs <span>what to dial</span></h3>
+      <div class="pbody">
+        <ol class="nlist knobs">
+          <li style="--k:120deg"><b>Shell presence <span class="rng">full ↔ bezel-only</span></b><p>The full shell gives the most character. A bezel-only frame keeps the stripes and LED and gives the LCD the whole phone height on small devices.</p></li>
+          <li style="--k:200deg"><b>Palette cartridge <span class="rng">pea ↔ pocket grey ↔ amber</span></b><p>Swap the four LCD tokens and the rest follows. Amber negative works well as a "weekend" or seasonal skin.</p></li>
+          <li style="--k:250deg"><b>LCD realism <span class="rng">0 – 8%</span></b><p>Controls the strength of the pixel grid, the reflector shadow and the ghost segments. Turn it down for a cleaner, flatter read.</p></li>
+          <li style="--k:300deg"><b>Frame rate <span class="rng">12 fps ↔ 60 fps</span></b><p>Stepped motion is the signature. Smooth easing makes it softer and more modern.</p></li>
+          <li style="--k:160deg"><b>Accent strategy <span class="rng">dither ↔ tint</span></b><p>Strict four shades with a dither per game, or allow one colour tint per cartridge as a "colour edition" palette swap.</p></li>
+        </ol>
+      </div>
+    </article>
+  </div>
+</section>
+
+<footer class="foot">
+  <span>Handheld ’89 — Daily style exploration · variant R-89</span>
+  <span>Silkscreen · Pixelify Sans · Archivo via Google Fonts · every pixel drawn in CSS/SVG</span>
+</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var root = document.documentElement;
+  var RM = function(){ return window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; };
+
+  /* ---------- sprites (X = pixel on) ---------- */
+  var SPR = {
+    target:["....XXX....","..XX.X.XX..",".X...X...X.",".X.......X.","X.........X","XXX..X..XXX","X.........X",".X.......X.",".X...X...X.","..XX.X.XX..","....XXX...."],
+    tile:["XXXXXXXXXX.","X........XX","X...XX...XX","X..X..X..XX","X..X..X..XX","X..XXXX..XX","X..X..X..XX","X..X..X..XX","X........XX","XXXXXXXXXXX",".XXXXXXXXXX"],
+    grid:["XXXXXXXXXXXXX","XXXXX...XX.XX","XXXXX...X.X.X","XXXXX...XX.XX","XXXXXXXXXXXXX","XX.XXXXXX...X","X.X.XXXXX.X.X","XX.XXXXXX...X","XXXXXXXXXXXXX","X...XX.XXXXXX","X.X.X.X.XXXXX","X...XX.XXXXXX","XXXXXXXXXXXXX"],
+    flame:["...X....","...XX...","..XXX...","..XXXX.X",".XXXXXXX",".XXX.XXX","XXX..XXX","XX....XX","XX....XX",".XX..XX.","..XXXX.."],
+    crown:["X...X...X","XX.XXX.XX","XXXXXXXXX","XX.XXX.XX","XXXXXXXXX"],
+    trophy:["XXXXXXXXX","X.XXXXX.X","X.XXXXX.X",".XXXXXXX.","..XXXXX..","...XXX...","....X....","...XXX...","..XXXXX.."],
+    check:["......X",".....XX","X...XX.","XX.XX..",".XXX...","..X...."],
+    lock:["..XXXXX..",".XX...XX.",".X.....X.",".X.....X.","XXXXXXXXX","XXXXXXXXX","XXXX.XXXX","XXXX.XXXX","XXXXXXXXX","XXXXXXXXX"],
+    down:["..XXX..","..XXX..","..XXX..","XXXXXXX",".XXXXX.","..XXX..","...X..."],
+    star:["...X...","..XXX..","XXXXXXX",".XXXXX.","..XXX..",".XX.XX.",".X...X."],
+    cursor:["X...","XX..","XXX.","XXXX","XXX.","XX..","X..."],
+    hourglass:["XXXXXXX",".X...X.",".XX.XX.","..XXX..","...X...","..X.X..",".X.X.X.",".XXXXX.","XXXXXXX"],
+    batt:["XXXXXXXXXXXX.","X.XX.XX.XX.X.","X.XX.XX.XX.XX","X.XX.XX.XX.XX","X.XX.XX.XX.X.","XXXXXXXXXXXX."],
+    diamond:["..X..",".XXX.","XXXXX",".XXX.","..X.."]
+  };
+  SPR.up = SPR.down.slice().reverse();
+  SPR.back = SPR.cursor.map(function(r){ return r.split('').reverse().join(''); });
+
+  function sprite(name, px){
+    var rows = SPR[name]; if(!rows) return '';
+    var h = rows.length, w = rows[0].length, d = '';
+    rows.forEach(function(r, y){
+      var x = 0;
+      while(x < w){
+        if(r[x] === 'X'){ var s = x; while(x < w && r[x] === 'X') x++; d += 'M' + s + ' ' + y + 'h' + (x - s) + 'v1h-' + (x - s) + 'z'; }
+        else x++;
+      }
+    });
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="' + (w * px) + '" height="' + (h * px) + '" shape-rendering="crispEdges" aria-hidden="true" focusable="false"><path fill="currentColor" d="' + d + '"/></svg>';
+  }
+  document.querySelectorAll('[data-spr]').forEach(function(el){
+    el.innerHTML = sprite(el.getAttribute('data-spr'), +(el.getAttribute('data-px') || 2));
+    el.setAttribute('aria-hidden', 'true');
+  });
+
+  /* ---------- numerals in Pixelify body copy switch to Silkscreen (clearer 2/5/8) ---------- */
+  document.querySelectorAll('.lcd, .lcds, .smp-lcd').forEach(function(scope){
+    var w = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null), list = [], n;
+    while((n = w.nextNode())){ if(/\d/.test(n.nodeValue)) list.push(n); }
+    list.forEach(function(t){
+      var p = t.parentElement;
+      if(!p || p.closest('.seg, svg, .num, pre')) return;
+      if(getComputedStyle(p).fontFamily.indexOf('Pixelify') === -1) return;
+      var wrap = document.createElement('span');
+      t.nodeValue.split(/(\d+)/).forEach(function(part, i){
+        if(!part) return;
+        if(i % 2){ var sp = document.createElement('span'); sp.className = 'num'; sp.textContent = part; wrap.appendChild(sp); }
+        else wrap.appendChild(document.createTextNode(part));
+      });
+      p.replaceChild(wrap, t);
+    });
+  });
+
+  /* ---------- seven-segment digits ---------- */
+  var H = 1.3, G = 0.6, Lx = 2, Rx = 12, T = 2, M = 12, B = 22;
+  function hz(y, x1, x2){ return [x1,y, x1+H,y-H, x2-H,y-H, x2,y, x2-H,y+H, x1+H,y+H].join(' '); }
+  function vt(x, y1, y2){ return [x,y1, x+H,y1+H, x+H,y2-H, x,y2, x-H,y2-H, x-H,y1+H].join(' '); }
+  var SEGP = { a:hz(T,Lx+G,Rx-G), b:vt(Rx,T+G,M-G), c:vt(Rx,M+G,B-G), d:hz(B,Lx+G,Rx-G), e:vt(Lx,M+G,B-G), f:vt(Lx,T+G,M-G), g:hz(M,Lx+G,Rx-G) };
+  var MAP = {'0':'abcdef','1':'bc','2':'abdeg','3':'abcdg','4':'bcfg','5':'acdfg','6':'acdefg','7':'abc','8':'abcdefg','9':'abcdfg','-':'g',' ':''};
+  function digit(ch){
+    var on = MAP[ch] || '';
+    var s = '<svg class="sd" viewBox="0 0 14 24" aria-hidden="true" focusable="false">';
+    'abcdefg'.split('').forEach(function(k){ s += '<polygon class="' + (on.indexOf(k) > -1 ? 'on' : 'off') + '" points="' + SEGP[k] + '"/>'; });
+    return s + '</svg>';
+  }
+  var COLON = '<svg class="sc" viewBox="0 0 5 24" aria-hidden="true" focusable="false"><rect class="on" x="1" y="7" width="3" height="3"/><rect class="on" x="1" y="15" width="3" height="3"/></svg>';
+  function renderSeg(el, str){ el.innerHTML = str.split('').map(function(c){ return c === ':' ? COLON : digit(c); }).join(''); }
+  document.querySelectorAll('[data-seg]').forEach(function(el){ renderSeg(el, el.getAttribute('data-seg')); if(!el.hasAttribute('role')) el.setAttribute('role','img'); });
+
+  /* ---------- countdown 7:42:10, ticking ---------- */
+  var left = 7*3600 + 42*60 + 10;
+  var cds = Array.prototype.slice.call(document.querySelectorAll('[data-countdown]'));
+  function fmt(s){ var h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return h + ':' + (m<10?'0':'') + m + ':' + (x<10?'0':'') + x; }
+  function drawCd(){ var t = fmt(left); cds.forEach(function(el){ renderSeg(el, t); el.setAttribute('role','img'); el.setAttribute('aria-label', 'Next puzzles in ' + t); }); }
+  drawCd();
+  setInterval(function(){ left = left > 0 ? left - 1 : 86399; drawCd(); }, 1000);
+
+  /* ---------- score latch (count-up) ---------- */
+  function countUp(el, to, delay, timers){
+    var pad = function(v){ return (v < 10 ? '0' : '') + v; };
+    if(RM()){ renderSeg(el, pad(to)); return; }
+    renderSeg(el, '00');
+    var n = 10, i = 0;
+    function step(){ i++; renderSeg(el, pad(Math.round(to * i / n))); if(i < n) timers.push(setTimeout(step, 55)); }
+    timers.push(setTimeout(step, delay));
+  }
+  var bootTimers = [];
+  document.querySelectorAll('[data-countup]').forEach(function(el){ countUp(el, +el.getAttribute('data-seg'), 380, bootTimers); });
+
+  /* ---------- tile helpers + pixel-latch reveal ---------- */
+  var LABEL = { correct:'correct', present:'in word, wrong spot', absent:'not in word', typed:'typed', empty:'empty' };
+  function setTile(t, s){
+    t.className = 'tile s-' + s;
+    var ch = t.textContent.trim();
+    t.setAttribute('aria-label', ch ? ch + ', ' + LABEL[s] : 'empty');
+  }
+  function reveal(tiles, states, timers, done){
+    timers.forEach(clearTimeout); timers.length = 0;
+    tiles.forEach(function(t){ t.removeAttribute('data-ph'); setTile(t, 'typed'); });
+    if(RM()){ tiles.forEach(function(t, i){ setTile(t, states[i]); }); if(done) done(); return; }
+    tiles.forEach(function(t, i){
+      var b = i * 150;
+      [1,2,3].forEach(function(p, k){ timers.push(setTimeout(function(){ t.setAttribute('data-ph', p); }, b + k * 70)); });
+      timers.push(setTimeout(function(){ t.removeAttribute('data-ph'); setTile(t, states[i]); t.classList.add('land'); }, b + 210));
+    });
+    timers.push(setTimeout(function(){ if(done) done(); }, (tiles.length - 1) * 150 + 400));
+  }
+
+  /* motion demo */
+  var mTimers = [];
+  var mTiles = Array.prototype.slice.call(document.querySelectorAll('#mrow .tile'));
+  var mStates = mTiles.map(function(t){ return t.getAttribute('data-s'); });
+  var mScore = document.getElementById('mscore');
+  document.getElementById('replay').addEventListener('click', function(){
+    reveal(mTiles, mStates, mTimers);
+    countUp(mScore, 80, 120, mTimers);
+  });
+
+  /* ---------- playable Five Letters (answer: PARTY) ---------- */
+  var ANSWER = 'PARTY';
+  var wb = document.getElementById('wb');
+  var rows = Array.prototype.slice.call(wb.querySelectorAll('.wrow'));
+  var used = document.getElementById('wbUsed');
+  var toast = document.getElementById('wbToast');
+  var r = 2, cur = ['P','A','R'], busy = false, over = false, wTimers = [], tTimer;
+  var RANK = { absent:1, present:2, correct:3 };
+  function tilesOf(i){ return Array.prototype.slice.call(rows[i].querySelectorAll('.tile')); }
+  function say(msg){ toast.textContent = msg; toast.hidden = false; clearTimeout(tTimer); tTimer = setTimeout(function(){ toast.hidden = true; }, 1500); }
+  function paint(popIdx){
+    tilesOf(r).forEach(function(t, i){ t.textContent = cur[i] || ''; setTile(t, cur[i] ? 'typed' : 'empty'); if(i === popIdx && !RM()){ t.classList.add('pop'); } });
+  }
+  function evaluate(g){
+    var res = [0,0,0,0,0].map(function(){ return 'absent'; }), pool = {};
+    for(var i = 0; i < 5; i++){ if(g[i] === ANSWER[i]) res[i] = 'correct'; else pool[ANSWER[i]] = (pool[ANSWER[i]] || 0) + 1; }
+    for(var j = 0; j < 5; j++){ if(res[j] !== 'correct' && pool[g[j]] > 0){ res[j] = 'present'; pool[g[j]]--; } }
+    return res;
+  }
+  function keyEl(k){ return document.querySelector('#kb .key[data-k="' + k + '"]'); }
+  function press(k){
+    if(busy || over) return;
+    if(k === 'ENTER'){
+      if(cur.length < 5){
+        say('Need 5 letters');
+        if(!RM()){ rows[r].classList.remove('shake'); void rows[r].offsetWidth; rows[r].classList.add('shake'); }
+        return;
+      }
+      var g = cur.join(''), res = evaluate(g);
+      busy = true;
+      reveal(tilesOf(r), res, wTimers, function(){
+        for(var i = 0; i < 5; i++){
+          var el = keyEl(g[i]); if(!el) continue;
+          var prev = el.classList.contains('k-correct') ? 3 : el.classList.contains('k-present') ? 2 : el.classList.contains('k-absent') ? 1 : 0;
+          if(RANK[res[i]] > prev){ el.classList.remove('k-correct','k-present','k-absent'); el.classList.add('k-' + res[i]); }
+        }
+        used.textContent = (r + 1) + '/6 used';
+        if(res.every(function(s){ return s === 'correct'; })){ over = true; say('Solved in ' + (r + 1)); }
+        else if(r === 5){ over = true; say('Out of guesses'); }
+        else { r++; cur = []; }
+        busy = false;
+      });
+    } else if(k === 'DEL'){
+      if(cur.length){ cur.pop(); paint(); }
+    } else if(/^[A-Z]$/.test(k) && cur.length < 5){
+      cur.push(k); paint(cur.length - 1);
+    }
+  }
+  document.querySelectorAll('[data-k]').forEach(function(b){
+    b.setAttribute('type', 'button');
+    var k = b.getAttribute('data-k');
+    if(b.classList.contains('key')) b.setAttribute('aria-label', k === 'DEL' ? 'Delete' : k === 'ENTER' ? 'Enter' : k);
+    b.addEventListener('click', function(){ press(k); });
+  });
+  document.querySelectorAll('.tile').forEach(function(t){ t.addEventListener('animationend', function(){ t.classList.remove('land','pop'); }); });
+  rows.forEach(function(rw){ rw.addEventListener('animationend', function(){ rw.classList.remove('shake'); }); });
+
+  /* ---------- small LCD interactions (tabs / period are visual-only) ---------- */
+  document.querySelectorAll('.lbt').forEach(function(list){
+    list.addEventListener('click', function(e){ var b = e.target.closest('button'); if(!b) return; list.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-selected', x === b ? 'true' : 'false'); }); });
+  });
+  document.querySelectorAll('.per').forEach(function(g){
+    g.addEventListener('click', function(e){ var b = e.target.closest('button'); if(!b) return; g.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); }); });
+  });
+
+  /* ---------- theme: hash + toggle ---------- */
+  var btn = document.getElementById('themeBtn');
+  var mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+  function current(){ return root.dataset.theme || (mq && mq.matches ? 'dark' : 'light'); }
+  function sync(){
+    var c = current();
+    btn.setAttribute('data-state', c);
+    btn.setAttribute('aria-pressed', c === 'dark' ? 'true' : 'false');
+    btn.setAttribute('aria-label', c === 'dark' ? 'Backlight: night. Switch to day (light) theme' : 'Backlight: day. Switch to night (dark) theme');
+  }
+  function fromHash(){ var h = location.hash.slice(1); if(h === 'light' || h === 'dark'){ root.dataset.theme = h; } sync(); }
+  fromHash();
+  window.addEventListener('hashchange', fromHash);
+  if(mq && mq.addEventListener) mq.addEventListener('change', sync);
+  btn.addEventListener('click', function(){ root.dataset.theme = current() === 'dark' ? 'light' : 'dark'; sync(); });
+})();
+</script>
+</body>
+</html>

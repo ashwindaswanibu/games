@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Interaction of Color</title>
+<meta name="description" content="Home screen vision sketch: every bucket is a Homage to the Square whose nested squares settle as you finish its games, repainted daily from the day's puzzles.">
+<meta name="theme-color" content="#12302E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* All colour tokens are rewritten at runtime from the day's palette (see DAYS). These are Day 1 values. */
+  --ground:#12302E; --ink:#F2EADB; --soft:#B7BDB3; --faint:#8A9690; --hair:rgba(242,234,219,.16); --hair2:rgba(242,234,219,.32);
+  --backdrop:#0A2120; --accent:#F7DFA0; --c1:#E38C36; --c2:#C75652; --c3:#709CB3; --movies:#C75652;
+  --study:#183936; --pencil:#5E716C;
+  --sw0:#C9632A; --sw1:#C75652; --sw2:#709CB3; --sw3:#F7DFA0; --sw4:#1F3C6A;
+  --s:1;
+  --sans:'Jost','Futura','Century Gothic','Avenir Next','Helvetica Neue',sans-serif;
+  --serif:'EB Garamond','Garamond','Iowan Old Style','Palatino Linotype',Georgia,serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--backdrop); color:var(--ink); font-family:var(--sans);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  overflow:hidden; text-rendering:optimizeLegibility;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:left}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+p,h1,h2,ol{margin:0}
+
+/* ---------- frame ---------- */
+#backdrop{position:fixed;inset:0;width:100vw;height:100vh;display:block;pointer-events:none}
+.stage{position:fixed;inset:0;display:grid;place-items:center}
+.phone{
+  position:relative;width:390px;height:844px;flex:none;border-radius:50px;overflow:hidden;isolation:isolate;
+  background:var(--ground);transform:scale(var(--s));
+  box-shadow:0 70px 120px -40px rgba(0,0,0,.6),0 24px 48px -24px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.05);
+}
+.caption{position:fixed;left:56px;bottom:56px;width:262px;z-index:2}
+.cap-k{font:500 10.5px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase;color:var(--soft)}
+.cap-t{font:italic 400 40px/1 var(--serif);letter-spacing:-.01em;margin:14px 0 16px}
+.cap-d{font:400 15.5px/1.5 var(--serif);color:var(--soft)}
+.cap-try{list-style:none;margin:22px 0 0;padding:16px 0 0;border-top:1px solid var(--hair)}
+.cap-try li{display:flex;gap:10px;align-items:baseline;font:400 13px/1.45 var(--sans);color:var(--ink);padding:3px 0}
+.cap-try li::before{content:"";flex:none;width:6px;height:6px;background:var(--accent);transform:translateY(-1px)}
+.cap-days{display:inline-flex;gap:5px;margin-left:2px}
+.cap-days button,.cap-replay{border:1px solid var(--hair2);padding:3px 7px 4px;font:400 12px/1 var(--sans);font-variant-numeric:tabular-nums}
+.cap-days button[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+
+@media (min-width:481px) and (max-width:1039px){
+  body{overflow:auto}
+  .stage{position:relative;inset:auto;display:flex;flex-direction:column;align-items:center;gap:36px;padding:40px 24px 56px}
+  .caption{position:static;width:390px}
+  #backdrop{display:none}
+}
+@media (max-width:480px){
+  .stage{display:block}
+  .phone{width:100%;height:100%;height:100dvh;border-radius:0;box-shadow:none;transform:none}
+  .caption,#backdrop{display:none}
+}
+
+/* ---------- home screen ---------- */
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:none;padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))}
+.screen::-webkit-scrollbar{display:none}
+.pad{padding-left:22px;padding-right:22px}
+.label{font:500 10.5px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;color:var(--ink)}
+.soft{color:var(--soft)}
+
+.top{display:flex;align-items:center;justify-content:space-between;padding-top:calc(22px + env(safe-area-inset-top,0px))}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:20px;height:20px;display:block}
+.ed{font:500 10.5px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;color:var(--soft)}
+.hdate{font:italic 400 17px/1 var(--serif);color:var(--ink);letter-spacing:.005em}
+.clock{display:flex;align-items:baseline;gap:8px}
+.clock span{font:italic 400 14.5px/1 var(--serif);color:var(--soft)}
+.clock b{font:400 13.5px/1 var(--sans);letter-spacing:.06em;font-variant-numeric:tabular-nums}
+
+.hero{padding-top:38px}
+.head{font-weight:300;font-size:50px;line-height:.98;letter-spacing:-.035em}
+.head .a{display:block}
+.head .b{display:block;font-family:var(--serif);font-style:italic;font-weight:400;font-size:53px;letter-spacing:-.02em;line-height:1.04;color:var(--accent)}
+.lede{font:400 18px/1.42 var(--serif);color:var(--soft);margin-top:16px;max-width:31ch}
+.lede b{font-weight:500;color:var(--ink)}
+.nn{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px;padding-top:14px;border-top:1px solid var(--hair)}
+.nn .k{display:flex;align-items:center;gap:7px;font:500 9.5px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;color:var(--soft)}
+.nn .v{display:block;margin-top:7px}
+.next{display:flex;align-items:center;gap:12px;min-height:44px}
+.next svg{width:40px;height:40px;flex:none;display:block}
+.next .v{font:400 16px/1.15 var(--sans)}
+.next .v::after{content:"";display:inline-block;width:6px;height:6px;margin-left:8px;border-top:1.4px solid currentColor;border-right:1.4px solid currentColor;transform:translateY(-2px) rotate(45deg)}
+.now .v{font:italic 400 15.5px/1.25 var(--serif);color:var(--ink)}
+.now i{width:7px;height:7px;flex:none;background:var(--movies);animation:pulse 3.2s ease-in-out infinite}
+
+.palette{margin:18px 22px 0;padding-top:16px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.sw{display:flex;gap:3px}
+.sw i{display:block;width:15px;height:15px}
+.sw i:nth-child(1){background:var(--sw0)} .sw i:nth-child(2){background:var(--sw1)} .sw i:nth-child(3){background:var(--sw2)} .sw i:nth-child(4){background:var(--sw3)} .sw i:nth-child(5){background:var(--sw4)}
+.swrow{display:flex;align-items:center;gap:12px}
+.swrow .ed{font-size:9.5px}
+.src{font:italic 400 14.5px/1.2 var(--serif);color:var(--soft);margin-top:10px;white-space:nowrap;transition:opacity .4s}
+.days{display:flex;align-items:center;gap:5px}
+.days .lbl{font:500 9.5px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;color:var(--soft);margin-right:5px}
+.days button{position:relative;width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--hair2);font:400 13px/1 var(--sans);font-variant-numeric:tabular-nums;transition:background .3s,color .3s,border-color .3s}
+.days button::after{content:"";position:absolute;inset:-7px -3px}
+.days button[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+
+.gallery{display:grid;grid-template-columns:1fr 1fr;gap:26px 14px;margin-top:22px}
+.tile{display:block;width:100%;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.tile:active{transform:scale(.985)}
+.tile svg{display:block;width:100%;height:auto;aspect-ratio:1}
+.tcap{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.tname{font:500 11px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase}
+.dots{display:flex;gap:3px}
+.dots i{display:block;width:7px;height:7px;border:1px solid var(--soft)}
+.dots i.d{background:var(--ink);border-color:var(--ink)}
+.dots i.p{background:linear-gradient(to top,var(--ink) 50%,transparent 50%);border-color:var(--ink)}
+.tsub{display:block;margin-top:6px;font:italic 400 14.5px/1.25 var(--serif);color:var(--soft)}
+.tile.study{cursor:default}
+.study .tname{color:var(--soft)}
+.study rect.f{fill:var(--study)}
+.study rect.o{fill:none;stroke:var(--pencil);stroke-width:1;vector-effect:non-scaling-stroke}
+
+.sec-head{display:flex;justify-content:space-between;align-items:baseline;margin-top:48px}
+.note{font:italic 400 14.5px/1 var(--serif);color:var(--soft)}
+.strip{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding:0 22px;padding:16px 22px 6px;scrollbar-width:none;overscroll-behavior-x:contain}
+.strip::-webkit-scrollbar{display:none}
+.gt{flex:0 0 116px;scroll-snap-align:start;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.gt:active{transform:scale(.97)}
+.gt svg{display:block;width:116px;height:116px}
+.gk{display:block;margin-top:11px;font:500 9.5px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
+.gn{display:block;margin-top:6px;font:400 15px/1.15 var(--sans)}
+.gs{display:block;margin-top:3px;font:italic 400 14px/1.2 var(--serif);color:var(--soft)}
+.strip .end{flex:0 0 10px}
+
+.board{list-style:none;padding:0;margin-top:14px}
+.row{position:relative;display:grid;grid-template-columns:38px 1fr auto;align-items:baseline;padding:13px 0 17px;border-top:1px solid var(--hair)}
+.rk{font:300 27px/1 var(--sans);letter-spacing:-.02em}
+.nm{font:400 17px/1 var(--sans)}
+.nm em{font:italic 400 14.5px/1 var(--serif);color:var(--soft);margin-left:7px}
+.pt{font:400 15px/1 var(--sans);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.bar{position:absolute;left:38px;right:0;bottom:6px;height:3px}
+.bar i{display:block;height:100%;background:var(--c);width:calc(var(--w) * 100%)}
+.row.me .rk,.row.me .nm,.row.me .pt{color:var(--accent)}
+.more{border-top:1px solid var(--hair);padding-top:12px;font:italic 400 15px/1 var(--serif);color:var(--soft)}
+
+.leaders{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+.ld svg{display:block;width:46px;height:46px}
+.ld .lb{display:block;margin-top:12px;font:500 9.5px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--soft)}
+.ld .ln{display:block;margin-top:6px;font:italic 400 19px/1 var(--serif)}
+.ld .ln.me{color:var(--accent)}
+
+.foot{margin:52px 22px 0;padding-top:18px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;align-items:center;gap:14px}
+.foot p{font:italic 400 14px/1.35 var(--serif);color:var(--soft);max-width:27ch;text-wrap:pretty}
+.replay{display:inline-flex;align-items:center;gap:9px;min-height:40px;font:500 10.5px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase}
+.replay svg{width:16px;height:16px}
+
+/* ---------- intro ---------- */
+/* text reveal is driven from the render loop (main thread), so it always lands at rest */
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+
+/* ---------- bucket / game world (placeholder) ---------- */
+.world{position:absolute;inset:0;z-index:5;display:none;overflow-y:auto;overflow-x:hidden;background:var(--wbg);color:var(--wink);scrollbar-width:none}
+.world::-webkit-scrollbar{display:none}
+.world.on{display:block}
+.world .w-top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;padding:calc(14px + env(safe-area-inset-top,0px)) 22px 0}
+.world .ed{color:var(--wsoft)}
+.back{display:inline-flex;align-items:center;gap:9px;min-height:44px;font:500 10.5px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase}
+.back:focus-visible{outline-color:var(--wink)}
+.w-in{position:relative;z-index:1;padding:56px 22px 40px}
+.w-k{font:500 10.5px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;color:var(--wsoft)}
+.w-title{font:300 82px/.92 var(--sans);letter-spacing:-.045em;margin-top:14px}
+.w-title.sm{font-size:60px;letter-spacing:-.035em}
+.w-lede{font:italic 400 21px/1.35 var(--serif);margin-top:14px;color:var(--wsoft)}
+.w-list{list-style:none;padding:0;margin-top:36px}
+.w-list li{display:grid;grid-template-columns:52px 1fr auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--whair)}
+.w-list li:last-child{border-bottom:1px solid var(--whair)}
+.w-list svg{width:52px;height:52px;display:block}
+.w-list b{display:block;font:400 17px/1.1 var(--sans)}
+.w-list em{display:block;font:italic 400 14.5px/1.2 var(--serif);color:var(--wsoft);margin-top:3px}
+.w-act{font:500 10px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase}
+.w-meta{font:400 16px/1.4 var(--serif);margin-top:24px}
+.w-btn{display:inline-block;margin-top:30px;padding:16px 26px;background:var(--wink);color:var(--wbg);font:500 11px/1 var(--sans);letter-spacing:.24em;text-transform:uppercase}
+.w-note{font:italic 400 14px/1.4 var(--serif);color:var(--wsoft);margin-top:30px;max-width:28ch}
+.w-deco{position:absolute;right:-30%;bottom:-10%;width:110%;height:auto;aspect-ratio:1;z-index:0;pointer-events:none}
+.w-deco rect{fill:none;stroke:var(--whair);stroke-width:1;vector-effect:non-scaling-stroke}
+.world.on .w-in > *{animation:rise .8s cubic-bezier(.2,.7,.2,1) both}
+.world.on .w-in > *:nth-child(2){animation-delay:.06s}
+.world.on .w-in > *:nth-child(3){animation-delay:.12s}
+.world.on .w-in > *:nth-child(4){animation-delay:.18s}
+.world.on .w-in > *:nth-child(5){animation-delay:.24s}
+.world.on .w-in > *:nth-child(6){animation-delay:.3s}
+.world .w-top{transition:opacity .2s}
+.world.leaving .w-in,.world.leaving .w-top,.world.leaving .w-deco{opacity:0;transition:opacity .18s}
+
+#zoom{position:absolute;inset:0;width:100%;height:100%;z-index:6;display:none;pointer-events:none}
+
+@media (prefers-reduced-motion:reduce){
+  .world.on .w-in > *{animation:none}
+  .now i{animation:none;opacity:1}
+  .tile,.gt{transition:none}
+  .world.on{animation:fade .2s both}
+}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+<svg id="backdrop" aria-hidden="true"></svg>
+
+<div class="stage">
+  <div class="phone" id="phone">
+    <main class="screen intro" id="screen">
+      <header class="top pad rv" style="--i:0">
+        <div class="brand"><svg class="mark" id="mark" viewBox="0 0 100 100" aria-hidden="true"></svg><span class="hdate" id="date">Tuesday, October 6</span></div>
+        <div class="clock" aria-live="off"><span>New colors in</span><b id="cd">--:--:--</b></div>
+      </header>
+
+      <section class="hero pad" aria-label="Today">
+        <h1 class="head rv" style="--i:1"><span class="a">Three of ten</span><span class="b">squares settled.</span></h1>
+        <p class="lede rv" style="--i:2">Five days running, Ashwin. <b>Second of six</b> today, 32 behind Priya.</p>
+        <div class="nn rv" style="--i:3">
+          <button type="button" class="next" id="next" aria-label="Continue Word Ladder">
+            <svg viewBox="0 0 100 100" aria-hidden="true"></svg>
+            <span><span class="k">Up next</span><span class="v">Word Ladder</span></span>
+          </button>
+          <p class="now"><span class="k"><i aria-hidden="true"></i>Live</span><span class="v">Dev is playing Color Grade</span></p>
+        </div>
+      </section>
+
+      <div class="palette rv" style="--i:4">
+        <div>
+          <div class="swrow"><div class="sw" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><span class="ed" id="ed">No. 214</span></div>
+          <p class="src" id="src">From today's Color Grade still</p>
+        </div>
+        <div class="days" aria-label="Preview another day's palette">
+          <span class="lbl">Oct</span>
+          <button type="button" data-day="0" aria-pressed="true" aria-label="Tuesday October 6">6</button>
+          <button type="button" data-day="1" aria-pressed="false" aria-label="Wednesday October 7">7</button>
+          <button type="button" data-day="2" aria-pressed="false" aria-label="Thursday October 8">8</button>
+        </div>
+      </div>
+
+      <div class="gallery pad" id="gallery"></div>
+
+      <section aria-label="Every game">
+        <div class="sec-head pad"><span class="label">Every game</span><span class="note">7 left to play</span></div>
+        <div class="strip" id="strip"></div>
+      </section>
+
+      <section class="pad" aria-label="Standings">
+        <div class="sec-head"><span class="label">Standings · today</span><span class="note">Everyone</span></div>
+        <ol class="board">
+          <li class="row"><span class="rk">1</span><span class="nm">Priya</span><span class="pt">412</span><span class="bar" style="--w:1;--c:var(--c1)"><i></i></span></li>
+          <li class="row me"><span class="rk">2</span><span class="nm">Ashwin<em>you</em></span><span class="pt">380</span><span class="bar" style="--w:.922;--c:var(--c2)"><i></i></span></li>
+          <li class="row"><span class="rk">3</span><span class="nm">Marco</span><span class="pt">301</span><span class="bar" style="--w:.731;--c:var(--c3)"><i></i></span></li>
+        </ol>
+        <p class="more">and 3 more</p>
+      </section>
+
+      <section class="pad" aria-label="Bucket leaders this week">
+        <div class="sec-head"><span class="label">Leading each bucket</span><span class="note">This week</span></div>
+        <div class="leaders" id="leaders"></div>
+      </section>
+
+      <footer class="foot">
+        <p>New puzzles, and new colors, at midnight in New York.</p>
+        <button type="button" class="replay" data-replay>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" fill="none" stroke="currentColor"/><rect x="5" y="6.5" width="6" height="6" fill="currentColor"/></svg>
+          Replay
+        </button>
+      </footer>
+    </main>
+
+    <section class="world" id="world" aria-label="Bucket"></section>
+    <svg id="zoom" aria-hidden="true"></svg>
+  </div>
+
+  <aside class="caption" aria-label="About this sketch">
+    <p class="cap-k">Home · vision sketch</p>
+    <h2 class="cap-t">Interaction of Color</h2>
+    <p class="cap-d">Each bucket is a Homage to the Square, one nested square per game; finish a game and its square settles into Albers' position. At midnight in New York the whole palette is repainted from the day's puzzles.</p>
+    <ul class="cap-try">
+      <li><span>Tap a painting to zoom through its squares into the bucket.</span></li>
+      <li><span>Tap any tile under Every game to jump straight into it.</span></li>
+      <li><span>Preview a day <span class="cap-days"><button type="button" data-day="0" aria-pressed="true">6</button><button type="button" data-day="1" aria-pressed="false">7</button><button type="button" data-day="2" aria-pressed="false">8</button></span></span></li>
+      <li><span><button type="button" class="cap-replay" data-replay>Replay</button> the settle.</span></li>
+    </ul>
+  </aside>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================================================================
+   Data (example)
+   ================================================================ */
+const BUCKETS = [
+  { id:'words', name:'Words', leader:'Priya', sub:'Word Ladder underway',
+    lede:'Four games. One settled, one underway.', lead:'Priya leads the week.',
+    games:[
+      { id:'five-letters', name:'Five Letters', status:'done', result:'3/6' },
+      { id:'word-ladder', name:'Word Ladder', status:'progress', result:'Underway' },
+      { id:'four-groups', name:'Four Groups', status:'todo', result:'Not started' },
+      { id:'mini-grid', name:'Mini Grid', status:'todo', result:'Not started' } ] },
+  { id:'movies', name:'Movies', leader:'Ashwin', sub:'Frame by Frame next',
+    lede:'Three games. One settled.', lead:'You lead the week. Dev is in Color Grade now.',
+    games:[
+      { id:'color-grade', name:'Color Grade', status:'done', result:'Solved after 2 reveals' },
+      { id:'frame-by-frame', name:'Frame by Frame', status:'todo', result:'Not started' },
+      { id:'release-order', name:'Release Order', status:'todo', result:'Not started' } ] },
+  { id:'geography', name:'Geography', leader:'Marco', sub:'Silhouette next',
+    lede:'Three games. One settled.', lead:'Marco leads the week.',
+    games:[
+      { id:'capitals', name:'Capitals', status:'done', result:'5/5' },
+      { id:'silhouette', name:'Silhouette', status:'todo', result:'Not started' },
+      { id:'distance', name:'Distance', status:'todo', result:'Not started' } ] },
+];
+
+/* Day palettes. Each bucket ramp runs field -> innermost square (one colour per game). */
+const DAYS = [
+  { date:'Tuesday, October 6', ed:214, src:"From today's Color Grade still",
+    ground:'#12302E', ink:'#F2EADB',
+    ramps:[ ['#9E3F1A','#C9632A','#E38C36','#EFB656','#F7DFA0'],
+            ['#58182A','#8E2D3E','#C75652','#EE9C7C'],
+            ['#A9C7CB','#709CB3','#416C95','#1F3C6A'] ] },
+  { date:'Wednesday, October 7', ed:215, src:"From Wednesday's movie still",
+    ground:'#2A1631', ink:'#F6ECE4',
+    ramps:[ ['#4F5A17','#76861F','#A1B135','#CBD767','#ECF0B2'],
+            ['#F3BCA6','#E8805F','#C9452C','#8E2116'],
+            ['#173F5A','#2B6E84','#62A8AE','#BDE0D8'] ] },
+  { date:'Thursday, October 8', ed:216, src:"From Thursday's movie still",
+    ground:'#141C44', ink:'#F4EEE4',
+    ramps:[ ['#731C43','#A63462','#D16A83','#EEA6A2','#F9D8C5'],
+            ['#6E500E','#A27A1C','#D0A83C','#F1DA8C'],
+            ['#C3E7D1','#80C4A2','#3D9074','#0F584A'] ] },
+];
+
+/* ================================================================
+   Colour math (OKLab)
+   ================================================================ */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const easeIO = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+const lin = c => c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4);
+const gam = c => c <= .0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1/2.4) - .055;
+function toLab(hex){
+  const h = hex.replace('#','');
+  const r = lin(parseInt(h.slice(0,2),16)/255), g = lin(parseInt(h.slice(2,4),16)/255), b = lin(parseInt(h.slice(4,6),16)/255);
+  const l = Math.cbrt(.4122214708*r + .5363325363*g + .0514459929*b);
+  const m = Math.cbrt(.2119034982*r + .6806995451*g + .1073969566*b);
+  const s = Math.cbrt(.0883024619*r + .2817188376*g + .6299787005*b);
+  return [ .2104542553*l + .7936177850*m - .0040720468*s,
+           1.9779984951*l - 2.4285922050*m + .4505937099*s,
+           .0259040371*l + .7827717662*m - .8086757660*s ];
+}
+function rgb(c){
+  const l_ = c[0] + .3963377774*c[1] + .2158037573*c[2];
+  const m_ = c[0] - .1055613458*c[1] - .0638541728*c[2];
+  const s_ = c[0] - .0894841775*c[1] - 1.2914855480*c[2];
+  const l = l_*l_*l_, m = m_*m_*m_, s = s_*s_*s_;
+  const r = 4.0767416621*l - 3.3077115913*m + .2309699292*s;
+  const g = -1.2684380046*l + 2.6097574011*m - .3413193965*s;
+  const b = -.0041960863*l - .7034186147*m + 1.7076147010*s;
+  const f = v => Math.round(clamp(gam(clamp(v,0,1)),0,1)*255);
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+const mix = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+
+DAYS.forEach(d => { d.L = { ground:toLab(d.ground), ink:toLab(d.ink), ramps:d.ramps.map(r => r.map(toLab)) }; });
+const lerpPal = (A, B, t) => ({ ground:mix(A.ground,B.ground,t), ink:mix(A.ink,B.ink,t), ramps:A.ramps.map((r,i) => r.map((c,k) => mix(c, B.ramps[i][k], t))) });
+
+/* ================================================================
+   Motion state
+   ================================================================ */
+const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+let reduce = mq.matches;
+let introStart = performance.now();
+let day = 0;
+let palFrom = DAYS[0].L, palTo = DAYS[0].L, palT0 = -1e9, palDirty = true, cur = DAYS[0].L;
+const PAL_DUR = 1900;
+const SETTLE_DUR = 1250;
+
+// staggered settle timing for completed games (the intro's signature move)
+(() => {
+  let n = 0;
+  BUCKETS.forEach(B => B.games.forEach(g => {
+    if (g.status === 'done') g.delay = 700 + (n++) * 280;
+    else if (g.status === 'progress') g.delay = 1500;
+    else g.delay = 0;
+    g.target = g.status === 'done' ? 1 : g.status === 'progress' ? .5 : 0;
+  }));
+})();
+
+function settleOf(g, now){
+  if (reduce) return g.target;
+  if (!g.target) return 0;
+  const p = clamp((now - introStart - g.delay) / SETTLE_DUR, 0, 1);
+  return g.target * easeIO(p);
+}
+// unsettled squares hover; the one underway drifts like it is being placed
+function bobOf(g, now, b, i){
+  if (reduce || g.status === 'done') return 0;
+  const ramp = clamp((now - introStart - 1100) / 1600, 0, 1);
+  const amp = g.status === 'progress' ? .2 : .1;
+  const T = g.status === 'progress' ? 5.2 : 7.5 + i*1.4 + b*.8;
+  return amp * ramp * ramp * (3 - 2*ramp) * Math.sin(now/1000 * TAU / T + b*1.3 + i*.9);
+}
+
+/* Albers proportions: side margin m, settled square has top 1.5m / bottom .5m.
+   Unsettled squares hover high (top .7m), the inverse of his drop. */
+function bucketGeom(b, now, settledAll){
+  const B = BUCKETS[b], n = B.games.length, m = n >= 4 ? 8 : 10;
+  const out = [{ x:0, y:0, s:100 }];
+  let p = out[0];
+  for (let i = 0; i < n; i++){
+    const g = B.games[i];
+    const st = settledAll ? 1 : settleOf(g, now);
+    const top = m * (.7 + .8*st) + (settledAll ? 0 : bobOf(g, now, b, i) * m);
+    const q = { x:p.x + m, y:p.y + top, s:p.s - 2*m };
+    out.push(q); p = q;
+  }
+  return out;
+}
+function gameGeom(b, i, now){
+  const g = BUCKETS[b].games[i], m = 20;
+  const st = settleOf(g, now);
+  return [{ x:0, y:0, s:100 }, { x:m, y:m*(.7 + .8*st) + bobOf(g, now, b, i)*m, s:100 - 2*m }];
+}
+
+/* Breathing: each colour drifts toward its neighbour and rotates a few degrees of hue, very slowly. */
+const T = [[], [], []];
+function breathe(P, now){
+  const t = now / 1000;
+  P.ramps.forEach((ramp, b) => {
+    for (let k = 0; k < ramp.length; k++){
+      let c = ramp[k];
+      if (!reduce){
+        const nb = ramp[k+1] || ramp[k-1];
+        const w = .27 * (.5 + .5*Math.sin(t*TAU / (13 + k*3.1 + b*2.3) + b*1.9 + k*1.3));
+        c = mix(c, nb, w);
+        const th = .09 * Math.sin(t*TAU / 41 + b*2.1 + k*.5);
+        const ca = Math.cos(th), sa = Math.sin(th);
+        c = [c[0], c[1]*ca - c[2]*sa, c[1]*sa + c[2]*ca];
+      }
+      T[b][k] = c;
+    }
+  });
+}
+// an unsettled square is not fully painted: it leans toward the colour it sits in
+const statusLab = (b, k, st) => mix(T[b][k], T[b][k-1], .3 * (1 - st));
+
+/* ================================================================
+   Painters (SVG rects, geometry + fill per frame)
+   ================================================================ */
+const NS = 'http://www.w3.org/2000/svg';
+const painters = [];
+function rects(svg, n){
+  const a = [];
+  for (let i = 0; i < n; i++){ const r = document.createElementNS(NS, 'rect'); svg.appendChild(r); a.push(r); }
+  return a;
+}
+function setRect(r, g, fill){
+  const x = g.x.toFixed(2), y = g.y.toFixed(2), s = g.s.toFixed(2);
+  if (r._x !== x){ r.setAttribute('x', x); r._x = x; }
+  if (r._y !== y){ r.setAttribute('y', y); r._y = y; }
+  if (r._s !== s){ r.setAttribute('width', s); r.setAttribute('height', s); r._s = s; }
+  if (r._f !== fill){ r.setAttribute('fill', fill); r._f = fill; }
+}
+function makePainter(svg, kind, b, i){
+  const n = kind === 'game' ? 2 : BUCKETS[b].games.length + 1;
+  const P = { svg, kind, b, i, rs:rects(svg, n), labs:[], fills:[] };
+  P.geom = now => kind === 'game' ? gameGeom(b, i, now) : bucketGeom(b, now, kind === 'glyph');
+  P.paint = now => {
+    const labs = [];
+    if (kind === 'game'){
+      labs.push(T[b][i], statusLab(b, i+1, settleOf(BUCKETS[b].games[i], now)));
+    } else {
+      for (let k = 0; k < n; k++){
+        labs.push(k === 0 || kind === 'glyph' ? T[b][k] : statusLab(b, k, settleOf(BUCKETS[b].games[k-1], now)));
+      }
+    }
+    P.labs = labs; P.fills = labs.map(rgb);
+    return P.fills;
+  };
+  P.draw = now => { const g = P.geom(now), f = P.paint(now); for (let k = 0; k < n; k++) setRect(P.rs[k], g[k], f[k]); };
+  painters.push(P);
+  return P;
+}
+
+/* ================================================================
+   Build the home screen
+   ================================================================ */
+const $ = s => document.querySelector(s);
+const screen = $('#screen'), phone = $('#phone'), world = $('#world'), zoomSvg = $('#zoom');
+const bucketPainters = [];
+
+(function buildGallery(){
+  const gal = $('#gallery');
+  BUCKETS.forEach((B, b) => {
+    const done = B.games.filter(g => g.status === 'done').length;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tile rv';
+    btn.style.setProperty('--i', 5 + b);
+    btn.setAttribute('aria-label', `Enter ${B.name}: ${done} of ${B.games.length} games done`);
+    btn.innerHTML = `<svg viewBox="0 0 100 100" aria-hidden="true"></svg>
+      <span class="tcap"><span class="tname">${B.name}</span><span class="dots" aria-hidden="true">${
+        B.games.map(g => `<i class="${g.status === 'done' ? 'd' : g.status === 'progress' ? 'p' : ''}"></i>`).join('')
+      }</span></span>
+      <span class="tsub">${B.sub}</span>`;
+    gal.appendChild(btn);
+    const P = makePainter(btn.querySelector('svg'), 'bucket', b);
+    bucketPainters.push(P);
+    btn.addEventListener('click', () => openWorld(P, () => bucketWorld(b)));
+  });
+  // a fourth, unpainted study: the coming Chess bucket
+  const st = document.createElement('div');
+  st.className = 'tile study rv';
+  st.style.setProperty('--i', 8);
+  st.setAttribute('aria-label', 'Chess, coming soon');
+  st.innerHTML = `<svg viewBox="0 0 100 100" aria-hidden="true">
+      <rect class="f" x="0" y="0" width="100" height="100"/>
+      <rect class="o" x="10" y="7" width="80" height="80"/>
+      <rect class="o" x="20" y="14" width="60" height="60"/>
+      <rect class="o" x="30" y="21" width="40" height="40"/>
+    </svg>
+    <span class="tcap"><span class="tname">Chess</span><span class="dots" aria-hidden="true"></span></span>
+    <span class="tsub">In preparation</span>`;
+  gal.appendChild(st);
+})();
+
+(function buildStrip(){
+  const strip = $('#strip');
+  const list = [];
+  BUCKETS.forEach((B, b) => B.games.forEach((g, i) => list.push({ B, b, g, i })));
+  // underway first, then unplayed interleaved across buckets, settled last
+  const rank = { progress:0, todo:1, done:2 };
+  list.sort((x, y) => rank[x.g.status] - rank[y.g.status] || x.i - y.i || x.b - y.b);
+  list.forEach(({ B, b, g, i }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'gt';
+    btn.setAttribute('aria-label', `${g.name}, ${B.name}: ${g.result}`);
+    btn.innerHTML = `<svg viewBox="0 0 100 100" aria-hidden="true"></svg>
+      <span class="gk">${B.name}</span><span class="gn">${g.name}</span><span class="gs">${g.result}</span>`;
+    strip.appendChild(btn);
+    const P = makePainter(btn.querySelector('svg'), 'game', b, i);
+    btn.addEventListener('click', () => openWorld(P, () => gameWorld(b, i)));
+  });
+  const end = document.createElement('span'); end.className = 'end'; strip.appendChild(end);
+})();
+
+(function buildNext(){
+  // "Up next": the game underway, one tap from the top of the screen
+  const btn = $('#next');
+  const P = makePainter(btn.querySelector('svg'), 'game', 0, 1);
+  btn.addEventListener('click', () => openWorld(P, () => gameWorld(0, 1)));
+})();
+
+(function buildLeaders(){
+  const box = $('#leaders');
+  BUCKETS.forEach((B, b) => {
+    const d = document.createElement('div');
+    d.className = 'ld';
+    d.innerHTML = `<svg viewBox="0 0 100 100" aria-hidden="true"></svg><span class="lb">${B.name}</span><span class="ln${B.leader === 'Ashwin' ? ' me' : ''}">${B.leader}</span>`;
+    box.appendChild(d);
+    makePainter(d.querySelector('svg'), 'glyph', b);
+  });
+})();
+
+const markRects = rects($('#mark'), 3);
+const backdrop = $('#backdrop');
+const backRects = rects(backdrop, 4);
+let backGeom = null;
+
+/* ================================================================
+   Palette -> CSS
+   ================================================================ */
+function applyVars(P){
+  const st = document.documentElement.style;
+  const g = P.ground, ink = P.ink;
+  const set = (k, v) => st.setProperty(k, v);
+  set('--ground', rgb(g));
+  set('--ink', rgb(ink));
+  set('--soft', rgb(mix(ink, g, .3)));
+  set('--faint', rgb(mix(ink, g, .5)));
+  const ir = rgb(ink).slice(4, -1);
+  set('--hair', `rgba(${ir},.16)`);
+  set('--hair2', `rgba(${ir},.34)`);
+  set('--backdrop', rgb([g[0] - .075, g[1]*.9, g[2]*.9]));
+  set('--accent', rgb(P.ramps[0][4]));
+  set('--c1', rgb(P.ramps[0][2]));
+  set('--c2', rgb(P.ramps[1][2]));
+  set('--c3', rgb(P.ramps[2][1]));
+  set('--movies', rgb(P.ramps[1][2]));
+  set('--study', rgb(mix(g, ink, .06)));
+  set('--pencil', rgb(mix(g, ink, .32)));
+  const still = [P.ramps[0][1], P.ramps[1][2], P.ramps[2][1], P.ramps[0][4], P.ramps[2][3]];
+  still.forEach((c, k) => set('--sw' + k, rgb(c)));
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', rgb(g));
+}
+function currentPalette(now){
+  const k = reduce ? 1 : clamp((now - palT0) / PAL_DUR, 0, 1);
+  if (k < 1 || palDirty){
+    cur = k >= 1 ? palTo : lerpPal(palFrom, palTo, easeIO(k));
+    applyVars(cur);
+    palDirty = k < 1;
+  }
+  return cur;
+}
+
+/* ================================================================
+   Render loop
+   ================================================================ */
+let homeHidden = false, lastFrame = 0;
+function render(now){
+  const P = currentPalette(now);
+  breathe(P, now);
+  if (!homeHidden){
+    for (const p of painters) p.draw(now);
+    const mg = [{x:0,y:0,s:100},{x:14,y:21,s:72},{x:28,y:42,s:44}];
+    const mc = [T[2][3], T[0][2], T[0][4]].map(rgb);
+    markRects.forEach((r, k) => setRect(r, mg[k], mc[k]));
+  }
+  if (backGeom){
+    const bg = P.ground;
+    const cols = [mix(bg, T[1][0], .78), mix(bg, T[1][1], .8), mix(bg, T[0][2], .84), mix(bg, T[0][4], .88)];
+    backRects.forEach((r, k) => setRect(r, backGeom[k], rgb(cols[k])));
+  }
+}
+/* Intro reveal for the type: staggered rise, finished well inside 2s, then inline styles are cleared. */
+const rvEls = Array.from(screen.querySelectorAll('.rv')).map(el => ({ el, d: (+el.style.getPropertyValue('--i') || 0) * 85 + 60 }));
+let revealOn = !reduce;
+function reveal(now){
+  if (!revealOn) return;
+  let all = true;
+  for (const r of rvEls){
+    const p = reduce ? 1 : clamp((now - introStart - r.d) / 900, 0, 1);
+    if (p < 1) all = false;
+    const e = 1 - Math.pow(1 - p, 3);
+    r.el.style.opacity = p < 1 ? e.toFixed(3) : '';
+    r.el.style.transform = p < 1 ? `translateY(${(12 * (1 - e)).toFixed(2)}px)` : '';
+  }
+  if (all) revealOn = false;
+}
+reveal(performance.now());
+
+function loop(now){
+  requestAnimationFrame(loop);
+  reveal(now);
+  if (reduce && !palDirty) return;
+  if (now - lastFrame < 31) return; // ~30fps is plenty for drift this slow
+  lastFrame = now;
+  render(now);
+}
+requestAnimationFrame(loop);
+
+/* ================================================================
+   Layout (desktop frame scale + backdrop painting)
+   ================================================================ */
+let scale = 1;
+function layout(){
+  const W = innerWidth, H = innerHeight;
+  scale = W >= 1040 ? Math.min(1, (H - 40) / 844) : 1;
+  document.documentElement.style.setProperty('--s', scale.toFixed(4));
+  backGeom = null;
+  if (W >= 1040){
+    const S = Math.min(H * .88, W - 716);
+    backdrop.style.display = S >= 420 ? 'block' : 'none';
+    if (S >= 420){
+      backdrop.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      const m = S * .1;
+      let p = { x:W/2 - S/2, y:H/2 - S/2, s:S };
+      backGeom = [p];
+      for (let i = 1; i < 4; i++){ p = { x:p.x + m, y:p.y + 1.5*m, s:p.s - 2*m }; backGeom.push(p); }
+    }
+  }
+  render(performance.now());
+}
+addEventListener('resize', layout);
+
+/* ================================================================
+   Zoom through the squares
+   ================================================================ */
+let busy = false, openP = null;
+function runZoom(P, dir, done){
+  const W = phone.clientWidth, H = phone.clientHeight;
+  const pr = phone.getBoundingClientRect(), r = P.svg.getBoundingClientRect();
+  const sc = pr.width / phone.offsetWidth || 1;
+  const tx = (r.left - pr.left) / sc, ty = (r.top - pr.top) / sc, tw = r.width / sc;
+  const geo = P.geom(performance.now());
+  const inner = geo[geo.length - 1];
+  const F = { x:inner.x + inner.s/2, y:inner.y + inner.s/2 };
+  const z0 = tw / 100, z1 = 1.25 * Math.max(W, H) / inner.s;
+  const S0 = { x:tx + F.x*z0, y:ty + F.y*z0 }, S1 = { x:W/2, y:H/2 };
+  zoomSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  while (zoomSvg.childNodes.length < geo.length) zoomSvg.appendChild(document.createElementNS(NS, 'rect'));
+  while (zoomSvg.childNodes.length > geo.length) zoomSvg.removeChild(zoomSvg.lastChild);
+  const zr = Array.from(zoomSvg.childNodes);
+  zoomSvg.style.display = 'block';
+  const dur = reduce ? 0 : (dir > 0 ? 1300 : 1050);
+  const t0 = performance.now();
+  const step = now => {
+    const p = dur ? clamp((now - t0) / dur, 0, 1) : 1;
+    const e = dir > 0 ? p : 1 - p;
+    const ez = easeIO(e), ep = easeIO(clamp(e * 1.18, 0, 1));
+    const z = z0 * Math.pow(z1 / z0, ez);
+    const sx = S0.x + (S1.x - S0.x) * ep, sy = S0.y + (S1.y - S0.y) * ep;
+    const fills = P.fills; // live colours from the painter
+    geo.forEach((g, k) => {
+      const q = zr[k];
+      q.setAttribute('x', ((g.x - F.x) * z + sx).toFixed(2));
+      q.setAttribute('y', ((g.y - F.y) * z + sy).toFixed(2));
+      q.setAttribute('width', (g.s * z).toFixed(2));
+      q.setAttribute('height', (g.s * z).toFixed(2));
+      q.setAttribute('fill', fills[k]);
+    });
+    if (p < 1) requestAnimationFrame(step); else done();
+  };
+  requestAnimationFrame(step);
+}
+
+function openWorld(P, build){
+  if (busy || openP) return;
+  busy = true;
+  runZoom(P, +1, () => {
+    const bgLab = P.labs[P.labs.length - 1];
+    const darkest = BUCKETS[P.b] && T[P.b].reduce((a, c) => c[0] < a[0] ? c : a, T[P.b][0]);
+    const ink = bgLab[0] > .62 ? [Math.min(darkest[0] * .62, .3), darkest[1] * .55, darkest[2] * .55] : cur.ink;
+    world.style.setProperty('--wbg', rgb(bgLab));
+    world.style.setProperty('--wink', rgb(ink));
+    world.style.setProperty('--wsoft', rgb(mix(ink, bgLab, .3)));
+    world.style.setProperty('--whair', rgb(mix(ink, bgLab, .78)));
+    world.innerHTML = build();
+    world.classList.add('on');
+    world.scrollTop = 0;
+    world.querySelector('.back').addEventListener('click', closeWorld);
+    zoomSvg.style.display = 'none';
+    homeHidden = true; openP = P; busy = false;
+    world.querySelector('.back').focus({ preventScroll:true });
+  });
+}
+function closeWorld(){
+  if (busy || !openP) return;
+  busy = true;
+  world.classList.add('leaving');
+  setTimeout(() => {
+    homeHidden = false;
+    render(performance.now());
+    const P = openP;
+    runZoom(P, -1, () => {
+      zoomSvg.style.display = 'none';
+      busy = false; openP = null;
+    });
+    world.classList.remove('on', 'leaving');
+    world.innerHTML = '';
+  }, reduce ? 0 : 190);
+}
+addEventListener('keydown', e => { if (e.key === 'Escape') closeWorld(); });
+
+const backBtn = label => `<div class="w-top"><button type="button" class="back" aria-label="Back to today">
+  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10.5 2.5 5 8l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Today</button>
+  <span class="ed">${label}</span></div>`;
+const deco = `<svg class="w-deco" viewBox="0 0 100 100" aria-hidden="true"><rect x="0" y="0" width="100" height="100"/><rect x="10" y="15" width="80" height="80"/><rect x="20" y="30" width="60" height="60"/><rect x="30" y="45" width="40" height="40"/></svg>`;
+function miniGlyph(b, i){
+  const g = BUCKETS[b].games[i];
+  const st = g.target, m = 20;
+  return `<svg viewBox="0 0 100 100" aria-hidden="true"><rect x="0" y="0" width="100" height="100" fill="${rgb(T[b][i])}"/><rect x="${m}" y="${m*(.7+.8*st)}" width="${100-2*m}" height="${100-2*m}" fill="${rgb(statusLab(b, i+1, st))}"/></svg>`;
+}
+function bucketWorld(b){
+  const B = BUCKETS[b];
+  const act = s => s === 'done' ? 'Result' : s === 'progress' ? 'Continue' : 'Play';
+  return `${backBtn(`${B.name} · No. ${DAYS[day].ed}`)}
+  <div class="w-in">
+    <p class="w-k">Bucket · ${B.games.length} games</p>
+    <h2 class="w-title">${B.name}</h2>
+    <p class="w-lede">${B.lede}</p>
+    <ol class="w-list">${B.games.map((g, i) => `<li>${miniGlyph(b, i)}<span><b>${g.name}</b><em>${g.result}</em></span><span class="w-act">${act(g.status)}</span></li>`).join('')}</ol>
+    <p class="w-meta">${B.lead}</p>
+    <p class="w-note">Vision sketch. This bucket's own world is designed in the next pass.</p>
+  </div>`;
+}
+function gameWorld(b, i){
+  const B = BUCKETS[b], g = B.games[i];
+  const copy = g.status === 'done' ? [`Settled: ${g.result}.`, 'See the board']
+    : g.status === 'progress' ? ['Underway. Pick up where you left off.', 'Continue']
+    : ['Not started. Same puzzle for everyone today.', 'Begin'];
+  return `${backBtn(`No. ${DAYS[day].ed}`)}
+  <div class="w-in">
+    <p class="w-k">${B.name} · ${i + 1} of ${B.games.length}</p>
+    <h2 class="w-title sm">${g.name}</h2>
+    <p class="w-lede">${copy[0]}</p>
+    <div><span class="w-btn">${copy[1]}</span></div>
+    <p class="w-note">Vision sketch. The game itself opens here.</p>
+  </div>${deco}`;
+}
+
+/* ================================================================
+   Day preview + replay
+   ================================================================ */
+function setDay(i){
+  if (i === day) return;
+  day = i;
+  palFrom = cur; palTo = DAYS[i].L; palT0 = performance.now(); palDirty = true;
+  const d = DAYS[i];
+  const src = $('#src');
+  src.style.opacity = 0;
+  setTimeout(() => { src.textContent = d.src; src.style.opacity = 1; }, reduce ? 0 : 380);
+  $('#date').textContent = d.date;
+  $('#ed').textContent = 'No. ' + d.ed;
+  document.querySelectorAll('[data-day]').forEach(btn => btn.setAttribute('aria-pressed', String(+btn.dataset.day === i)));
+  if (reduce) render(performance.now());
+}
+document.querySelectorAll('[data-day]').forEach(btn => btn.addEventListener('click', () => setDay(+btn.dataset.day)));
+
+function replay(){
+  if (openP) return;
+  introStart = performance.now();
+  revealOn = !reduce;
+  reveal(introStart);
+  screen.scrollTo({ top:0, behavior: reduce ? 'auto' : 'smooth' });
+  if (reduce) render(performance.now());
+}
+document.querySelectorAll('[data-replay]').forEach(btn => btn.addEventListener('click', replay));
+
+mq.addEventListener && mq.addEventListener('change', e => { reduce = e.matches; palDirty = true; render(performance.now()); });
+
+/* ================================================================
+   Countdown to the next midnight in New York
+   ================================================================ */
+const fmt = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' });
+function nyParts(d){ const o = {}; fmt.formatToParts(d).forEach(p => o[p.type] = p.value); return o; }
+function nyOffset(d){
+  const p = nyParts(d);
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - Math.floor(d.getTime() / 1000) * 1000;
+}
+function nextNYMidnight(now){
+  const p = nyParts(now);
+  const wall = Date.UTC(+p.year, +p.month - 1, +p.day + 1, 0, 0, 0);
+  let g = wall - nyOffset(now);
+  g = wall - nyOffset(new Date(g)); // correct across a DST change before midnight
+  return g;
+}
+const cd = $('#cd');
+const pad2 = n => String(n).padStart(2, '0');
+function tick(){
+  const now = new Date();
+  const left = Math.max(0, Math.floor((nextNYMidnight(now) - now.getTime()) / 1000));
+  cd.textContent = `${pad2(Math.floor(left / 3600))}:${pad2(Math.floor(left / 60) % 60)}:${pad2(left % 60)}`;
+  setTimeout(tick, 1000 - (Date.now() % 1000) + 8);
+}
+tick();
+
+layout();
+})();
+</script>
+</body>
+</html>

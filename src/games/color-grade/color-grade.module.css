@@ -1,0 +1,318 @@
+/*
+ * Color Grade board. It sits inside the kit's neutral MoviesStage (a colorist's suite: every
+ * surface is R = G = B), so it only uses the kit's --mv-* tokens and never adds colour of its own.
+ * The only colours on the board are the film's: the palette and the images.
+ */
+
+.viewer {
+  display: grid;
+  gap: 10px;
+}
+
+/* ─────────────────────────── Palette ─────────────────────────── */
+
+.paletteFull {
+  aspect-ratio: 16 / 9;
+  background: var(--mv-image-bg);
+}
+
+.paletteCompact {
+  display: grid;
+  gap: 6px;
+}
+
+.paletteLabel {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mv-fg-dim);
+}
+
+.swatches {
+  display: flex;
+  gap: 3px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.swatches[data-compact="true"] {
+  height: 44px;
+  gap: 2px;
+}
+
+.swatchItem {
+  display: flex;
+  flex-basis: 0;
+  min-width: 44px;
+  animation: cg-cut 0.55s cubic-bezier(0.16, 0.92, 0.2, 1) both;
+}
+.swatchItem:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.swatchItem:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.swatchItem:nth-child(4) {
+  animation-delay: 0.18s;
+}
+.swatchItem:nth-child(5) {
+  animation-delay: 0.24s;
+}
+
+.swatch {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.swatch[data-tone="light"] {
+  color: #111111;
+}
+.swatch[data-tone="dark"] {
+  color: #ffffff;
+}
+.swatch:focus-visible {
+  outline: 3px solid var(--mv-signal);
+  outline-offset: 2px;
+  z-index: 1;
+}
+/* A pinned value is marked by a notch, not only by its text. */
+.swatch[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--mv-image-bg);
+}
+
+.swatchValue {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0 12px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.swatch[data-shown="true"] .swatchValue,
+.swatch:focus-visible .swatchValue {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .swatch:hover .swatchValue {
+    opacity: 1;
+  }
+}
+
+.swatchShare {
+  order: -1;
+  font-family: var(--mv-font-film), "Six Caps", Impact, sans-serif;
+  font-size: 30px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.swatchHex {
+  /* Reads bottom to top along the column, like a spine label. */
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.swatches[data-compact="true"] .swatchValue {
+  justify-content: center;
+  padding: 0;
+}
+.swatches[data-compact="true"] .swatchHex {
+  writing-mode: horizontal-tb;
+  transform: none;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+/* ─────────────────────────── Caption & compare ─────────────────────────── */
+
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.caption p {
+  flex: 1 1 200px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--mv-fg-dim);
+}
+.stageName {
+  margin-right: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mv-fg);
+}
+
+.compare {
+  display: inline-flex;
+  flex: none;
+}
+.compare button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border: 2px solid var(--mv-fg);
+  background: none;
+  color: var(--mv-fg);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.compare button + button {
+  margin-left: -2px;
+}
+.compare button[aria-pressed="true"] {
+  background: var(--mv-accent);
+  color: var(--mv-on-accent);
+}
+.compare button[aria-pressed="true"]::before {
+  content: "● ";
+}
+.compare button:focus-visible {
+  outline: 3px solid var(--mv-signal);
+  outline-offset: 2px;
+  position: relative;
+}
+
+/* ─────────────────────────── Controls ─────────────────────────── */
+
+.controls {
+  display: grid;
+  gap: 10px;
+}
+
+.confirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 2px dashed var(--mv-rule);
+}
+.confirm p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.confirmButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--mv-fg);
+  background: var(--mv-field);
+  font-size: 14px;
+  font-weight: 600;
+}
+.error::before {
+  content: "! ";
+  font-weight: 900;
+}
+
+/* ─────────────────────────── Verdict ─────────────────────────── */
+
+.verdict {
+  display: grid;
+  gap: 6px;
+  padding: 16px 0 4px;
+  border-top: 2px solid var(--mv-fg);
+}
+.verdictKicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.verdictTitle {
+  margin: 0;
+  font-family: var(--mv-font-film), "Six Caps", Impact, "Arial Narrow", sans-serif;
+  font-weight: 400;
+  font-size: clamp(54px, 15vw, 84px);
+  line-height: 0.86;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  animation: cg-wipe 0.7s cubic-bezier(0.76, 0, 0.24, 1) both;
+}
+.verdictMeta {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  font-stretch: 88%;
+}
+.verdictHint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--mv-fg-dim);
+}
+
+/* ─────────────────────────── Motion ─────────────────────────── */
+
+@keyframes cg-cut {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes cg-wipe {
+  from {
+    clip-path: inset(-20% 100% -20% 0);
+  }
+  to {
+    clip-path: inset(-20% 0 -20% 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swatchItem,
+  .verdictTitle {
+    animation: none;
+  }
+  .swatchValue {
+    transition: none;
+  }
+}

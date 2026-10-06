@@ -1,0 +1,1336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nocturne · Daily</title>
+<meta name="description" content="Nocturne: a Wordle-elevated style exploration for Daily. Jewel-toned tiles, champagne hairlines, watch-dial precision.">
+<script>(function(){var h=location.hash.slice(1);if(h==="light"||h==="dark"){document.documentElement.setAttribute("data-theme",h);}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Azeret+Mono:wght@300..600&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&display=swap">
+<style>
+/* =========================================================
+   NOCTURNE — tokens
+   Day edition on :root, Night edition via media + data-theme
+   ========================================================= */
+:root{
+  color-scheme: light;
+  --f-display: "Bodoni Moda", "Bodoni 72", Didot, "Times New Roman", serif;
+  --f-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "Azeret Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* hallmarks — the shape cue stamped in every jewel tile (theme-independent) */
+  --hm-c: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M5 .6 9.4 5 5 9.4 .6 5z' fill='%23fff' fill-opacity='.74'/%3E%3C/svg%3E");
+  --hm-p: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Ccircle cx='5' cy='5' r='3.4' fill='none' stroke='%2317120A' stroke-opacity='.66' stroke-width='1.6'/%3E%3C/svg%3E");
+  --hm-a: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect x='1' y='4.1' width='8' height='1.8' fill='%23fff' fill-opacity='.62'/%3E%3C/svg%3E");
+  --facet: linear-gradient(140deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 36%, rgba(255,255,255,0) 52%, rgba(0,0,0,.16) 100%);
+
+  /* ---------- Day edition: opaline silver dial ---------- */
+  --board: #E6E7E2;
+  --board-glow: #F8F8F4;
+  --pattern: rgba(122, 98, 50, .075);
+  --screen: #F6F6F2;
+  --screen-2: #EFF0EB;
+  --screen-glow: radial-gradient(120% 46% at 50% -8%, rgba(255,255,255,.95), rgba(255,255,255,0) 62%);
+  --surface: #FCFCF9;
+  --surface-2: #EEEFEA;
+  --ink: #0F1828;
+  --ink-2: #4A5263;
+  --ink-3: #5C6270;
+  --line: rgba(122, 98, 50, .26);
+  --line-soft: rgba(15, 24, 40, .09);
+  --line-strong: rgba(122, 98, 50, .52);
+  --metal: #A88A4E;
+  --metal-ink: #7A6232;
+  --metal-grad: linear-gradient(135deg, #8A7040 0%, #D8C28C 36%, #A88A4E 56%, #E9DBB4 78%, #8A7040 100%);
+  --frame: linear-gradient(150deg, #FBFBF8 0%, #C6C8C2 28%, #EDEEE9 52%, #B4B6B0 82%, #DCDDD8 100%);
+  --frame-shadow: 0 0 0 1px rgba(15,24,40,.10), inset 0 1px 0 rgba(255,255,255,.75), 0 60px 80px -56px rgba(15,24,40,.55), 0 24px 40px -30px rgba(15,24,40,.30);
+  --island: #05070A;
+
+  --correct-1: #157552; --correct-2: #0C4E37; --correct-ink: #F7F3EA;
+  --present-1: #E4B758; --present-2: #C38F2C; --present-ink: #1A1407;
+  --absent-1:  #766C63; --absent-2:  #5E564E; --absent-ink:  #FBF8F2;
+  --absent-key-ink: #F1ECE4;
+  --key: #E0E2DC; --key-ink: #0F1828; --key-hi: rgba(255,255,255,.9);
+  --tile-empty: rgba(255,255,255,.55);
+  --tile-typed: #FFFFFF;
+  --typed-line: rgba(15,24,40,.55);
+  --jewel-shadow: inset 0 1px 0 rgba(255,255,255,.34), inset 0 -1px 0 rgba(0,0,0,.18), 0 8px 14px -10px rgba(15,24,40,.55);
+
+  --sapphire: #2B55A6; --emerald: #11704F; --garnet: #A3324A;
+  --mark-c: #11704F; --mark-p: #A87720; --mark-a: #766C63;
+
+  --primary-bg: #0F1828; --primary-ink: #F3EEE2;
+  --primary-edge: inset 0 0 0 1px rgba(216,194,140,.38), inset 0 1px 0 rgba(255,255,255,.14), 0 10px 18px -12px rgba(15,24,40,.6);
+  --focus: #2B55A6;
+  --frost: rgba(246,246,242,.80);
+  --card-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 10px 22px -20px rgba(15,24,40,.5);
+
+  --j-correct: var(--facet), linear-gradient(172deg, var(--correct-1), var(--correct-2));
+  --j-present: var(--facet), linear-gradient(172deg, var(--present-1), var(--present-2));
+  --j-absent:  var(--facet), linear-gradient(172deg, var(--absent-1), var(--absent-2));
+  --g-correct: var(--hm-c) right 6px top 6px / 8px 8px no-repeat, var(--j-correct);
+  --g-present: var(--hm-p) right 6px top 6px / 8px 8px no-repeat, var(--j-present);
+  --g-absent:  var(--hm-a) right 6px top 6px / 8px 8px no-repeat, var(--j-absent);
+}
+
+/* ---------- Night edition: blue-black, champagne metal ---------- */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --board: #05070C;
+    --board-glow: #14213A;
+    --pattern: rgba(214,190,140,.055);
+    --screen: #0A0E17;
+    --screen-2: #0D121D;
+    --screen-glow: radial-gradient(120% 45% at 50% -8%, rgba(126,166,242,.08), rgba(126,166,242,0) 60%);
+    --surface: #111622;
+    --surface-2: #171E2D;
+    --ink: #EEE8DA;
+    --ink-2: #A9AFBD;
+    --ink-3: #7F8696;
+    --line: rgba(214,190,140,.20);
+    --line-soft: rgba(238,232,218,.07);
+    --line-strong: rgba(214,190,140,.48);
+    --metal: #D6BE8C;
+    --metal-ink: #D6BE8C;
+    --metal-grad: linear-gradient(135deg, #8C7647 0%, #F4E6C2 36%, #C9AE74 56%, #FBF0D2 78%, #8C7647 100%);
+    --frame: linear-gradient(150deg, #3B404C 0%, #12161F 28%, #262B36 52%, #0B0D13 82%, #2B303B 100%);
+    --frame-shadow: 0 0 0 1px rgba(214,190,140,.16), inset 0 1px 0 rgba(255,255,255,.06), 0 60px 90px -50px rgba(0,0,0,.95);
+    --island: #000;
+    --correct-1: #157552; --correct-2: #0C4E37; --correct-ink: #F3EEE2;
+    --present-1: #E8B95C; --present-2: #C08A2A; --present-ink: #17120A;
+    --absent-1:  #4A443E; --absent-2:  #2F2A26; --absent-ink:  #DDD5C7;
+    --absent-key-ink: #9C9488;
+    --key: #1B2335; --key-ink: #EEE8DA; --key-hi: rgba(255,255,255,.07);
+    --tile-empty: transparent;
+    --tile-typed: #0F1422;
+    --typed-line: rgba(214,190,140,.72);
+    --jewel-shadow: inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(0,0,0,.4), 0 10px 18px -10px rgba(0,0,0,.9);
+    --sapphire: #7EA6F2; --emerald: #4CC79A; --garnet: #E27A8A;
+    --mark-c: #4CC79A; --mark-p: #E8B95C; --mark-a: #8A8178;
+    --primary-bg: linear-gradient(180deg, #F2E3BC, #C9AE74);
+    --primary-ink: #15120B;
+    --primary-edge: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(0,0,0,.22), 0 10px 22px -12px rgba(214,190,140,.45);
+    --focus: #F4E6C2;
+    --frost: rgba(10,14,23,.72);
+    --card-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 12px 24px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --board: #05070C;
+  --board-glow: #14213A;
+  --pattern: rgba(214,190,140,.055);
+  --screen: #0A0E17;
+  --screen-2: #0D121D;
+  --screen-glow: radial-gradient(120% 45% at 50% -8%, rgba(126,166,242,.08), rgba(126,166,242,0) 60%);
+  --surface: #111622;
+  --surface-2: #171E2D;
+  --ink: #EEE8DA;
+  --ink-2: #A9AFBD;
+  --ink-3: #7F8696;
+  --line: rgba(214,190,140,.20);
+  --line-soft: rgba(238,232,218,.07);
+  --line-strong: rgba(214,190,140,.48);
+  --metal: #D6BE8C;
+  --metal-ink: #D6BE8C;
+  --metal-grad: linear-gradient(135deg, #8C7647 0%, #F4E6C2 36%, #C9AE74 56%, #FBF0D2 78%, #8C7647 100%);
+  --frame: linear-gradient(150deg, #3B404C 0%, #12161F 28%, #262B36 52%, #0B0D13 82%, #2B303B 100%);
+  --frame-shadow: 0 0 0 1px rgba(214,190,140,.16), inset 0 1px 0 rgba(255,255,255,.06), 0 60px 90px -50px rgba(0,0,0,.95);
+  --island: #000;
+  --correct-1: #157552; --correct-2: #0C4E37; --correct-ink: #F3EEE2;
+  --present-1: #E8B95C; --present-2: #C08A2A; --present-ink: #17120A;
+  --absent-1:  #4A443E; --absent-2:  #2F2A26; --absent-ink:  #DDD5C7;
+  --absent-key-ink: #9C9488;
+  --key: #1B2335; --key-ink: #EEE8DA; --key-hi: rgba(255,255,255,.07);
+  --tile-empty: transparent;
+  --tile-typed: #0F1422;
+  --typed-line: rgba(214,190,140,.72);
+  --jewel-shadow: inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(0,0,0,.4), 0 10px 18px -10px rgba(0,0,0,.9);
+  --sapphire: #7EA6F2; --emerald: #4CC79A; --garnet: #E27A8A;
+  --mark-c: #4CC79A; --mark-p: #E8B95C; --mark-a: #8A8178;
+  --primary-bg: linear-gradient(180deg, #F2E3BC, #C9AE74);
+  --primary-ink: #15120B;
+  --primary-edge: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(0,0,0,.22), 0 10px 22px -12px rgba(214,190,140,.45);
+  --focus: #F4E6C2;
+  --frost: rgba(10,14,23,.72);
+  --card-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 12px 24px -20px rgba(0,0,0,.9);
+}
+
+/* =========================================================
+   Base
+   ========================================================= */
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+html{background:var(--board);-webkit-text-size-adjust:100%}
+body{
+  background: radial-gradient(1200px 640px at 74% -140px, var(--board-glow), transparent 70%), var(--board);
+  color:var(--ink);
+  font-family:var(--f-ui);
+  font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  overflow-x:clip;
+  min-height:100vh;
+}
+h1,h2,h3,h4,p,ul,ol,dl,dd,dt,figure{margin:0;padding:0}
+ul,ol{list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid var(--focus);outline-offset:3px;border-radius:4px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+/* Azeret Mono ships an fi/fl ligature that reads as a dotless i in a monospace setting */
+.mono,.spec dd,.cx-v,.fg,.fp,.dial-sub,.dial-lab,.meta,.pts,.sw-hex,.sw-cr,.ts-meta span,.bubble,.moments code,.knob-h span,.chip,.inst-t .read,.tm>span,.hero-bot,.ph-idx,.scale b{font-variant-ligatures:none}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.cap{font-family:var(--f-ui);font-weight:600;font-size:10.5px;line-height:1.2;letter-spacing:.2em;text-transform:uppercase;font-stretch:125%}
+
+.board{max-width:1680px;margin:0 auto;padding:40px 32px 96px}
+@media (max-width:480px){.board{padding:24px 16px 72px}}
+
+/* =========================================================
+   Masthead
+   ========================================================= */
+.masthead{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,460px);gap:56px;align-items:center;padding:24px 0 56px;border-bottom:1px solid var(--line)}
+.masthead::before{content:"";position:absolute;inset:0;z-index:-1;
+  background-image:repeating-linear-gradient(45deg,var(--pattern) 0 1px,transparent 1px 14px),repeating-linear-gradient(-45deg,var(--pattern) 0 1px,transparent 1px 14px);
+  -webkit-mask-image:radial-gradient(60% 80% at 82% 45%,#000 0%,transparent 78%);mask-image:radial-gradient(60% 80% at 82% 45%,#000 0%,transparent 78%)}
+.eyebrow{display:flex;align-items:center;gap:12px;color:var(--metal-ink)}
+.eyebrow::before{content:"";width:7px;height:7px;background:var(--metal);transform:rotate(45deg);flex:none}
+.mh-title{font-family:var(--f-display);font-style:italic;font-weight:500;font-size:clamp(68px,10vw,150px);line-height:.88;letter-spacing:-.025em;margin:22px 0 22px -.04em}
+.mh-concept{font-family:var(--f-display);font-weight:400;font-size:clamp(19px,1.65vw,24px);line-height:1.42;max-width:36ch}
+.mh-concept em{font-style:italic;color:var(--metal-ink)}
+.spec{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:28px;margin:30px 0;max-width:600px;border-top:1px solid var(--line)}
+.spec div{display:flex;flex-direction:column;gap:4px;padding:12px 0;border-bottom:1px solid var(--line)}
+.spec dt{color:var(--ink-3);font-size:9.5px}
+.spec dd{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2)}
+@media (max-width:480px){.spec{grid-template-columns:1fr}}
+
+.toggle{display:inline-flex;align-items:center;gap:14px;padding:8px 20px 8px 8px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);cursor:pointer;box-shadow:var(--card-shadow)}
+.toggle:hover{border-color:var(--metal)}
+.tg-track{position:relative;width:58px;height:30px;border-radius:999px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);flex:none;color:var(--ink-3)}
+.tg-track svg{position:absolute;top:8px;width:14px;height:14px}
+.tg-track .sun{left:8px}.tg-track .moon{right:8px}
+.tg-knob{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--metal-grad);box-shadow:0 1px 3px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.35);transition:transform .4s cubic-bezier(.3,.7,.2,1);z-index:1}
+.toggle[data-dark="true"] .tg-knob{transform:translateX(28px)}
+.tg-text{display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
+.tg-cap{font-size:9px;color:var(--ink-3)}
+.tg-label{font-family:var(--f-display);font-style:italic;font-size:19px;font-weight:500}
+
+.mh-art{display:flex;flex-direction:column;align-items:center;gap:24px;min-width:0}
+.hero-dial{position:relative;width:min(100%,440px);aspect-ratio:1;container-type:inline-size}
+.hero-dial svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.hd-tk{stroke:var(--line-strong);stroke-width:1}
+.hd-tk.mj{stroke:var(--metal);stroke-width:1.8}
+.hd-ring{fill:none;stroke:var(--line);stroke-width:1}
+.hd-text{font-family:var(--f-ui);font-size:8.6px;font-weight:600;letter-spacing:.3em;fill:var(--metal-ink)}
+.hd-idx{fill:var(--metal)}
+.hero-tiles{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:1.6cqw}
+.hero-tiles .tile{width:12.5cqw;height:12.5cqw;font-size:6.6cqw;border-radius:.7cqw}
+.hero-top,.hero-bot{position:absolute;left:0;right:0;text-align:center}
+.hero-top{top:27.5%;font-family:var(--f-display);font-style:italic;font-weight:600;font-size:6.2cqw;line-height:1}
+.hero-bot{bottom:29%;font-family:var(--f-mono);font-size:2.5cqw;letter-spacing:.24em;color:var(--ink-2)}
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 22px}
+.legend li{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-2)}
+.legend .lg-j{width:18px;height:18px;border-radius:2px;flex:none;box-shadow:var(--jewel-shadow)}
+.legend b{font-weight:600;color:var(--ink)}
+@media (max-width:1040px){
+  .masthead{grid-template-columns:minmax(0,1fr);gap:40px}
+  .mh-art{justify-self:center;width:min(100%,440px)}
+}
+
+/* hallmark marks (inline) */
+.hm{display:inline-block;flex:none;width:8px;height:8px}
+.hm-c{background:var(--mark-c);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+.hm-p{border:1.6px solid var(--mark-p);border-radius:50%}
+.hm-a{height:2px;width:9px;background:var(--mark-a)}
+
+/* =========================================================
+   Sections
+   ========================================================= */
+.sec{padding-top:64px}
+.sec-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px 18px;margin-bottom:34px}
+.sec-idx{font-family:var(--f-display);font-style:italic;font-size:22px;color:var(--metal-ink);min-width:1.2em}
+.sec-head h2{font-family:var(--f-display);font-weight:500;font-size:clamp(32px,3.4vw,46px);line-height:1;letter-spacing:-.012em}
+.sec-rule{flex:1 1 80px;height:1px;align-self:center;background:linear-gradient(90deg,var(--line-strong),transparent)}
+.sec-note{color:var(--ink-2)}
+
+/* =========================================================
+   Device frames
+   ========================================================= */
+.phones{--pz:1;display:grid;grid-template-columns:repeat(4,max-content);justify-content:center;gap:44px 24px}
+.device{zoom:var(--pz);width:380px;max-width:100%;display:flex;flex-direction:column;gap:18px}
+@media (max-width:1679px){.phones{--pz:.85;gap:40px 22px}}
+@media (max-width:1439px){.phones{--pz:.75;gap:36px 20px}}
+@media (max-width:1279px){.phones{--pz:1;grid-template-columns:repeat(2,max-content);gap:48px 28px}}
+@media (max-width:859px){.phones{grid-template-columns:minmax(0,380px)}}
+.phone{position:relative;padding:10px;border-radius:56px;background:var(--frame);box-shadow:var(--frame-shadow)}
+.screen{position:relative;height:760px;border-radius:46px;overflow:hidden;isolation:isolate;display:flex;flex-direction:column;background:var(--screen-glow),var(--screen);color:var(--ink)}
+@media (max-width:480px){.phone{padding:7px;border-radius:52px}.screen{border-radius:45px}}
+.device figcaption{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;padding:0 10px}
+.fc-idx{grid-row:1/3;font-family:var(--f-display);font-style:italic;font-size:30px;line-height:1;color:var(--metal-ink)}
+.fc-t{font-family:var(--f-display);font-weight:500;font-size:20px;line-height:1.2}
+.fc-d{font-size:13px;line-height:1.45;color:var(--ink-2)}
+
+/* status bar */
+.sb{flex:none;height:46px;position:relative;display:flex;align-items:center;justify-content:space-between;padding:4px 26px 0 34px;font:600 15px/1 var(--f-ui);font-variant-numeric:tabular-nums}
+.sb-island{position:absolute;top:11px;left:50%;width:104px;height:30px;margin-left:-52px;border-radius:18px;background:var(--island)}
+.sb-icons{display:flex;gap:6px;align-items:center}
+.sb-icons svg{display:block}
+
+/* app chrome */
+.appbar{flex:none;height:48px;display:flex;align-items:center;gap:10px;padding:0 18px}
+.logo{display:grid;grid-template-columns:repeat(5,6px);gap:2px}
+.logo i{width:6px;height:6px;border-radius:1px}
+.logo .c{background:var(--correct-1)}.logo .p{background:var(--present-1)}.logo .a{background:var(--absent-1)}
+.wordmark{font-family:var(--f-display);font-style:italic;font-weight:600;font-size:26px;line-height:1;letter-spacing:-.01em}
+.appbar .ed{margin-left:auto;font-size:11px;color:var(--ink-2)}
+.av{width:30px;height:30px;flex:none;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-style:italic;font-weight:600;font-size:15px;line-height:1;color:var(--ink);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.av.you{border:1.5px solid transparent;background:linear-gradient(var(--surface-2),var(--surface-2)) padding-box,var(--metal-grad) border-box;box-shadow:none}
+.content{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 16px;overflow:hidden}
+
+.hbar{flex:none;display:grid;grid-template-columns:40px minmax(0,1fr) 40px;align-items:center;padding:2px 12px 10px;border-bottom:1px solid var(--line)}
+.ib{width:36px;height:36px;display:grid;place-items:center;color:var(--ink-2)}
+.ib svg{width:21px;height:21px}
+.hb-mid{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+.hb-title{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-display);font-weight:600;font-size:20px;line-height:1.1}
+.hb-title .glyph{width:20px;height:20px}
+.hb-sub{font-size:10.5px;color:var(--ink-2);letter-spacing:.03em}
+.hb-r{font-size:10.5px;color:var(--ink-2);text-align:right}
+
+.tabbar{flex:none;position:relative;display:grid;grid-template-columns:repeat(3,1fr);height:84px;padding:12px 18px 0;border-top:1px solid var(--line);background:var(--screen-2)}
+.tabbar::after{content:"";position:absolute;left:50%;bottom:8px;width:128px;height:5px;margin-left:-64px;border-radius:3px;background:var(--ink);opacity:.32}
+.tab{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink-3)}
+.tab svg{width:22px;height:22px}
+.tab span{font-size:8.5px;letter-spacing:.16em}
+.tab.on{color:var(--ink)}
+.tab.on::before{content:"";position:absolute;top:-16px;left:50%;width:7px;height:7px;margin-left:-3.5px;transform:rotate(45deg);background:var(--metal);box-shadow:0 0 0 3px var(--screen-2)}
+.home{flex:none;height:22px;position:relative}
+.home::after{content:"";position:absolute;left:50%;bottom:8px;width:128px;height:5px;margin-left:-64px;border-radius:3px;background:var(--ink);opacity:.32}
+
+.list-head{display:flex;align-items:center;gap:10px;margin:12px 0 9px;color:var(--ink-2);font-size:9px}
+.list-head i{flex:1;height:1px;background:var(--line)}
+.list-head .mono{font-size:10.5px;letter-spacing:0;text-transform:none;font-weight:400}
+
+/* glyphs */
+.glyph{display:block;width:36px;height:36px;color:var(--acc,var(--metal))}
+.glyph svg{display:block;width:100%;height:100%}
+.g-oct{fill:currentColor;fill-opacity:.09;stroke:currentColor;stroke-width:1}
+
+/* =========================================================
+   Tiles — the heart of it
+   ========================================================= */
+.tile{
+  --sz:56px; --dur:520ms;
+  position:relative;display:grid;place-items:center;
+  width:var(--sz);height:var(--sz);
+  border:1px solid var(--line);border-radius:3px;
+  background:var(--tile-empty);color:var(--ink);
+  font-family:var(--f-display);font-weight:700;font-size:calc(var(--sz) * .5);line-height:1;
+  text-transform:uppercase;padding-top:.04em;
+}
+.tile.typed{background:var(--tile-typed);border-color:var(--typed-line)}
+.tile.cursor{border-color:var(--line-strong);box-shadow:inset 0 -2px 0 var(--metal)}
+.tile.correct{--s-bg:var(--g-correct);--s-ink:var(--correct-ink)}
+.tile.present{--s-bg:var(--g-present);--s-ink:var(--present-ink)}
+.tile.absent{--s-bg:var(--g-absent);--s-ink:var(--absent-ink)}
+.tile.correct,.tile.present,.tile.absent{background:var(--s-bg);color:var(--s-ink);border-color:transparent;box-shadow:var(--jewel-shadow)}
+/* step-cut inner facet */
+.tile.correct::before,.tile.present::before,.tile.absent::before{content:"";position:absolute;inset:4px;border:1px solid rgba(255,255,255,.11);border-radius:1px;pointer-events:none}
+.tile.present::before{border-color:rgba(255,255,255,.34)}
+/* sheen — light catching the crystal as the tile turns */
+.tile::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+  background:linear-gradient(105deg,rgba(255,255,255,0) 32%,rgba(255,255,255,.62) 48%,rgba(255,255,255,0) 62%);
+  background-size:300% 100%;background-position:100% 0}
+.tile.flip{animation:nx-flip var(--dur) cubic-bezier(.4,0,.2,1) var(--d,0ms) both}
+.tile.flip::before{animation:nx-half var(--dur) linear var(--d,0ms) both}
+.tile.flip::after{animation:nx-sheen 520ms ease-out calc(var(--d,0ms) + var(--dur) * .5) both}
+@keyframes nx-flip{
+  0%{transform:perspective(520px) rotateX(0);background:var(--tile-typed);color:var(--ink);border-color:var(--typed-line);box-shadow:none}
+  49.99%{transform:perspective(520px) rotateX(-90deg);background:var(--tile-typed);color:var(--ink);border-color:var(--typed-line);box-shadow:none}
+  50%{transform:perspective(520px) rotateX(-90deg);background:var(--s-bg);color:var(--s-ink);border-color:transparent;box-shadow:var(--jewel-shadow)}
+  100%{transform:perspective(520px) rotateX(0);background:var(--s-bg);color:var(--s-ink);border-color:transparent;box-shadow:var(--jewel-shadow)}
+}
+@keyframes nx-half{0%,49.99%{opacity:0}50%,100%{opacity:1}}
+@keyframes nx-sheen{0%{opacity:0;background-position:100% 0}22%{opacity:1}100%{opacity:0;background-position:0 0}}
+@keyframes nx-fade{
+  0%{opacity:1;background:var(--tile-typed);color:var(--ink);border-color:var(--typed-line);box-shadow:none}
+  49.99%{opacity:.3;background:var(--tile-typed);color:var(--ink);border-color:var(--typed-line);box-shadow:none}
+  50%{opacity:.3;background:var(--s-bg);color:var(--s-ink);border-color:transparent;box-shadow:var(--jewel-shadow)}
+  100%{opacity:1;background:var(--s-bg);color:var(--s-ink);border-color:transparent;box-shadow:var(--jewel-shadow)}
+}
+
+/* =========================================================
+   A · Today
+   ========================================================= */
+.dateline{margin-top:2px;color:var(--metal-ink);font-size:9.5px}
+.greet{font-family:var(--f-display);font-weight:500;font-size:37px;line-height:1.05;letter-spacing:-.015em;margin-top:6px}
+.statusline{font-size:12.5px;line-height:1.45;color:var(--ink-2);margin-top:6px}
+.statusline .mono{color:var(--ink);font-size:12px}
+.cxs{display:grid;grid-template-columns:repeat(3,1fr);margin-top:12px;padding:9px 0 8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.cx{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px}
+.cx + .cx::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:1px;background:var(--line-soft)}
+.cx-dial{position:relative;width:58px;height:58px}
+.cx-dial svg{position:absolute;inset:0;width:100%;height:100%}
+.cx-v{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-mono);font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums}
+.cx-v small{font-size:9px;color:var(--ink-3);font-weight:400}
+.cx-stack{display:flex;flex-direction:column;align-items:center;line-height:1.05;font-size:12.5px}
+.cx-stack small{font-size:8px;letter-spacing:.04em}
+.cx-l{font-size:8.5px;color:var(--ink-2)}
+.cx-track{fill:none;stroke:var(--line);stroke-width:4}
+.cx-on{fill:none;stroke-width:4}
+.cx-on.sapph{stroke:var(--sapphire)}.cx-on.emer{stroke:var(--emerald)}.cx-on.metal{stroke:var(--metal);stroke-width:3}
+.cx-tk{stroke:var(--line-strong);stroke-width:3.4}
+.cx-tk.lit{stroke:var(--metal)}
+.cx-mt{stroke:var(--line-strong);stroke-width:1.1}
+.cx-mt.mj{stroke:var(--ink-2);stroke-width:1.8}
+.cx-ring{fill:none;stroke:var(--line-soft);stroke-width:1}
+
+.cards{display:flex;flex-direction:column;gap:8px}
+.gcard{display:grid;grid-template-columns:36px minmax(0,1fr);column-gap:12px;padding:11px 13px 9px;background:var(--surface);border:1px solid var(--line);border-radius:5px;box-shadow:var(--card-shadow)}
+.gcard .glyph{grid-row:1/3;align-self:start;margin-top:1px}
+.gc-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.gc-name{font-family:var(--f-display);font-weight:600;font-size:19px;line-height:1.12;letter-spacing:-.005em;white-space:nowrap}
+.state{display:inline-flex;align-items:center;gap:6px;font-size:8.5px;letter-spacing:.15em;color:var(--ink-2);white-space:nowrap}
+.gc-desc{font-size:12px;line-height:1.4;color:var(--ink-2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gc-foot{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:7px;border-top:1px solid var(--line-soft);min-height:36px}
+.gc-score{font-size:12.5px;color:var(--ink-2)}
+.gc-score b{color:var(--ink);font-weight:600}
+.gc-link{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:9px;color:var(--metal-ink)}
+.gc-link svg{width:10px;height:10px}
+.notches{display:inline-flex;gap:3px}
+.notches i{width:3px;height:12px;border-radius:1px;background:var(--line-strong)}
+.notches i.on{background:var(--emerald)}
+.gc-prog{font-size:11px;color:var(--ink-2)}
+.gc-sealed{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2)}
+.gc-sealed svg{width:15px;height:15px;color:var(--metal-ink)}
+.gc-foot .btn{margin-left:auto}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;height:44px;padding:0 20px;border-radius:4px;border:1px solid transparent;
+  font-family:var(--f-ui);font-weight:600;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;font-stretch:125%;white-space:nowrap;cursor:pointer;
+  transition:transform .15s ease,filter .15s ease,border-color .15s ease}
+.btn svg{width:16px;height:16px;flex:none}
+.btn-sm{height:28px;padding:0 13px;font-size:9px;letter-spacing:.16em}
+.btn-primary{background:var(--primary-bg);color:var(--primary-ink);box-shadow:var(--primary-edge)}
+.btn-secondary{color:var(--ink);border-color:var(--line-strong)}
+.btn-accent{background:var(--facet),var(--correct-2);color:var(--correct-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 0 0 1px rgba(255,255,255,.06),0 8px 16px -10px rgba(0,0,0,.6)}
+.btn:disabled,.btn.is-disabled{background:var(--surface-2);color:var(--ink-3);border:1px dashed var(--line-strong);box-shadow:none;cursor:not-allowed}
+.btn:not(:disabled):hover{filter:brightness(1.07)}
+.btn-secondary:not(:disabled):hover{border-color:var(--metal)}
+.btn:not(:disabled):active{transform:translateY(1px)}
+
+/* =========================================================
+   B · Play
+   ========================================================= */
+.bboard{display:flex;flex-direction:column;align-items:center;gap:6px;margin:20px auto 0}
+.brow{position:relative;display:grid;grid-template-columns:repeat(5,auto);gap:6px}
+.ridx{position:absolute;right:calc(100% + 9px);top:50%;transform:translateY(-50%);width:20px;text-align:right;font-family:var(--f-display);font-style:italic;font-size:11px;color:var(--ink-3)}
+.brow.now .ridx{color:var(--metal-ink)}
+.brow.now .ridx::after{content:"";position:absolute;right:-8px;top:50%;margin-top:-3.5px;border:3.5px solid transparent;border-left:4.5px solid var(--metal);border-right:0}
+.play-note{margin:14px auto 0;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-2)}
+.kb{margin-top:auto;padding:0 6px 6px;display:flex;flex-direction:column;gap:7px}
+.kr{display:flex;gap:5px}
+.kr .sp{flex:.5 1 0}
+.key{flex:1 1 0;min-width:0;height:54px;border-radius:5px;display:grid;place-items:center;background:var(--key);color:var(--key-ink);
+  font-family:var(--f-ui);font-weight:600;font-size:14px;font-stretch:110%;box-shadow:inset 0 1px 0 var(--key-hi),0 1px 1px rgba(0,0,0,.18)}
+.key.wide{flex:1.55 1 0;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;font-stretch:125%}
+.key.wide svg{width:22px;height:22px}
+.key.correct{background:var(--facet),var(--correct-2);color:var(--correct-ink)}
+.key.present{background:var(--facet),var(--present-2);color:var(--present-ink)}
+.key.absent{background:var(--absent-2);color:var(--absent-key-ink)}
+
+/* =========================================================
+   C · Result
+   ========================================================= */
+.dial-wrap{position:relative;width:180px;height:180px;margin:8px auto 0;flex:none}
+.dial-wrap svg{position:absolute;inset:0;width:100%;height:100%}
+.tk{stroke:var(--line-strong);stroke-width:1}
+.tk.mj{stroke-width:1.7}
+.tk.lit{stroke:var(--metal)}
+.dial-track{fill:none;stroke:var(--line-soft);stroke-width:2}
+.dial-arc{fill:none;stroke:var(--sapphire);stroke-width:2.4;stroke-dasharray:80 100;animation:dial-sweep 900ms cubic-bezier(.2,.7,.2,1) 120ms both}
+@keyframes dial-sweep{from{stroke-dashoffset:80}to{stroke-dashoffset:0}}
+.dial-idx{fill:var(--sapphire)}
+.dial-lab{font-family:var(--f-mono);font-size:8px;fill:var(--ink-3)}
+.dial-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dial-cap{font-size:8px;color:var(--ink-2);margin-top:4px}
+.dial-num{font-family:var(--f-display);font-weight:500;font-size:74px;line-height:.9;letter-spacing:-.03em;font-variant-numeric:tabular-nums lining-nums;margin:3px 0 4px}
+.dial-sub{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.res-row{display:flex;align-items:center;gap:16px;margin-top:10px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.trace{display:flex;gap:7px}
+.tm{display:flex;flex-direction:column;align-items:center;gap:5px}
+.tm > span:last-child{font-family:var(--f-mono);font-size:10px;color:var(--ink-2)}
+.mark{position:relative;width:36px;height:36px;border-radius:3px;display:grid;place-items:center;box-shadow:var(--jewel-shadow)}
+.mark::before{content:"";position:absolute;inset:3px;border:1px solid rgba(255,255,255,.12);border-radius:1px}
+.mark.l{background:var(--j-absent);color:var(--absent-ink)}
+.mark.h{background:var(--j-present);color:var(--present-ink)}
+.mark.h::before{border-color:rgba(255,255,255,.34)}
+.mark.c{background:var(--j-correct);color:var(--correct-ink)}
+.mark svg{width:18px;height:18px}
+.res-row .btn{flex:1;min-width:0;padding:0 12px}
+.friends{display:flex;flex-direction:column}
+.fr{display:grid;grid-template-columns:26px minmax(0,1fr) auto 34px 24px;align-items:center;gap:10px;height:36px;padding:0 6px;border-bottom:1px solid var(--line-soft)}
+.fr:last-child{border-bottom:0}
+.fr .av{width:26px;height:26px;font-size:13px}
+.fr-n{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.you-tag{margin-left:7px;font-size:7.5px;letter-spacing:.18em;color:var(--metal-ink);vertical-align:2px}
+.ft{display:flex;gap:2.5px}
+.ft i{width:7px;height:7px;border-radius:1.5px}
+.ft .l{background:var(--absent-1)}.ft .h{background:var(--present-1)}.ft .c{background:var(--correct-1)}
+.fg{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums}
+.fp{font-family:var(--f-mono);font-size:13px;font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.fr.you{background:linear-gradient(90deg,color-mix(in srgb,var(--metal) 13%,transparent),transparent 85%);border-radius:3px}
+.fr.fail .fg{color:var(--garnet)}
+.fs{grid-column:3/6;justify-self:end;display:inline-flex;align-items:center;gap:8px;font-family:var(--f-display);font-style:italic;font-size:13.5px;color:var(--ink-2)}
+.fr.idle .fr-n{color:var(--ink-2)}
+.fr.idle .fs{color:var(--ink-3)}
+
+/* =========================================================
+   D · Leaderboard
+   ========================================================= */
+.lb-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-top:2px}
+.lb-top h3{font-family:var(--f-display);font-weight:500;font-size:32px;line-height:1.1;letter-spacing:-.015em}
+.lb-top .mono{font-size:10.5px;color:var(--ink-2);white-space:nowrap}
+.gtabs{display:flex;gap:14px;margin-top:10px;border-bottom:1px solid var(--line);overflow:hidden}
+.gt{position:relative;display:inline-flex;align-items:center;gap:5px;padding:8px 0 10px;font-size:12px;font-weight:600;font-stretch:92%;color:var(--ink-3);white-space:nowrap}
+.gt i{width:5px;height:5px;transform:rotate(45deg);background:var(--acc)}
+.gt.on{color:var(--ink)}
+.gt.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--metal-grad)}
+.period{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:12px;padding:3px;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+.pd{height:30px;display:grid;place-items:center;font-size:8.5px;color:var(--ink-2);border-radius:2px}
+.pd.on{background:var(--primary-bg);color:var(--primary-ink);box-shadow:var(--primary-edge)}
+.gapline{display:flex;justify-content:space-between;gap:10px;margin-top:10px;font-size:10.5px;color:var(--ink-2)}
+.gapline b{font-family:var(--f-display);font-style:italic;font-size:13px;font-weight:600;color:var(--metal-ink)}
+.lbgrid{display:grid;grid-template-columns:22px 28px minmax(0,1fr) 56px;column-gap:10px}
+.ruler{margin-top:10px;padding:0 7px}
+.scale{grid-column:3;position:relative;height:18px;border-bottom:1px solid var(--line);
+  background:linear-gradient(90deg,var(--ink-3) 1px,transparent 1px) left bottom/20% 6px repeat-x,linear-gradient(90deg,var(--line-strong) 1px,transparent 1px) left bottom/10% 3px repeat-x}
+.scale::after{content:"";position:absolute;right:0;bottom:0;width:1px;height:6px;background:var(--ink-3)}
+.scale b{position:absolute;top:0;transform:translateX(-50%);font-family:var(--f-mono);font-weight:400;font-size:8px;color:var(--ink-3);line-height:1}
+.lb{display:flex;flex-direction:column}
+.lbr{align-items:center;min-height:51px;padding:7px 6px;border:1px solid transparent;border-bottom-color:var(--line-soft)}
+.lbr .av{width:28px;height:28px;font-size:14px}
+.rk{font-family:var(--f-display);font-style:italic;font-weight:500;font-size:17px;line-height:1;text-align:center;color:var(--ink-2)}
+.lbr.first .rk{color:var(--metal-ink)}
+.who{display:flex;flex-direction:column;gap:3px;min-width:0}
+.nm{display:flex;align-items:center;font-size:14px;font-weight:600;line-height:1.2;white-space:nowrap}
+.meta{font-family:var(--f-mono);font-size:10px;line-height:1.2;color:var(--ink-3);white-space:nowrap}
+.meta b{font-weight:500;color:var(--metal-ink)}
+.vbar{position:relative;height:7px;margin-top:2px}
+.vbar::before{content:"";position:absolute;left:0;right:0;top:3px;height:1px;background:var(--line)}
+.vbar::after{content:"";position:absolute;left:0;top:2.5px;height:2px;width:calc(var(--v) * 100%);background:var(--ink-2)}
+.vbar i{position:absolute;top:0;bottom:0;left:calc(var(--v) * 100%);width:1.5px;margin-left:-1px;background:var(--metal)}
+.lbr.you .vbar::after{background:var(--metal)}
+.pts{text-align:right;font-family:var(--f-mono);font-weight:300;font-size:21px;line-height:1;font-variant-numeric:tabular-nums}
+.pts small{display:block;margin-top:4px;font-family:var(--f-ui);font-weight:600;font-size:7.5px;letter-spacing:.2em;text-transform:uppercase;font-stretch:125%;color:var(--ink-3)}
+.lbr.you{border-radius:4px;border:1px solid transparent;background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--metal-grad) border-box}
+.lbr.idle .nm{color:var(--ink-2)}
+.lbr.idle .pts{color:var(--ink-3)}
+.lbr.idle .vbar i{display:none}
+
+/* spoiler wall */
+.sealed{position:relative;margin-top:10px;min-height:72px;border-radius:5px;overflow:hidden;border:1px solid var(--line);background:var(--surface);flex:none}
+.sealed-ghost{position:absolute;inset:0;padding:11px 16px;display:flex;flex-direction:column;justify-content:center;gap:8px;filter:blur(4.5px)}
+.gr{display:flex;align-items:center;gap:9px}
+.gr .gav{width:16px;height:16px;border-radius:50%;background:var(--ink-3)}
+.gr .g5{display:flex;gap:3px}
+.gr .g5 i{width:13px;height:13px;border-radius:2px}
+.g5 .c{background:var(--correct-1)}.g5 .p{background:var(--present-1)}.g5 .a{background:var(--absent-1)}
+.gr .gb{flex:1;height:5px;border-radius:2px;background:var(--line-strong)}
+.sealed-front{position:relative;display:flex;align-items:center;gap:12px;min-height:72px;padding:12px 14px;
+  background:repeating-linear-gradient(45deg,var(--pattern) 0 1px,transparent 1px 9px),repeating-linear-gradient(-45deg,var(--pattern) 0 1px,transparent 1px 9px),linear-gradient(90deg,var(--frost) 62%,color-mix(in srgb,var(--frost) 45%,transparent))}
+.seal{width:36px;height:36px;flex:none;color:var(--metal)}
+.seal svg{width:100%;height:100%;display:block}
+.sealed-t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sealed-cap{font-size:8.5px;color:var(--metal-ink)}
+.sealed-msg{font-family:var(--f-display);font-weight:500;font-size:15px;line-height:1.2}
+
+/* =========================================================
+   System
+   ========================================================= */
+.sys-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.span-all{grid-column:1/-1}
+.span-2{grid-column:span 2}
+@media (max-width:1099px){.sys-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span-2{grid-column:1/-1}}
+@media (max-width:719px){.sys-grid{grid-template-columns:minmax(0,1fr)}}
+.panel{position:relative;min-width:0;padding:26px;background:var(--surface);border:1px solid var(--line);border-radius:6px;box-shadow:var(--card-shadow)}
+@media (max-width:480px){.panel{padding:20px 18px}}
+.ph{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:8px 12px;margin-bottom:20px}
+.ph-idx{font-family:var(--f-mono);font-size:11px;color:var(--metal-ink)}
+.ph h3{font-family:var(--f-display);font-weight:500;font-size:25px;line-height:1.1}
+.ph p{grid-column:1/-1;font-size:13.5px;color:var(--ink-2);max-width:68ch}
+
+.editions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.editions{grid-template-columns:minmax(0,1fr)}}
+.ed-card{border-radius:5px;padding:20px;border:1px solid}
+.ed-card.night{background:#0A0E17;color:#EEE8DA;border-color:rgba(214,190,140,.3);--sw-sub:#A9AFBD;--sw-acc:#D6BE8C}
+.ed-card.day{background:#F6F6F2;color:#0F1828;border-color:rgba(122,98,50,.32);--sw-sub:#4A5263;--sw-acc:#7A6232}
+.ed-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.ed-h b{font-family:var(--f-display);font-style:italic;font-weight:500;font-size:23px}
+.ed-h span{font-size:9px;color:var(--sw-acc)}
+.sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:16px 12px}
+.sw{display:flex;flex-direction:column;gap:5px;min-width:0}
+.sw-chip{height:46px;margin-bottom:3px;clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0 calc(100% - 8px),0 8px);box-shadow:inset 0 0 0 1px rgba(128,128,128,.28)}
+.sw-role{font-size:11.5px;font-weight:600;line-height:1.25}
+.sw-hex{font-family:var(--f-mono);font-size:10px;color:var(--sw-sub);line-height:1.35;overflow-wrap:anywhere}
+.sw-cr{font-family:var(--f-mono);font-size:9.5px;color:var(--sw-acc)}
+
+.type-list{display:flex;flex-direction:column}
+.ts{display:grid;grid-template-columns:minmax(150px,210px) minmax(0,1fr);gap:8px 28px;align-items:baseline;padding:15px 0;border-top:1px solid var(--line-soft)}
+.ts:first-child{border-top:0;padding-top:0}
+@media (max-width:640px){.ts{grid-template-columns:minmax(0,1fr)}}
+.ts-meta b{display:block;font-size:9.5px;color:var(--metal-ink);margin-bottom:4px}
+.ts-meta span{display:block;font-family:var(--f-mono);font-size:10.5px;line-height:1.55;color:var(--ink-2)}
+.ts-sample{min-width:0;overflow-wrap:anywhere}
+
+.tile-states{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.tstate{display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;min-width:0}
+.tstate .tile{--sz:52px}
+.tstate b{font-size:8.5px;letter-spacing:.14em;color:var(--ink)}
+.tstate .ts-d{font-size:11px;line-height:1.3;color:var(--ink-2)}
+.hm-legend{margin-top:20px;padding-top:16px;border-top:1px solid var(--line-soft);display:grid;gap:9px}
+.hm-legend li{display:grid;grid-template-columns:14px minmax(0,1fr);align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2)}
+.hm-legend li .hm{justify-self:center}
+.hm-legend b{color:var(--ink);font-weight:600}
+
+.key-states{margin-top:20px;padding-top:16px;border-top:1px solid var(--line-soft);display:flex;flex-direction:column;gap:12px}
+.key-row{display:grid;grid-template-columns:repeat(4,minmax(0,64px));gap:10px}
+.ks{display:flex;flex-direction:column;align-items:center;gap:7px}
+.ks .key{width:100%;flex:none;height:52px}
+.key-states .ts-d{font-size:11px;line-height:1.4;color:var(--ink-2)}
+.gems{margin-top:20px;padding-top:16px;border-top:1px solid var(--line-soft);display:flex;flex-direction:column;gap:12px}
+.gem-list{display:grid;gap:10px}
+.gem-list li{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:12px}
+.gem-list .glyph{width:32px;height:32px}
+.gem-t{display:flex;flex-direction:column;gap:1px;min-width:0;line-height:1.25}
+.gem-t b{font-family:var(--f-display);font-weight:600;font-size:16px}
+.gem-t span{font-size:11.5px;color:var(--ink-2)}
+.gem-sw{width:22px;height:22px;background:var(--facet),var(--acc);box-shadow:var(--jewel-shadow);clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%)}
+.gem-list li.next{--acc:var(--ink-3)}
+.gem-list li.next .gem-t b{font-style:italic;font-weight:500;color:var(--ink-2)}
+.gems .ts-d{font-size:11px;line-height:1.4;color:var(--ink-2)}
+.btn-demo{display:grid;gap:16px}
+.bd{display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:16px}
+.bd .btn{width:100%}
+.bd-l{font-size:12px;line-height:1.45;color:var(--ink-2)}
+.bd-l b{display:block;color:var(--ink);font-weight:600}
+@media (max-width:420px){.bd{grid-template-columns:minmax(0,1fr)}}
+.btn-sizes{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line-soft);align-items:center}
+.btn-sizes .bd-l{flex-basis:100%}
+
+.comp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+@media (max-width:760px){.comp-grid{grid-template-columns:minmax(0,1fr)}}
+.comp{display:flex;flex-direction:column;gap:10px;min-width:0}
+.comp-l{font-size:9px;color:var(--ink-2)}
+.comp .gcard,.comp .lbr{max-width:360px}
+.comp .sealed{margin-top:0;max-width:360px}
+.comp .sealed,.comp .sealed-front{min-height:96px}
+.comp .sealed-front{align-items:center}
+.share-demo{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.bubble{font-family:var(--f-mono);font-size:12px;line-height:1.65;padding:12px 15px;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:14px 14px 14px 3px;white-space:pre;color:var(--ink)}
+
+.inst{display:flex;flex-direction:column;gap:22px}
+.inst-row{display:flex;align-items:center;gap:18px}
+.inst-dial{position:relative;flex:none}
+.inst-dial svg{position:absolute;inset:0;width:100%;height:100%}
+.inst-dial .cx-v{font-size:14px}
+.inst-big{font-family:var(--f-display);font-size:26px;font-weight:600}
+.inst-t{display:flex;flex-direction:column;gap:4px;min-width:0}
+.inst-t .cap{font-size:9px;color:var(--ink-2)}
+.inst-t .read{font-family:var(--f-mono);font-size:26px;font-weight:300;line-height:1.1;font-variant-numeric:tabular-nums}
+.inst-t p{font-size:12px;color:var(--ink-2)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--line-strong);border-radius:3px;font-family:var(--f-mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+.chip .hm{width:7px;height:7px;background:var(--metal);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}
+
+.motion{display:grid;grid-template-columns:auto minmax(0,1fr);gap:32px;align-items:center}
+@media (max-width:760px){.motion{grid-template-columns:minmax(0,1fr)}}
+.motion-stage{display:flex;flex-direction:column;align-items:flex-start;gap:18px}
+.motion-row{display:flex;gap:7px}
+.motion-row .tile{--sz:58px}
+.motion-spec{display:grid;gap:0}
+.motion-spec li{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;padding:8px 0;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--ink-2)}
+.motion-spec li:first-child{border-top:0}
+.motion-spec b{font-size:9px;color:var(--metal-ink);padding-top:3px}
+.motion-spec .mono{font-size:11.5px;color:var(--ink);white-space:nowrap}
+@media (max-width:420px){.motion-spec li{grid-template-columns:minmax(0,1fr);gap:2px}}
+
+/* =========================================================
+   Notes
+   ========================================================= */
+.notes{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px}
+@media (max-width:960px){.notes{grid-template-columns:minmax(0,1fr)}}
+.moments li{display:grid;grid-template-columns:36px minmax(0,1fr);gap:4px 12px;padding:17px 0;border-top:1px solid var(--line-soft)}
+.moments li:first-child{border-top:0;padding-top:0}
+.moments .n{grid-row:1/3;font-family:var(--f-display);font-style:italic;font-size:20px;line-height:1.2;color:var(--metal-ink)}
+.moments b{font-family:var(--f-display);font-weight:600;font-size:18px;line-height:1.25}
+.moments p{font-size:14px;line-height:1.55;color:var(--ink-2)}
+.moments code{display:block;width:fit-content;max-width:100%;margin-top:8px;font-family:var(--f-mono);font-size:12px;line-height:1.5;color:var(--ink);background:var(--surface-2);border:1px solid var(--line-soft);padding:5px 10px;border-radius:3px;overflow-wrap:anywhere}
+.knob{padding:16px 0;border-top:1px solid var(--line-soft)}
+.knob:first-child{border-top:0;padding-top:0}
+.knob-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.knob-h b{font-family:var(--f-display);font-weight:600;font-size:17px}
+.knob-h span{font-family:var(--f-mono);font-size:10.5px;color:var(--metal-ink)}
+.knob p{font-size:13px;line-height:1.5;color:var(--ink-2);margin-top:4px}
+.kscale{position:relative;height:12px;margin-top:12px;border-bottom:1px solid var(--line-strong);background:linear-gradient(90deg,var(--line-strong) 1px,transparent 1px) left bottom/10% 5px repeat-x}
+.kscale::after{content:"";position:absolute;right:0;bottom:0;width:1px;height:5px;background:var(--line-strong)}
+.kscale i{position:absolute;bottom:-5px;left:var(--at);width:9px;height:9px;margin-left:-4.5px;transform:rotate(45deg);background:var(--metal);box-shadow:0 0 0 2px var(--surface)}
+.kends{display:flex;justify-content:space-between;gap:12px;margin-top:9px;font-size:8.5px;color:var(--ink-3)}
+
+.foot{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px 24px;font-size:9px;color:var(--ink-3)}
+
+/* =========================================================
+   Reduced motion
+   ========================================================= */
+@media (prefers-reduced-motion: reduce){
+  .tile.flip{animation:nx-fade 260ms ease both;animation-delay:0ms}
+  .tile.flip::before{animation:nx-half 260ms linear both;animation-delay:0ms}
+  .tile.flip::after{animation:none;opacity:0}
+  .dial-arc{animation:none}
+  .tg-knob,.btn{transition:none}
+}
+</style>
+</head>
+<body>
+<main class="board">
+
+  <!-- ============================== MASTHEAD ============================== -->
+  <header class="masthead">
+    <div class="mh-copy">
+      <p class="eyebrow cap">Daily · Style exploration · Wordle, elevated</p>
+      <h1 class="mh-title">Nocturne</h1>
+      <p class="mh-concept">Wordle's grid, flip and green–yellow–gray, recut as a <em>night edition</em>: emerald, citrine and smoke quartz set on blue-black, ruled in champagne hairlines and read like a watch dial.</p>
+      <dl class="spec">
+        <div><dt class="cap">Jewels</dt><dd>Emerald · Citrine · Smoke quartz</dd></div>
+        <div><dt class="cap">Metal</dt><dd>Champagne hairline, 1px</dd></div>
+        <div><dt class="cap">Type</dt><dd>Bodoni Moda · Archivo · Azeret Mono</dd></div>
+        <div><dt class="cap">Editions</dt><dd>Night (dark-first) · Day</dd></div>
+      </dl>
+      <button class="toggle" id="themeToggle" type="button">
+        <span class="tg-track" aria-hidden="true">
+          <svg class="sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></svg>
+          <svg class="moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M12.8 10.2A5.4 5.4 0 0 1 5.8 3.2a5.4 5.4 0 1 0 7 7z"/></svg>
+          <span class="tg-knob"></span>
+        </span>
+        <span class="tg-text"><span class="tg-cap cap">Edition</span><span class="tg-label" id="tgLabel">Night</span></span>
+      </button>
+    </div>
+
+    <div class="mh-art">
+      <div class="hero-dial">
+        <svg id="heroDial" viewBox="0 0 400 400" aria-hidden="true"></svg>
+        <div class="hero-top" aria-hidden="true">Daily</div>
+        <div class="hero-tiles" role="img" aria-label="The word DAILY set as tiles: D correct, A present, I absent, L correct, Y correct">
+          <span class="tile correct flip" style="--d:60ms;--dur:460ms" aria-hidden="true">D</span>
+          <span class="tile present flip" style="--d:140ms;--dur:460ms" aria-hidden="true">A</span>
+          <span class="tile absent flip" style="--d:220ms;--dur:460ms" aria-hidden="true">I</span>
+          <span class="tile correct flip" style="--d:300ms;--dur:460ms" aria-hidden="true">L</span>
+          <span class="tile correct flip" style="--d:380ms;--dur:460ms" aria-hidden="true">Y</span>
+        </div>
+        <div class="hero-bot" aria-hidden="true">Nº 214 · MON 05 OCT</div>
+      </div>
+      <ul class="legend" aria-label="Tile state legend">
+        <li><span class="lg-j" style="background:var(--g-correct)" aria-hidden="true"></span><span><b>Correct</b> · Emerald</span></li>
+        <li><span class="lg-j" style="background:var(--g-present)" aria-hidden="true"></span><span><b>Present</b> · Citrine</span></li>
+        <li><span class="lg-j" style="background:var(--g-absent)" aria-hidden="true"></span><span><b>Absent</b> · Smoke quartz</span></li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- ============================== SCREENS ============================== -->
+  <section class="sec" id="screens" aria-labelledby="h-screens">
+    <div class="sec-head">
+      <span class="sec-idx" aria-hidden="true">I</span>
+      <h2 id="h-screens">Screens</h2>
+      <span class="sec-rule" aria-hidden="true"></span>
+      <p class="sec-note cap">Monday, October 5 · four moments of one day</p>
+    </div>
+
+    <div class="phones">
+
+      <!-- A · TODAY -->
+      <figure class="device">
+        <div class="phone"><div class="screen">
+          <div class="sb"></div>
+          <div class="appbar">
+            <span class="logo" aria-hidden="true"><i class="c"></i><i class="p"></i><i class="a"></i><i class="c"></i><i class="c"></i></span>
+            <span class="wordmark">Daily</span>
+            <span class="ed mono">Nº 214</span>
+            <span class="av you" aria-label="Ashwin">A</span>
+          </div>
+          <div class="content">
+            <p class="dateline cap">Monday, October 5</p>
+            <h3 class="greet">Hey Ashwin</h3>
+            <p class="statusline">1 of 3 done today · 5-day streak · next puzzles in <span class="mono">7:42:10</span></p>
+            <div class="cxs" aria-hidden="true">
+              <div class="cx"><div class="cx-dial"><svg viewBox="0 0 100 100" data-cx="today"></svg><span class="cx-v"><span>1<small>/3</small></span></span></div><span class="cx-l cap">Today</span></div>
+              <div class="cx"><div class="cx-dial"><svg viewBox="0 0 100 100" data-cx="streak"></svg><span class="cx-v"><span>5</span></span></div><span class="cx-l cap">Streak</span></div>
+              <div class="cx"><div class="cx-dial"><svg viewBox="0 0 100 100" data-cx="next"></svg><span class="cx-v"><span class="cx-stack">7:42<small>10s</small></span></span></div><span class="cx-l cap">Next</span></div>
+            </div>
+            <div class="list-head cap"><span>Today’s puzzles</span><i></i><span class="mono">3</span></div>
+            <div class="cards">
+              <article class="gcard" style="--acc:var(--sapphire)">
+                <span class="glyph" data-g="nh" aria-hidden="true"></span>
+                <div class="gc-top"><h4 class="gc-name">Number Hunt</h4><span class="state cap"><i class="hm hm-c"></i>Done</span></div>
+                <p class="gc-desc">Find the number 1–100 in 7 guesses</p>
+                <div class="gc-foot"><span class="gc-score mono">3/7 · <b>80</b> pts</span><span class="gc-link cap">Results <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></span></div>
+              </article>
+              <article class="gcard" style="--acc:var(--emerald)">
+                <span class="glyph" data-g="fl" aria-hidden="true"></span>
+                <div class="gc-top"><h4 class="gc-name">Five Letters</h4><span class="state cap"><i class="hm hm-p"></i>In progress</span></div>
+                <p class="gc-desc">Guess the five-letter word in 6 tries</p>
+                <div class="gc-foot"><span class="notches" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span><span class="gc-prog mono">2 of 6 guesses used</span><span class="btn btn-accent btn-sm">Resume</span></div>
+              </article>
+              <article class="gcard" style="--acc:var(--garnet)">
+                <span class="glyph" data-g="gl" aria-hidden="true"></span>
+                <div class="gc-top"><h4 class="gc-name">Grid Lock</h4><span class="state cap"><i class="hm hm-a"></i>Not started</span></div>
+                <p class="gc-desc">Deduce the hidden grid from the clues</p>
+                <div class="gc-foot"><span class="gc-sealed"><span data-i="lock" aria-hidden="true"></span>Friends’ results sealed</span><span class="btn btn-primary btn-sm">Play</span></div>
+              </article>
+            </div>
+          </div>
+          <nav class="tabbar" data-on="today" aria-label="App navigation"></nav>
+        </div></div>
+        <figcaption><span class="fc-idx" aria-hidden="true">A</span><span class="fc-t">Today</span><span class="fc-d">An instrument cluster (progress, streak, reserve to rollover), then one gem-cut card per game.</span></figcaption>
+      </figure>
+
+      <!-- B · PLAY -->
+      <figure class="device">
+        <div class="phone"><div class="screen">
+          <div class="sb"></div>
+          <div class="hbar">
+            <span class="ib" data-i="back" aria-hidden="true"></span>
+            <div class="hb-mid"><span class="hb-title"><span class="glyph" data-g="fl" style="--acc:var(--emerald)" aria-hidden="true"></span>Five Letters</span><span class="hb-sub mono">Nº 214 · guess 3 of 6</span></div>
+            <span class="ib" data-i="help" aria-hidden="true"></span>
+          </div>
+          <div class="bboard" id="board"></div>
+          <p class="play-note mono"><i class="hm hm-p" aria-hidden="true"></i>2 of 6 guesses used</p>
+          <div class="kb" id="kb" role="group" aria-label="Keyboard"></div>
+          <div class="home"></div>
+        </div></div>
+        <figcaption><span class="fc-idx" aria-hidden="true">B</span><span class="fc-t">Play · Five Letters</span><span class="fc-d">The Wordle grid, recut: Bodoni capitals, step-cut jewels, a hallmark in every corner. Nav retracts while you play.</span></figcaption>
+      </figure>
+
+      <!-- C · RESULT -->
+      <figure class="device">
+        <div class="phone"><div class="screen">
+          <div class="sb"></div>
+          <div class="hbar">
+            <span class="ib" data-i="close" aria-hidden="true"></span>
+            <div class="hb-mid"><span class="hb-title"><span class="glyph" data-g="nh" style="--acc:var(--sapphire)" aria-hidden="true"></span>Number Hunt</span><span class="hb-sub mono">Solved · Nº 214</span></div>
+            <span></span>
+          </div>
+          <div class="content">
+            <div class="dial-wrap">
+              <svg viewBox="0 0 200 200" id="resDial" aria-hidden="true"></svg>
+              <div class="dial-c"><span class="dial-cap cap">Points</span><span class="dial-num">80</span><span class="dial-sub">3/7</span></div>
+            </div>
+            <div class="res-row">
+              <div class="trace" role="img" aria-label="Your trace: lower, higher, correct">
+                <div class="tm"><span class="mark l" data-i="down" aria-hidden="true"></span><span aria-hidden="true">50</span></div>
+                <div class="tm"><span class="mark h" data-i="up" aria-hidden="true"></span><span aria-hidden="true">25</span></div>
+                <div class="tm"><span class="mark c" data-i="gem" aria-hidden="true"></span><span aria-hidden="true">37</span></div>
+              </div>
+              <button class="btn btn-primary" type="button"><span data-i="share" aria-hidden="true"></span>Share result</button>
+            </div>
+            <div class="list-head cap"><span>How everyone did</span><i></i><span class="mono">4 of 6 in</span></div>
+            <ul class="friends" id="friends"></ul>
+          </div>
+          <nav class="tabbar" data-on="today" aria-label="App navigation"></nav>
+        </div></div>
+        <figcaption><span class="fc-idx" aria-hidden="true">C</span><span class="fc-t">Result</span><span class="fc-d">The score dial winds to 80; your trace is set like a row of stones; friends unseal because you finished.</span></figcaption>
+      </figure>
+
+      <!-- D · LEADERBOARD -->
+      <figure class="device">
+        <div class="phone"><div class="screen">
+          <div class="sb"></div>
+          <div class="content">
+            <div class="lb-top"><h3>Leaderboard</h3><span class="mono">Week 41 · Oct 5–11</span></div>
+            <div class="gtabs" role="tablist" aria-label="Board">
+              <span class="gt on" role="tab" aria-selected="true">Overall</span>
+              <span class="gt" role="tab" aria-selected="false" style="--acc:var(--sapphire)"><i aria-hidden="true"></i>Number Hunt</span>
+              <span class="gt" role="tab" aria-selected="false" style="--acc:var(--emerald)"><i aria-hidden="true"></i>Five Letters</span>
+              <span class="gt" role="tab" aria-selected="false" style="--acc:var(--garnet)"><i aria-hidden="true"></i>Grid Lock</span>
+            </div>
+            <div class="period" role="tablist" aria-label="Period">
+              <span class="pd cap" role="tab" aria-selected="false">Today</span>
+              <span class="pd on cap" role="tab" aria-selected="true">This week</span>
+              <span class="pd cap" role="tab" aria-selected="false">All time</span>
+            </div>
+            <p class="gapline mono"><span>You’re <b>II</b> of 6</span><span>16 pts behind Priya</span></p>
+            <div class="ruler lbgrid" aria-hidden="true"><span></span><span></span><div class="scale"><b style="left:0">0</b><b style="left:20%">50</b><b style="left:40%">100</b><b style="left:60%">150</b><b style="left:80%">200</b><b style="left:100%">250</b></div><span></span></div>
+            <ol class="lb" id="lb"></ol>
+            <div class="sealed" role="group" aria-label="Spoiler wall">
+              <div class="sealed-ghost" aria-hidden="true" data-ghost="3"></div>
+              <div class="sealed-front">
+                <span class="seal" data-g="seal" aria-hidden="true"></span>
+                <div class="sealed-t"><span class="sealed-cap cap">Five Letters · today</span><span class="sealed-msg">Finish to see how your friends did</span></div>
+              </div>
+            </div>
+          </div>
+          <nav class="tabbar" data-on="board" aria-label="App navigation"></nav>
+        </div></div>
+        <figcaption><span class="fc-idx" aria-hidden="true">D</span><span class="fc-t">Leaderboard</span><span class="fc-d">Roman ranks, a vernier scale and the gap to first. Unfinished games stay sealed behind the caseback.</span></figcaption>
+      </figure>
+
+    </div>
+  </section>
+
+  <!-- ============================== SYSTEM ============================== -->
+  <section class="sec" id="system" aria-labelledby="h-system">
+    <div class="sec-head">
+      <span class="sec-idx" aria-hidden="true">II</span>
+      <h2 id="h-system">System</h2>
+      <span class="sec-rule" aria-hidden="true"></span>
+      <p class="sec-note cap">Tokens · type · tiles · parts · motion</p>
+    </div>
+
+    <div class="sys-grid">
+
+      <!-- Palette -->
+      <div class="panel span-all">
+        <div class="ph"><span class="ph-idx">2.1</span><h3>Palette</h3><p>Two editions, one set of stones. Tiles keep the Wordle triad: emerald for correct, citrine for present, smoke quartz for absent. Each game also gets its own gem. Ratios are measured against the edition's screen colour; jewel tiles show the range from the top to the bottom of their gradient.</p></div>
+        <div class="editions">
+          <div class="ed-card night"><div class="ed-h"><b>Night edition</b><span class="cap">Default · dark-first</span></div><div class="sw-grid" data-sw="night"></div></div>
+          <div class="ed-card day"><div class="ed-h"><b>Day edition</b><span class="cap">Opaline silver dial</span></div><div class="sw-grid" data-sw="day"></div></div>
+        </div>
+      </div>
+
+      <!-- Type -->
+      <div class="panel span-2">
+        <div class="ph"><span class="ph-idx">2.2</span><h3>Type</h3><p>A Didone does the luxury: tile capitals, Breguet-like numerals and ranks. Wide Archivo labels work like the small print on a watch dial, and Azeret Mono handles every reading that has to line up.</p></div>
+        <div class="type-list">
+          <div class="ts"><div class="ts-meta"><b class="cap">Display</b><span>Bodoni Moda Italic 500<br>64 / 60 · opsz 96 · −2.5%</span></div><div class="ts-sample" style="font:italic 500 64px/1 var(--f-display);letter-spacing:-.025em">Nocturne</div></div>
+          <div class="ts"><div class="ts-meta"><b class="cap">Headline</b><span>Bodoni Moda 500<br>37 / 39 · −1.5%</span></div><div class="ts-sample" style="font:500 37px/1.05 var(--f-display);letter-spacing:-.015em">Hey Ashwin</div></div>
+          <div class="ts"><div class="ts-meta"><b class="cap">Tile capitals</b><span>Bodoni Moda 700 · caps<br>28 on a 56 tile · opsz auto</span></div><div class="ts-sample" style="font:700 28px/1 var(--f-display);letter-spacing:.14em">PARTY · CRANE</div></div>
+          <div class="ts"><div class="ts-meta"><b class="cap">Score numerals</b><span>Bodoni Moda 500 · lining, tabular<br>74 / 66</span></div><div class="ts-sample" style="font:500 74px/.9 var(--f-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums lining-nums">80 <span style="font-style:italic;font-size:30px;color:var(--metal-ink);letter-spacing:0">I · II · III</span></div></div>
+          <div class="ts"><div class="ts-meta"><b class="cap">Readout</b><span>Azeret Mono 300–500 · tabular<br>21 · 13 · 10.5</span></div><div class="ts-sample mono" style="font-size:22px;font-weight:300">247 · 231 · 7:42:10</div></div>
+          <div class="ts"><div class="ts-meta"><b class="cap">Dial label</b><span>Archivo 600 · wdth 125<br>8.5–10.5 · +0.2em caps</span></div><div class="ts-sample cap" style="font-size:11px;color:var(--metal-ink)">Monday, October 5 · How everyone did</div></div>
+          <div class="ts"><div class="ts-meta"><b class="cap">Body / UI</b><span>Archivo 400–600 · wdth 100<br>15 / 22 · 12 / 17</span></div><div class="ts-sample" style="font-size:15px;line-height:1.45">Find the number 1–100 in 7 guesses. <span style="color:var(--ink-2)">Guess the five-letter word in 6 tries.</span></div></div>
+        </div>
+      </div>
+
+      <!-- Tiles -->
+      <div class="panel">
+        <div class="ph"><span class="ph-idx">2.3</span><h3>Tile states</h3><p>Every tile is cut like a step-cut stone: a gradient, a facet and an inner girdle line. A hallmark in the corner carries the state, so colour is never the only signal.</p></div>
+        <div class="tile-states">
+          <div class="tstate"><span class="tile" aria-hidden="true"></span><b class="cap">Empty</b><span class="ts-d">Hairline only</span></div>
+          <div class="tstate"><span class="tile typed" aria-hidden="true">P</span><b class="cap">Typed</b><span class="ts-d">Brighter line</span></div>
+          <div class="tstate"><span class="tile correct" aria-hidden="true">A</span><b class="cap">Correct</b><span class="ts-d">Emerald&nbsp;◆</span></div>
+          <div class="tstate"><span class="tile present" aria-hidden="true">T</span><b class="cap">Present</b><span class="ts-d">Citrine&nbsp;○</span></div>
+          <div class="tstate"><span class="tile absent" aria-hidden="true">D</span><b class="cap">Absent</b><span class="ts-d">Smoke&nbsp;—</span></div>
+        </div>
+        <ul class="hm-legend">
+          <li><i class="hm hm-c" aria-hidden="true"></i><span><b>Diamond</b>: right letter, right place</span></li>
+          <li><i class="hm hm-p" aria-hidden="true"></i><span><b>Ring</b>: in the word, wrong place</span></li>
+          <li><i class="hm hm-a" aria-hidden="true"></i><span><b>Bar</b>: not in the word</span></li>
+        </ul>
+        <div class="key-states">
+          <span class="comp-l cap">Keyboard keys</span>
+          <div class="key-row">
+            <div class="ks"><span class="key" aria-hidden="true">Q</span><span class="ts-d">Unused</span></div>
+            <div class="ks"><span class="key correct" aria-hidden="true">A</span><span class="ts-d">Correct</span></div>
+            <div class="ks"><span class="key present" aria-hidden="true">T</span><span class="ts-d">Present</span></div>
+            <div class="ks"><span class="key absent" aria-hidden="true">C</span><span class="ts-d">Absent</span></div>
+          </div>
+          <p class="ts-d">Keys carry the state flat, with no hallmark, so the board stays the hero. Absent keys sink back and their letters dim.</p>
+        </div>
+        <div class="gems">
+          <span class="comp-l cap">Game gems</span>
+          <ul class="gem-list">
+            <li style="--acc:var(--sapphire)"><span class="glyph" data-g="nh" aria-hidden="true"></span><span class="gem-t"><b>Number Hunt</b><span>Sapphire · dial glyph</span></span><span class="gem-sw" aria-hidden="true"></span></li>
+            <li style="--acc:var(--emerald)"><span class="glyph" data-g="fl" aria-hidden="true"></span><span class="gem-t"><b>Five Letters</b><span>Emerald · five-stone glyph</span></span><span class="gem-sw" aria-hidden="true"></span></li>
+            <li style="--acc:var(--garnet)"><span class="glyph" data-g="gl" aria-hidden="true"></span><span class="gem-t"><b>Grid Lock</b><span>Garnet · lattice glyph</span></span><span class="gem-sw" aria-hidden="true"></span></li>
+            <li class="next"><span class="glyph" data-g="next" aria-hidden="true"></span><span class="gem-t"><b>Next game</b><span>Amethyst, topaz, tourmaline… one gem each</span></span></li>
+          </ul>
+          <p class="ts-d">A game's gem tints only its glyph, its progress arc and its tab diamond. Every game's tiles keep the shared emerald / citrine / smoke triad.</p>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="panel">
+        <div class="ph"><span class="ph-idx">2.4</span><h3>Buttons</h3><p>Square-shouldered, 4px radius, wide caps. The metal is saved for the one action that matters on each screen.</p></div>
+        <div class="btn-demo">
+          <div class="bd"><button class="btn btn-primary" type="button">Share result</button><span class="bd-l"><b>Primary</b>Champagne metal at night, midnight lacquer by day</span></div>
+          <div class="bd"><button class="btn btn-secondary" type="button">View board</button><span class="bd-l"><b>Secondary</b>Hairline in metal, ink label</span></div>
+          <div class="bd"><button class="btn btn-accent" type="button">Resume</button><span class="bd-l"><b>Accent</b>Emerald jewel. Used for continuing play</span></div>
+          <div class="bd"><button class="btn" type="button" disabled>Locked</button><span class="bd-l"><b>Disabled</b>Dashed hairline, faint ink</span></div>
+        </div>
+        <div class="btn-sizes">
+          <span class="btn btn-primary btn-sm">Play</span><span class="btn btn-accent btn-sm">Resume</span><span class="btn btn-secondary btn-sm">Results</span>
+          <span class="bd-l">Compact 28px for use inside cards</span>
+        </div>
+      </div>
+
+      <!-- Components -->
+      <div class="panel span-2">
+        <div class="ph"><span class="ph-idx">2.5</span><h3>Components</h3></div>
+        <div class="comp-grid">
+          <div class="comp"><span class="comp-l cap">Game card · done</span>
+            <article class="gcard" style="--acc:var(--sapphire)">
+              <span class="glyph" data-g="nh" aria-hidden="true"></span>
+              <div class="gc-top"><h4 class="gc-name">Number Hunt</h4><span class="state cap"><i class="hm hm-c"></i>Done</span></div>
+              <p class="gc-desc">Find the number 1–100 in 7 guesses</p>
+              <div class="gc-foot"><span class="gc-score mono">3/7 · <b>80</b> pts</span><span class="gc-link cap">Results <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg></span></div>
+            </article>
+          </div>
+          <div class="comp"><span class="comp-l cap">Leaderboard row · you</span>
+            <ol class="lb" id="lbDemo"></ol>
+          </div>
+          <div class="comp"><span class="comp-l cap">Spoiler wall · locked</span>
+            <div class="sealed" role="group" aria-label="Spoiler wall">
+              <div class="sealed-ghost" aria-hidden="true" data-ghost="4"></div>
+              <div class="sealed-front">
+                <span class="seal" data-g="seal" aria-hidden="true"></span>
+                <div class="sealed-t"><span class="sealed-cap cap">Five Letters · friends</span><span class="sealed-msg">Finish to see how your friends did</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="comp"><span class="comp-l cap">Share · in-app trace and plain text</span>
+            <div class="share-demo">
+              <div class="trace" role="img" aria-label="Trace: lower, higher, correct">
+                <div class="tm"><span class="mark l" data-i="down" aria-hidden="true"></span><span aria-hidden="true">lower</span></div>
+                <div class="tm"><span class="mark h" data-i="up" aria-hidden="true"></span><span aria-hidden="true">higher</span></div>
+                <div class="tm"><span class="mark c" data-i="gem" aria-hidden="true"></span><span aria-hidden="true">correct</span></div>
+              </div>
+              <div class="bubble">Daily Nº 214 · Number Hunt
+3/7 · 80 pts
+▼ ▲ ◆</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Instruments -->
+      <div class="panel">
+        <div class="ph"><span class="ph-idx">2.6</span><h3>Instruments</h3><p>Streak and countdown are drawn as subdials. They are the most watch-like parts of the system.</p></div>
+        <div class="inst">
+          <div class="inst-row">
+            <div class="inst-dial" style="width:80px;height:80px"><svg viewBox="0 0 100 100" data-cx="streak" aria-hidden="true"></svg><span class="cx-v"><span class="inst-big">5</span></span></div>
+            <div class="inst-t"><span class="cap">Streak badge</span><span class="read">5 days</span><div class="chips"><span class="chip"><i class="hm"></i>5</span><span class="chip"><i class="hm"></i>12</span></div></div>
+          </div>
+          <div class="inst-row">
+            <div class="inst-dial" style="width:80px;height:80px"><svg viewBox="0 0 100 100" data-cx="next" aria-hidden="true"></svg><span class="cx-v"><span class="cx-stack" style="font-size:14px">7:42<small>10s</small></span></span></div>
+            <div class="inst-t"><span class="cap">Countdown · next edition</span><span class="read">7:42:10</span><p>The reserve arc drains toward 00:00</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Motion -->
+      <div class="panel span-2">
+        <div class="ph"><span class="ph-idx">2.7</span><h3>Motion · the turn</h3><p>The signature move is Wordle's flip, with one addition: as each stone turns face up, a single sheen runs across it, like light on a watch crystal.</p></div>
+        <div class="motion">
+          <div class="motion-stage">
+            <div class="motion-row" id="demoRow" role="img" aria-label="TARDY: T present, A correct, R correct, D absent, Y correct">
+              <span class="tile present" aria-hidden="true">T</span><span class="tile correct" aria-hidden="true">A</span><span class="tile correct" aria-hidden="true">R</span><span class="tile absent" aria-hidden="true">D</span><span class="tile correct" aria-hidden="true">Y</span>
+            </div>
+            <button class="btn btn-secondary" type="button" id="replay"><span data-i="replay" aria-hidden="true"></span>Replay</button>
+          </div>
+          <ul class="motion-spec">
+            <li><b class="cap">Turn</b><span><span class="mono">640ms</span> · rotateX, eased <span class="mono">(.4, 0, .2, 1)</span></span></li>
+            <li><b class="cap">Stagger</b><span><span class="mono">150ms</span> per tile, left to right</span></li>
+            <li><b class="cap">Face swap</b><span>Exactly edge-on at 90°. The hallmark and girdle arrive with the colour</span></li>
+            <li><b class="cap">Sheen</b><span><span class="mono">520ms</span> sweep from the moment of the swap, then gone</span></li>
+            <li><b class="cap">Reduced</b><span>Honours <span class="mono">prefers-reduced-motion</span>: a <span class="mono">260ms</span> cross-fade with no turn and no sheen</span></li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================== NOTES ============================== -->
+  <section class="sec" id="notes" aria-labelledby="h-notes">
+    <div class="sec-head">
+      <span class="sec-idx" aria-hidden="true">III</span>
+      <h2 id="h-notes">Notes</h2>
+      <span class="sec-rule" aria-hidden="true"></span>
+      <p class="sec-note cap">Signature moments · tweak knobs</p>
+    </div>
+    <div class="notes">
+      <div class="panel">
+        <div class="ph"><span class="ph-idx">3.1</span><h3>Signature moments</h3></div>
+        <ol class="moments">
+          <li><span class="n" aria-hidden="true">i</span><b>Result reveal</b><p>The last tile turns. Then the score dial winds from 0, lighting its indices one at a time (900ms), and the Bodoni "80" lands last. One sheen crosses the crystal. No confetti.</p></li>
+          <li><span class="n" aria-hidden="true">ii</span><b>Share</b><p>In the app the trace is set like a row of stones. The copied text stays plain so it survives any group chat: <code>Daily Nº 214 · Number Hunt 3/7 · 80 ▼▲◆</code></p></li>
+          <li><span class="n" aria-hidden="true">iii</span><b>Daily rollover</b><p>All day the reserve complication drains toward midnight. At 00:00 the edition number clicks over like a date wheel (Nº 214 → 215) and every card goes back to unlit tiles.</p></li>
+          <li><span class="n" aria-hidden="true">iv</span><b>Rank change</b><p>Rows move like a date wheel: one crisp 240ms step with no bounce. The Roman numeral turns over and the gap readout ("16 pts behind Priya") counts again in mono.</p></li>
+          <li><span class="n" aria-hidden="true">v</span><b>Spoiler wall</b><p>Friends' results sit behind a frosted caseback stamped with a lock hallmark. You can see colour but never letters. Finishing lifts the frost from left to right with the same sheen as the flip.</p></li>
+          <li><span class="n" aria-hidden="true">vi</span><b>Two editions</b><p>Night is the default: blue-black and champagne. Day is an opaline silver dial with brushed-gold hairlines. The stones are cut the same way in both, so a share grid reads the same in either.</p></li>
+        </ol>
+      </div>
+      <div class="panel">
+        <div class="ph"><span class="ph-idx">3.2</span><h3>Tweak knobs</h3></div>
+        <div>
+          <div class="knob"><div class="knob-h"><b>Facet depth</b><span>now 65%</span></div><p>From flat Wordle fills to a full step-cut with a sheen on every tile.</p><div class="kscale" aria-hidden="true"><i style="--at:65%"></i></div><div class="kends cap"><span>Flat</span><span>Full jewel</span></div></div>
+          <div class="knob"><div class="knob-h"><b>Metal</b><span>champagne</span></div><p>No metal (ink hairlines), cool steel, or champagne gold. This sets how "luxury" the board reads.</p><div class="kscale" aria-hidden="true"><i style="--at:85%"></i></div><div class="kends cap"><span>None</span><span>Steel</span><span>Gold</span></div></div>
+          <div class="knob"><div class="knob-h"><b>Serif presence</b><span>tiles + numerals</span></div><p>Pull Bodoni back to display only and use Archivo Expanded for tile capitals. Sportier and a little more legible.</p><div class="kscale" aria-hidden="true"><i style="--at:80%"></i></div><div class="kends cap"><span>Display only</span><span>Everywhere</span></div></div>
+          <div class="knob"><div class="knob-h"><b>Dial density</b><span>high</span></div><p>Complications, Roman ranks and vernier scales, or plain numerals for a calmer screen closer to Wordle.</p><div class="kscale" aria-hidden="true"><i style="--at:78%"></i></div><div class="kends cap"><span>Plain</span><span>Chronograph</span></div></div>
+          <div class="knob"><div class="knob-h"><b>Night depth</b><span>midnight blue</span></div><p>Blue-black with a faint sapphire glow, or true OLED black with no glow for the starkest version.</p><div class="kscale" aria-hidden="true"><i style="--at:35%"></i></div><div class="kends cap"><span>Midnight</span><span>OLED black</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot cap">
+    <span>Nocturne · Daily concept board</span>
+    <span>Wordle, elevated · Night &amp; Day editions</span>
+    <span>Monday, October 5</span>
+  </footer>
+</main>
+
+<script>
+(() => {
+  /* ---------------- theme ---------------- */
+  const root = document.documentElement;
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const btn = document.getElementById('themeToggle');
+  const label = document.getElementById('tgLabel');
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : mq.matches;
+  function sync(){
+    const d = isDark();
+    btn.dataset.dark = String(d);
+    label.textContent = d ? 'Night' : 'Day';
+    btn.setAttribute('aria-label', 'Edition: ' + (d ? 'Night' : 'Day') + '. Switch to ' + (d ? 'Day' : 'Night') + ' edition');
+  }
+  btn.addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; sync(); });
+  if (mq.addEventListener) mq.addEventListener('change', sync); else if (mq.addListener) mq.addListener(sync);
+  window.addEventListener('hashchange', () => {
+    const h = location.hash.slice(1);
+    if (h === 'light' || h === 'dark') { root.dataset.theme = h; sync(); }
+  });
+  sync();
+
+  /* ---------------- icons ---------------- */
+  const S = (vb, body, extra='') => `<svg viewBox="${vb}" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" ${extra}>${body}</svg>`;
+  const OCT = '<path class="g-oct" d="M10.5 1.5h15l9 9v15l-9 9h-15l-9-9v-15z"/>';
+  const ICON = {
+    back:  S('0 0 24 24','<path d="M15 5l-7 7 7 7" stroke-width="1.6"/>'),
+    close: S('0 0 24 24','<path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke-width="1.5"/>'),
+    help:  S('0 0 24 24','<circle cx="12" cy="12" r="8.5" stroke-width="1.3"/><path d="M9.7 9.6a2.4 2.4 0 0 1 4.6.9c0 1.6-2.3 1.9-2.3 3.4" stroke-width="1.4"/><circle cx="12" cy="16.8" r=".7" fill="currentColor" stroke="none"/>'),
+    share: S('0 0 24 24','<path d="M12 4v11M8 8l4-4 4 4M5.5 12.5V19.5h13v-7" stroke-width="1.6"/>'),
+    lock:  S('0 0 24 24','<rect x="5.5" y="10.5" width="13" height="9.5" rx="1.5" stroke-width="1.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5M12 14.3v2.3" stroke-width="1.5"/>'),
+    down:  S('0 0 24 24','<path d="M7 9.5l5 5 5-5" stroke-width="2"/>'),
+    up:    S('0 0 24 24','<path d="M7 14.5l5-5 5 5" stroke-width="2"/>'),
+    gem:   '<svg viewBox="0 0 24 24"><path d="M12 5.5 18.5 12 12 18.5 5.5 12z" fill="currentColor"/></svg>',
+    replay:S('0 0 24 24','<path d="M5 12a7 7 0 1 0 2.1-5" stroke-width="1.6"/><path d="M5 4.5V8h3.5" stroke-width="1.6"/>'),
+    del:   S('0 0 24 24','<path d="M8.5 5.5H20v13H8.5L3 12z" stroke-width="1.4"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5" stroke-width="1.4"/>'),
+    today: S('0 0 24 24','<circle cx="12" cy="12" r="8.5" stroke-width="1.3"/><path d="M12 3.5v2M20.5 12h-2M12 20.5v-2M3.5 12h2" stroke-width="1.3"/><path d="M12 12l3.6-3.6" stroke-width="1.5"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>'),
+    board: S('0 0 24 24','<path d="M3.5 20h17M9.25 20V7.5h5.5V20M3.5 20v-7.5h5.75M14.75 20v-10h5.75V20" stroke-width="1.3"/>'),
+    me:    S('0 0 24 24','<circle cx="12" cy="9" r="3.6" stroke-width="1.3"/><path d="M5 20c1.2-3.6 3.9-5.3 7-5.3s5.8 1.7 7 5.3" stroke-width="1.3"/>'),
+  };
+  const GLYPH = {
+    nh: `<svg viewBox="0 0 36 36">${OCT}<circle cx="18" cy="18" r="8" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M18 10v2.2M26 18h-2.2M18 26v-2.2M10 18h2.2" stroke="currentColor" stroke-width="1.1"/><path d="M18 18l4.4-4.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="18" cy="18" r="1.5" fill="currentColor"/></svg>`,
+    fl: `<svg viewBox="0 0 36 36">${OCT}${[0,1,2,3,4].map(i => `<rect x="${(5.4 + i*5.3).toFixed(1)}" y="15.6" width="4.4" height="4.8" rx=".5" fill="${[1,3,4].includes(i)?'currentColor':'none'}" stroke="currentColor" stroke-width=".9"/>`).join('')}</svg>`,
+    gl: `<svg viewBox="0 0 36 36">${OCT}${[0,1,2].map(r => [0,1,2].map(c => `<rect x="${(10.2 + c*5.4).toFixed(1)}" y="${(10.2 + r*5.4).toFixed(1)}" width="4.2" height="4.2" fill="${r===c?'currentColor':'none'}" stroke="currentColor" stroke-width=".9"/>`).join('')).join('')}</svg>`,
+    next: `<svg viewBox="0 0 36 36"><path d="M10.5 1.5h15l9 9v15l-9 9h-15l-9-9v-15z" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2.2 2.4"/><path d="M18 13.5v9M13.5 18h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`,
+    seal: `<svg viewBox="0 0 36 36">${OCT}<g transform="translate(6 6)" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="6" y="10.5" width="12" height="9" rx="1.4"/><path d="M8.7 10.5V8.2a3.3 3.3 0 0 1 6.6 0v2.3M12 14.2v2.2"/></g></svg>`,
+  };
+  document.querySelectorAll('[data-i]').forEach(el => { el.innerHTML = ICON[el.dataset.i] || ''; });
+  document.querySelectorAll('[data-g]').forEach(el => { el.innerHTML = GLYPH[el.dataset.g] || ''; });
+
+  /* ---------------- status bar + tab bar ---------------- */
+  const SB = `<span class="sb-time">4:17</span><span class="sb-island"></span><span class="sb-icons" aria-hidden="true">
+    <svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx=".7" fill="currentColor"/><rect x="5" y="5.5" width="3" height="6.5" rx=".7" fill="currentColor"/><rect x="10" y="3" width="3" height="9" rx=".7" fill="currentColor"/><rect x="15" y="0" width="3" height="12" rx=".7" fill="currentColor"/></svg>
+    <svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 11.2 5.7 8.7a3.3 3.3 0 0 1 4.6 0z" fill="currentColor"/><path d="M3.5 6.4a6.4 6.4 0 0 1 9 0M1.3 4.1a9.5 9.5 0 0 1 13.4 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".45"/><rect x="2.5" y="2.5" width="15" height="8" rx="2" fill="currentColor"/><path d="M25 4.5v4c.9-.3 1.5-1.1 1.5-2s-.6-1.7-1.5-2z" fill="currentColor" opacity=".45"/></svg></span>`;
+  document.querySelectorAll('.sb').forEach(el => { el.innerHTML = SB; });
+  document.querySelectorAll('.tabbar').forEach(el => {
+    const on = el.dataset.on;
+    el.innerHTML = [['today','Today'],['board','Leaderboard'],['me','Me']].map(([k,t]) =>
+      `<span class="tab${k===on?' on':''}"${k===on?' aria-current="page"':''}>${ICON[k]}<span class="cap">${t}</span></span>`).join('');
+  });
+
+  /* ---------------- dial geometry ---------------- */
+  const polar = (cx, cy, r, deg) => { const a = (deg - 90) * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const f = n => n.toFixed(2);
+  function ticks({n, cx, cy, rOut, rIn, rMaj, major = 0, lit = 0, cls}){
+    let s = '';
+    for (let i = 0; i < n; i++){
+      const deg = i * 360 / n, mj = major && i % major === 0;
+      const [x1,y1] = polar(cx, cy, rOut, deg), [x2,y2] = polar(cx, cy, mj ? rMaj : rIn, deg);
+      s += `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" class="${cls}${i < lit ? ' lit' : ''}${mj ? ' mj' : ''}"/>`;
+    }
+    return s;
+  }
+  function arc(cx, cy, r, a0, a1){
+    const [x0,y0] = polar(cx, cy, r, a0), [x1,y1] = polar(cx, cy, r, a1);
+    return `M${f(x0)} ${f(y0)} A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${f(x1)} ${f(y1)}`;
+  }
+  const CX = {
+    today(){
+      let s = '';
+      [[8,112],[128,232],[248,352]].forEach(([a,b]) => { s += `<path class="cx-track" d="${arc(50,50,42,a,b)}"/>`; });
+      s += `<path class="cx-on sapph" d="${arc(50,50,42,8,112)}"/>`;          /* Number Hunt — done */
+      s += `<path class="cx-on emer" d="${arc(50,50,42,128,128 + 104/3)}"/>`;  /* Five Letters — 2 of 6 */
+      return s + `<circle class="cx-ring" cx="50" cy="50" r="33"/>`;
+    },
+    streak(){ return ticks({n:10, cx:50, cy:50, rOut:46, rIn:36, lit:5, cls:'cx-tk'}) + `<circle class="cx-ring" cx="50" cy="50" r="30"/>`; },
+    next(){
+      const frac = (7*3600 + 42*60 + 10) / 86400;
+      return ticks({n:48, cx:50, cy:50, rOut:47, rIn:43.5, rMaj:39.5, major:12, cls:'cx-mt'})
+        + `<circle class="cx-ring" cx="50" cy="50" r="34"/><path class="cx-on metal" d="${arc(50,50,34,0,360*frac)}"/>`;
+    }
+  };
+  document.querySelectorAll('svg[data-cx]').forEach(svg => { svg.innerHTML = CX[svg.dataset.cx](); });
+
+  /* result dial: 100 indices, 80 lit, sapphire hand-arc */
+  (function(){
+    const svg = document.getElementById('resDial');
+    let s = ticks({n:100, cx:100, cy:100, rOut:97, rIn:91, rMaj:85, major:10, lit:80, cls:'tk'});
+    s += `<circle class="dial-track" cx="100" cy="100" r="78"/>`;
+    s += `<circle class="dial-arc" cx="100" cy="100" r="78" pathLength="100" transform="rotate(-90 100 100)"/>`;
+    const [mx,my] = polar(100,100,78,288);
+    s += `<path class="dial-idx" d="M${f(mx)} ${f(my-4.5)} l4.5 4.5 -4.5 4.5 -4.5 -4.5z"/>`;
+    [['25',90],['50',180],['75',270]].forEach(([t,a]) => { const [x,y] = polar(100,100,69,a); s += `<text class="dial-lab" x="${f(x)}" y="${f(y)}" text-anchor="middle" dominant-baseline="central">${t}</text>`; });
+    svg.innerHTML = s;
+  })();
+
+  /* hero dial */
+  (function(){
+    const svg = document.getElementById('heroDial');
+    const r = 167, L = 2 * Math.PI * r * 0.992;
+    let s = ticks({n:120, cx:200, cy:200, rOut:197, rIn:191, rMaj:183, major:10, cls:'hd-tk'});
+    s += `<circle class="hd-ring" cx="200" cy="200" r="178"/><circle class="hd-ring" cx="200" cy="200" r="156"/>`;
+    s += `<defs><path id="hdPath" d="M${200-r} 200 a${r} ${r} 0 1 1 ${2*r} 0 a${r} ${r} 0 1 1 ${-2*r} 0"/></defs>`;
+    s += `<text class="hd-text"><textPath href="#hdPath" textLength="${f(L)}" lengthAdjust="spacing">DAILY · NOCTURNE · MONDAY 5 OCTOBER · Nº 214 · NUMBER HUNT · FIVE LETTERS · GRID LOCK · </textPath></text>`;
+    s += `<path class="hd-idx" d="M200 4 l5 5 -5 5 -5 -5z"/>`;
+    svg.innerHTML = s;
+  })();
+
+  /* ---------------- Five Letters board + keyboard ---------------- */
+  const ROMAN = ['I','II','III','IV','V','VI'];
+  const ST = {c:'correct', p:'present', a:'absent'};
+  (function(){
+    const rows = [
+      {w:'CRANE', s:'appaa'},
+      {w:'TARDY', s:'pccac', flip:true},
+      {w:'PAR', now:true},
+      {}, {}, {}
+    ];
+    document.getElementById('board').innerHTML = rows.map((r, i) => {
+      const w = r.w || '';
+      let tiles = '';
+      for (let j = 0; j < 5; j++){
+        const ch = w[j] || '';
+        if (r.s){
+          tiles += `<span class="tile ${ST[r.s[j]]}${r.flip ? ' flip' : ''}"${r.flip ? ` style="--d:${60 + j*80}ms;--dur:460ms"` : ''}>${ch}</span>`;
+        } else if (ch){
+          tiles += `<span class="tile typed">${ch}</span>`;
+        } else {
+          tiles += `<span class="tile${r.now && j === w.length ? ' cursor' : ''}"></span>`;
+        }
+      }
+      const lab = r.s ? `Guess ${i+1}, ${w}: ` + [...w].map((c, j) => `${c} ${ST[r.s[j]]}`).join(', ')
+                : w ? `Guess ${i+1}, typing ${w.split('').join(' ')}` : `Guess ${i+1}, empty`;
+      return `<div class="brow${r.now ? ' now' : ''}" role="img" aria-label="${lab}"><span class="ridx" aria-hidden="true">${ROMAN[i]}</span>${tiles}</div>`;
+    }).join('');
+
+    const KS = {A:'correct', R:'correct', Y:'correct', T:'present', C:'absent', N:'absent', E:'absent', D:'absent'};
+    const KR = ['QWERTYUIOP', 'ASDFGHJKL', '+ZXCVBNM-'];
+    document.getElementById('kb').innerHTML = KR.map((row, ri) => {
+      let h = ri === 1 ? '<span class="sp"></span>' : '';
+      for (const ch of row){
+        if (ch === '+') h += '<span class="key wide">Enter</span>';
+        else if (ch === '-') h += `<span class="key wide" aria-label="Delete">${ICON.del}</span>`;
+        else h += `<span class="key ${KS[ch] || ''}" aria-label="${ch}${KS[ch] ? ', ' + KS[ch] : ''}">${ch}</span>`;
+      }
+      if (ri === 1) h += '<span class="sp"></span>';
+      return `<div class="kr">${h}</div>`;
+    }).join('');
+  })();
+
+  /* ---------------- friends (Number Hunt) ---------------- */
+  (function(){
+    const FR = [
+      {n:'Priya',  g:'2/7', p:87, t:'hc'},
+      {n:'Ashwin', g:'3/7', p:80, t:'lhc', you:true},
+      {n:'Marco',  g:'5/7', p:60, t:'hlhlc'},
+      {n:'Jess',   g:'X/7', p:0,  t:'hlhlhlh', fail:true},
+      {n:'Dev',    s:'Playing…', hm:'p'},
+      {n:'Sam',    s:'Not played yet', hm:'a', idle:true},
+    ];
+    document.getElementById('friends').innerHTML = FR.map(r => {
+      const av = `<span class="av${r.you ? ' you' : ''}" aria-hidden="true">${r.n[0]}</span>`;
+      const nm = `<span class="fr-n">${r.n}${r.you ? '<span class="you-tag cap">you</span>' : ''}</span>`;
+      if (r.s) return `<li class="fr${r.idle ? ' idle' : ''}">${av}${nm}<span class="fs"><i class="hm hm-${r.hm}" aria-hidden="true"></i>${r.s}</span></li>`;
+      const trace = `<span class="ft" aria-hidden="true">${[...r.t].map(c => `<i class="${c}"></i>`).join('')}</span>`;
+      return `<li class="fr${r.you ? ' you' : ''}${r.fail ? ' fail' : ''}" aria-label="${r.n}${r.you ? ' (you)' : ''}: ${r.g}, ${r.p} points">${av}${nm}${trace}<span class="fg">${r.g}</span><span class="fp">${r.p}</span></li>`;
+    }).join('');
+  })();
+
+  /* ---------------- leaderboard ---------------- */
+  (function(){
+    const LB = [
+      {rk:'I',   num:1, n:'Priya',  pts:247, meta:'6 played · streak <b>12</b>', first:true},
+      {rk:'II',  num:2, n:'Ashwin', pts:231, meta:'streak <b>5</b>', you:true},
+      {rk:'III', num:3, n:'Marco',  pts:198},
+      {rk:'IV',  num:4, n:'Jess',   pts:156},
+      {rk:'V',   num:5, n:'Dev',    pts:140},
+      {rk:'–',   num:0, n:'Sam',    pts:0, meta:'Hasn’t played', idle:true},
+    ];
+    const row = r => `<li class="lbr lbgrid${r.you ? ' you' : ''}${r.idle ? ' idle' : ''}${r.first ? ' first' : ''}" aria-label="${r.num ? 'Rank ' + r.num : 'Unranked'}, ${r.n}${r.you ? ' (you)' : ''}, ${r.pts} points">
+        <span class="rk" aria-hidden="true">${r.rk}</span>
+        <span class="av${r.you ? ' you' : ''}" aria-hidden="true">${r.n[0]}</span>
+        <div class="who" aria-hidden="true"><span class="nm">${r.n}${r.you ? '<span class="you-tag cap">you</span>' : ''}</span>${r.meta ? `<span class="meta">${r.meta}</span>` : ''}<span class="vbar" style="--v:${(r.pts/250).toFixed(3)}"><i></i></span></div>
+        <span class="pts" aria-hidden="true">${r.pts}<small>pts</small></span>
+      </li>`;
+    document.getElementById('lb').innerHTML = LB.map(row).join('');
+    document.getElementById('lbDemo').innerHTML = row(LB[1]);
+  })();
+
+  /* ---------------- spoiler ghosts ---------------- */
+  document.querySelectorAll('[data-ghost]').forEach(el => {
+    const pats = ['ccpac','pacca','ccccc','apcpa'];
+    el.innerHTML = Array.from({length: +el.dataset.ghost}, (_, i) =>
+      `<div class="gr"><i class="gav"></i><span class="g5">${[...pats[i % pats.length]].map(c => `<i class="${c}"></i>`).join('')}</span><i class="gb"></i></div>`).join('');
+  });
+
+  /* ---------------- palette ---------------- */
+  function lum(hex){
+    const n = parseInt(hex.slice(1), 16);
+    const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+    return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+  }
+  const ratio = (a, b) => { const A = lum(a), B = lum(b); return (Math.max(A, B) + .05) / (Math.min(A, B) + .05); };
+  const PAL = {
+    night: { bg:'#0A0E17', sw:[
+      {r:'Board', h:'#05070C'}, {r:'Screen', h:'#0A0E17'}, {r:'Surface', h:'#111622'}, {r:'Raised · keys', h:'#1B2335'},
+      {r:'Ink · ivory', h:'#EEE8DA', t:1}, {r:'Ink · muted', h:'#A9AFBD', t:1}, {r:'Ink · faint', h:'#7F8696', t:1}, {r:'Metal · champagne', h:'#D6BE8C', t:1},
+      {r:'Correct · emerald', h:'#157552', h2:'#0C4E37', ink:'#F3EEE2'}, {r:'Present · citrine', h:'#E8B95C', h2:'#C08A2A', ink:'#17120A'}, {r:'Absent · smoke quartz', h:'#4A443E', h2:'#2F2A26', ink:'#DDD5C7'},
+      {r:'Number Hunt · sapphire', h:'#7EA6F2', t:1}, {r:'Five Letters · emerald', h:'#4CC79A', t:1}, {r:'Grid Lock · garnet', h:'#E27A8A', t:1},
+    ]},
+    day: { bg:'#F6F6F2', sw:[
+      {r:'Board', h:'#E6E7E2'}, {r:'Screen', h:'#F6F6F2'}, {r:'Surface', h:'#FCFCF9'}, {r:'Raised · keys', h:'#E0E2DC'},
+      {r:'Ink · midnight', h:'#0F1828', t:1}, {r:'Ink · muted', h:'#4A5263', t:1}, {r:'Ink · faint', h:'#5C6270', t:1}, {r:'Metal · brushed gold', h:'#A88A4E', note:'hairlines, marks'}, {r:'Metal · ink', h:'#7A6232', t:1},
+      {r:'Correct · emerald', h:'#157552', h2:'#0C4E37', ink:'#F7F3EA'}, {r:'Present · citrine', h:'#E4B758', h2:'#C38F2C', ink:'#1A1407'}, {r:'Absent · smoke quartz', h:'#766C63', h2:'#5E564E', ink:'#FBF8F2'},
+      {r:'Number Hunt · sapphire', h:'#2B55A6', t:1}, {r:'Five Letters · emerald', h:'#11704F', t:1}, {r:'Grid Lock · garnet', h:'#A3324A', t:1},
+    ]}
+  };
+  document.querySelectorAll('[data-sw]').forEach(el => {
+    const P = PAL[el.dataset.sw];
+    el.innerHTML = P.sw.map(s => {
+      const bg = s.h2 ? `linear-gradient(140deg,rgba(255,255,255,.18),rgba(255,255,255,0) 50%),linear-gradient(172deg,${s.h},${s.h2})` : s.h;
+      let cr = '';
+      if (s.t) cr = `<span class="sw-cr">${ratio(s.h, P.bg).toFixed(1)}:1 on screen</span>`;
+      else if (s.ink){ const a = ratio(s.ink, s.h), b = ratio(s.ink, s.h2); cr = `<span class="sw-cr">letters ${Math.min(a,b).toFixed(1)}–${Math.max(a,b).toFixed(1)}:1</span>`; }
+      else if (s.note) cr = `<span class="sw-cr">${s.note}</span>`;
+      return `<div class="sw"><span class="sw-chip" style="background:${bg}"></span><span class="sw-role">${s.r}</span><span class="sw-hex">${s.h}${s.h2 ? ' → ' + s.h2 : ''}</span>${cr}</div>`;
+    }).join('');
+  });
+
+  /* ---------------- motion demo ---------------- */
+  const demo = document.getElementById('demoRow');
+  document.getElementById('replay').addEventListener('click', () => {
+    const tiles = [...demo.children];
+    tiles.forEach(t => t.classList.remove('flip'));
+    void demo.offsetWidth;
+    tiles.forEach((t, i) => { t.style.setProperty('--d', (i * 150) + 'ms'); t.style.setProperty('--dur', '640ms'); t.classList.add('flip'); });
+    const a = document.querySelector('#resDial .dial-arc');
+    if (a){ a.style.animation = 'none'; void a.getBoundingClientRect(); a.style.animation = ''; }
+  });
+})();
+</script>
+</body>
+</html>

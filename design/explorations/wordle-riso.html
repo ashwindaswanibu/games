@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riso Overprint</title>
+<meta name="description" content="Daily — style exploration: Wordle-elevated, re-inked as a risograph puzzle zine.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,100..900&family=Archivo:wdth,wght@62..125,300..800&family=Martian+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script>
+  (function () {
+    var h = location.hash;
+    if (h === '#light' || h === '#dark') document.documentElement.dataset.theme = h.slice(1);
+  })();
+</script>
+<style>
+/* =========================================================
+   RISO OVERPRINT — tokens
+   Every colour is a custom property. Light = natural stock,
+   dark = the same inks pulled on black stock.
+   ========================================================= */
+:root{
+  --stock:#F1EDE3;      /* natural paper */
+  --stock-2:#E7E1D3;    /* card stock / panels */
+  --keycap:#DCD5C5;     /* unused keyboard keys */
+  --edge:#B4AD9C;       /* empty tile edge, quiet rules */
+  --key:#1C2140;        /* key plate: text + outlines (13.4:1 on stock) */
+  --key-2:#4A5468;      /* soft key: secondary text (6.5:1) */
+  --on-key:#F1EDE3;
+
+  --pink:#FF48B0;       /* Fluoro Pink — brand, Number Hunt */
+  --green:#00A95C;      /* Riso Green — correct, Five Letters */
+  --sun:#FFB511;        /* Sunflower — present, streaks */
+  --slate:#5E695E;      /* Slate — absent */
+  --blue:#3255A4;       /* Medium Blue — Grid Lock, focus */
+
+  --on-pink:#1C2140;  --on-green:#1C2140; --on-sun:#1C2140;
+  --on-slate:#F1EDE3; --on-blue:#F1EDE3;
+
+  --island:#0E0F14;
+  --focus:#3255A4;
+  --dot:rgba(28,33,64,.30);          /* present: dot screen */
+  --hatch:rgba(241,237,227,.20);     /* absent: line screen */
+  --shade:rgba(28,33,64,.40);        /* halftone drop plates */
+  --tint:rgba(28,33,64,.16);         /* 15% key tint (disabled / redaction) */
+
+  --blend:multiply;                  /* inks overprint by multiplying on paper */
+  --grain-blend:multiply;
+  --grain-op:.3;
+  --grain-k:1;                       /* knob */
+  --mis:1;                           /* misregistration knob (0 = perfect register) */
+
+  /* per-drum misregistration: each ink is consistently off by its own amount, like a real pull */
+  --pk-x:2.1px;  --pk-y:1.6px;
+  --gr-x:1.8px;  --gr-y:-1.3px;
+  --sf-x:-1.6px; --sf-y:1.5px;
+  --sl-x:1.3px;  --sl-y:1.6px;
+  --bl-x:-1.7px; --bl-y:-1.2px;
+
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .11 0 0 0 0 .13 0 0 0 0 .25 0 0 0 -3 1.75'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23g)'/%3E%3C/svg%3E");
+  --tex-ink:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.6 1.84'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23m)'/%3E%3C/svg%3E");
+
+  --f-display:"Anybody", "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-text:"Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-mono:"Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --stock:#121214; --stock-2:#1C1C21; --keycap:#2A2A31; --edge:#4A4A54;
+    --key:#EFE9DB; --key-2:#A7A9B4; --on-key:#121214;
+    --pink:#FF5CB9; --green:#1EBF6E; --sun:#FFC02E; --slate:#56605A; --blue:#6AA4EC;
+    --on-pink:#121214; --on-green:#121214; --on-sun:#121214; --on-slate:#EFE9DB; --on-blue:#121214;
+    --island:#000000; --focus:#6AA4EC;
+    --dot:rgba(18,18,20,.34); --hatch:rgba(239,233,219,.16); --shade:rgba(239,233,219,.20); --tint:rgba(239,233,219,.16);
+    --blend:screen; --grain-blend:screen; --grain-op:.15;
+    --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .94 0 0 0 0 .91 0 0 0 0 .86 0 0 0 -3 1.75'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23g)'/%3E%3C/svg%3E");
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --stock:#121214; --stock-2:#1C1C21; --keycap:#2A2A31; --edge:#4A4A54;
+  --key:#EFE9DB; --key-2:#A7A9B4; --on-key:#121214;
+  --pink:#FF5CB9; --green:#1EBF6E; --sun:#FFC02E; --slate:#56605A; --blue:#6AA4EC;
+  --on-pink:#121214; --on-green:#121214; --on-sun:#121214; --on-slate:#EFE9DB; --on-blue:#121214;
+  --island:#000000; --focus:#6AA4EC;
+  --dot:rgba(18,18,20,.34); --hatch:rgba(239,233,219,.16); --shade:rgba(239,233,219,.20); --tint:rgba(239,233,219,.16);
+  --blend:screen; --grain-blend:screen; --grain-op:.15;
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .94 0 0 0 0 .91 0 0 0 0 .86 0 0 0 -3 1.75'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23g)'/%3E%3C/svg%3E");
+  color-scheme:dark;
+}
+
+/* =========================================================
+   Base
+   ========================================================= */
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--stock);overflow-x:clip}
+body{margin:0;background:var(--stock);color:var(--key);font:400 15px/1.5 var(--f-text);font-stretch:100%;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:clip}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;background-image:var(--grain);background-size:220px 220px;mix-blend-mode:var(--grain-blend);opacity:calc(var(--grain-op) * var(--grain-k))}
+h1,h2,h3,h4,p,ol,ul,dl,dd,figure{margin:0}
+ol,ul{padding:0;list-style:none}
+button{font:inherit;color:inherit}
+svg{display:block}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--f-mono);font-weight:500;letter-spacing:.02em}
+.caps{text-transform:uppercase;letter-spacing:.08em}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:4px}
+
+/* ---------- the ink system ----------
+   .ink  = an element whose fill is a separate colour drum (::before),
+           printed with mottled coverage and pushed out of register.
+   .ol   = key-plate outline printed on top (::after).            */
+.ink{position:relative;isolation:isolate}
+.ink::before,.tile::before,.key::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;z-index:-2;
+  background:var(--fill,transparent);
+  transform:translate(calc(var(--dx,0px) * var(--mis)),calc(var(--dy,0px) * var(--mis)));
+  -webkit-mask:var(--tex-ink) 0 0/180px 180px;mask:var(--tex-ink) 0 0/180px 180px;
+}
+.ol::after,.tile::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;border:1.5px solid var(--key);pointer-events:none}
+.i-pk{--fill:var(--pink);--dx:var(--pk-x);--dy:var(--pk-y);color:var(--on-pink)}
+.i-gr{--fill:var(--green);--dx:var(--gr-x);--dy:var(--gr-y);color:var(--on-green)}
+.i-sf{--fill:var(--sun);--dx:var(--sf-x);--dy:var(--sf-y);color:var(--on-sun)}
+.i-sl{--fill:var(--slate);--dx:var(--sl-x);--dy:var(--sl-y);color:var(--on-slate)}
+.i-bl{--fill:var(--blue);--dx:var(--bl-x);--dy:var(--bl-y);color:var(--on-blue)}
+.i-k {--fill:var(--key);color:var(--on-key)}
+.i-0 {--fill:var(--stock-2);color:var(--key-2)}
+
+/* overprint text: base plate + second drum on top, multiplied */
+.op{position:relative;display:inline-block;color:var(--blue)}
+.op::after{content:attr(data-t);position:absolute;left:0;top:0;color:var(--pink);mix-blend-mode:var(--blend);
+  transform:translate(calc(.045em * var(--mis)),calc(.03em * var(--mis)));pointer-events:none;white-space:nowrap}
+
+/* =========================================================
+   Board chrome
+   ========================================================= */
+.board{max-width:1700px;margin:0 auto;padding:0 clamp(16px,3vw,48px) 64px}
+.mast{position:relative;padding:clamp(18px,2.6vw,30px) 0 clamp(28px,3.6vw,44px);border-bottom:2px solid var(--key)}
+.mast-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px}
+.ctrl{display:flex;align-items:stretch;border:1.5px solid var(--key);height:22px}
+.ctrl i{display:block;width:22px;background:var(--c)}
+.ctrl i.t{background:radial-gradient(circle,var(--c) 1.1px,transparent 1.4px) 0 0/4px 4px}
+.ctrl i + i{border-left:1px solid var(--key)}
+.mast-kick{font-family:var(--f-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--key-2);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.mast-kick b{color:var(--key);font-weight:700}
+.theme-toggle{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:10px;height:40px;padding:0 16px 0 12px;border:1.5px solid var(--key);background:var(--stock);color:var(--key);border-radius:999px;font:600 12px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.theme-toggle:hover{background:var(--stock-2)}
+.theme-toggle .sw{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--key);background:linear-gradient(90deg,var(--key) 50%,transparent 50%)}
+.mast-title{font-family:var(--f-display);font-weight:900;font-stretch:56%;font-size:clamp(84px,15.5vw,236px);line-height:.8;letter-spacing:-.012em;text-transform:uppercase;margin:.2em 0 .12em -.02em}
+.mast-title .op::after{animation:register 1s cubic-bezier(.2,.8,.2,1) both}
+.mast-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px 48px;align-items:end}
+.mast-concept{font:500 clamp(18px,1.7vw,24px)/1.32 var(--f-text);font-stretch:92%;max-width:40ch;text-wrap:pretty}
+.mast-concept em{font-style:normal;background:linear-gradient(transparent 58%,color-mix(in srgb,var(--sun) 70%,transparent) 58% 92%,transparent 92%)}
+.mast-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-top:1.5px solid var(--key)}
+.mast-meta div{padding:10px 12px 10px 0;border-bottom:1px solid var(--edge)}
+.mast-meta dt{font:500 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--key-2);margin-bottom:6px}
+.mast-meta dd{font:600 14px/1.25 var(--f-text);font-stretch:90%}
+.reg{position:absolute;width:26px;height:26px;color:var(--key)}
+.reg.tr{right:0;top:clamp(70px,9vw,120px)}
+.reg.bl{left:-4px;bottom:-14px;background:var(--stock)}
+@keyframes register{from{transform:translate(.16em,.1em)}}
+
+.sec{padding-top:clamp(40px,5vw,72px)}
+.sec-head{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:end;gap:6px 18px;padding-bottom:14px;margin-bottom:28px;border-bottom:1.5px solid var(--key)}
+.sec-no{font:700 12px/1 var(--f-mono);letter-spacing:.08em;padding:6px 7px 5px;background:var(--key);color:var(--on-key);align-self:start;margin-top:6px}
+.sec-head h2{font-family:var(--f-display);font-weight:900;font-stretch:58%;font-size:clamp(44px,6vw,84px);line-height:.82;text-transform:uppercase;letter-spacing:-.005em}
+.sec-head p{grid-column:2;font-size:15px;color:var(--key-2);max-width:68ch}
+
+/* =========================================================
+   Phones
+   ========================================================= */
+.phones{display:grid;grid-template-columns:repeat(4,378px);gap:28px 24px;justify-content:center}
+@media (max-width:1679px){.phones{zoom:.88}}
+@media (max-width:1519px){.phones{zoom:.8}}
+@media (max-width:1359px){.phones{zoom:.7}}
+@media (max-width:1199px){.phones{zoom:1;grid-template-columns:repeat(2,378px)}}
+@media (max-width:839px){.phones{grid-template-columns:minmax(0,378px)}}
+
+.shot{position:relative;z-index:0;display:flex;flex-direction:column;gap:14px;min-width:0}
+.shot-cap{display:flex;align-items:center;gap:10px;min-height:28px}
+.shot-cap .idx{flex:none;display:grid;place-items:center;width:26px;height:26px;font:700 12px/1 var(--f-mono)}
+.shot-cap b{font-family:var(--f-display);font-weight:800;font-stretch:72%;font-size:22px;line-height:1;text-transform:uppercase}
+.shot-cap span.m{margin-left:auto;font:500 10px/1.2 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--key-2);text-align:right}
+
+.phone{position:relative;width:378px;max-width:100%;height:778px;padding:8px;border-radius:56px;border:1.5px solid var(--key);background:var(--stock-2)}
+.phone::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;transform:translate(12px,14px);background:radial-gradient(circle,var(--shade) 1.15px,transparent 1.5px) 0 0/5px 5px}
+.screen{position:relative;height:100%;border-radius:47px;overflow:hidden;background:var(--stock);display:flex;flex-direction:column;box-shadow:inset 0 0 0 1px var(--edge)}
+.sbar{flex:none;position:relative;height:48px;display:flex;align-items:center;justify-content:space-between;padding:4px 26px 0 32px;font:600 15px/1 var(--f-text);font-stretch:96%}
+.sbar .isl{position:absolute;left:50%;top:11px;width:98px;height:28px;margin-left:-49px;border-radius:20px;background:var(--island)}
+.sbar .ic{display:flex;gap:5px;align-items:center}
+.sbar svg{fill:currentColor}
+.body{flex:1;min-height:0;display:flex;flex-direction:column;padding:2px 16px 0}
+.homebar{position:absolute;left:50%;bottom:8px;width:124px;height:5px;margin-left:-62px;border-radius:3px;background:var(--key);opacity:.85}
+
+.tabbar{flex:none;position:relative;height:84px;display:grid;grid-template-columns:repeat(3,1fr);padding:8px 14px 26px;border-top:1.5px solid var(--key);background:var(--stock)}
+.tab{appearance:none;background:none;border:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--key-2);font:600 11px/1 var(--f-text);font-stretch:92%;letter-spacing:.02em;border-radius:10px}
+.tab .ti{position:relative;isolation:isolate;width:48px;height:28px;border-radius:14px;display:grid;place-items:center}
+.tab svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round}
+.tab.on{color:var(--key)}
+.tab.on .ti{color:var(--on-key)}
+.tab.on .ti::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--pink);z-index:-2;transform:translate(calc(var(--pk-x) * var(--mis)),calc(var(--pk-y) * var(--mis)))}
+.tab.on .ti::after{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--key);z-index:-1}
+
+/* shared top bars */
+.topbar{flex:none;display:grid;grid-template-columns:40px minmax(0,1fr) 40px;align-items:center;height:48px}
+.icon-btn{appearance:none;cursor:pointer;width:40px;height:40px;display:grid;place-items:center;border-radius:50%;border:1.5px solid var(--key);background:transparent;color:var(--key)}
+.icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+.topbar .t{display:flex;justify-content:center;align-items:center;gap:9px;font-family:var(--f-display);font-weight:800;font-stretch:80%;font-size:21px;line-height:1}
+
+/* game marks */
+.gm{flex:none;width:46px;height:46px;border-radius:4px;display:grid;place-items:center}
+.gm svg{width:28px;height:28px}
+.gm.xs{width:26px;height:26px;border-radius:3px}
+.gm.xs svg{width:17px;height:17px}
+
+/* avatars */
+.av{--sz:30px;flex:none;width:var(--sz);height:var(--sz);border-radius:50%;display:grid;place-items:center;font:800 13px/1 var(--f-display);font-stretch:96%}
+.av.ol::after{border-width:1.5px}
+.av.ghost{border:1.5px dashed var(--key-2);color:var(--key-2)}
+
+/* =========================================================
+   A — Today
+   ========================================================= */
+.apptop{display:flex;align-items:center;gap:10px;height:46px}
+.logo{font-family:var(--f-display);font-weight:900;font-stretch:84%;font-size:30px;line-height:1;letter-spacing:-.015em}
+.issue{font:500 9.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2);border:1px solid var(--key-2);border-radius:2px;padding:4px 5px 3px}
+.apptop .av{--sz:34px;margin-left:auto;font-size:15px}
+.date{font:500 10.5px/1 var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--key-2);margin:8px 0 6px}
+.greet .hl{margin-left:.06em}
+.greet{font-family:var(--f-display);font-weight:900;font-stretch:58%;font-size:56px;line-height:.86;text-transform:uppercase;letter-spacing:-.005em;margin-bottom:14px}
+.hl{position:relative;isolation:isolate;display:inline-block;color:var(--on-sun)}
+.hl::before{content:"";position:absolute;left:-.04em;right:-.07em;top:.02em;bottom:-.05em;z-index:-1;background:var(--sun);transform:translate(calc(var(--sf-x) * var(--mis)),calc(var(--sf-y) * var(--mis))) rotate(-1.2deg);-webkit-mask:var(--tex-ink) 0 0/180px 180px;mask:var(--tex-ink) 0 0/180px 180px}
+.strip{display:grid;grid-template-columns:1fr 1fr 1.18fr;border:1.5px solid var(--key);border-radius:4px}
+.strip .c{padding:9px 9px 8px;display:flex;flex-direction:column;justify-content:space-between;gap:6px;font:500 11.5px/1.2 var(--f-text);font-stretch:92%;min-width:0}
+.strip .c + .c{border-left:1.5px solid var(--key)}
+.strip b{font-weight:800}
+.pips{display:flex;gap:3px}
+.pips i{width:10px;height:10px;border:1.5px solid var(--key);border-radius:1px}
+.pips i.f{background:var(--key)}
+.burst{position:relative;isolation:isolate;display:grid;place-items:center;width:30px;height:30px;font:900 14px/1 var(--f-display);font-stretch:80%;color:var(--on-sun)}
+.burst svg{position:absolute;inset:0;width:100%;height:100%;z-index:-1;overflow:visible}
+.burst .b1{fill:var(--sun);transform:translate(calc(var(--sf-x) * var(--mis)),calc(var(--sf-y) * var(--mis)))}
+.burst .b2{fill:none;stroke:var(--key);stroke-width:4}
+.cd{font:700 15px/1 var(--f-mono);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.label{display:flex;align-items:center;gap:8px;font:500 10px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--key-2);margin:14px 0 9px}
+.label::after{content:"";flex:1;height:1.5px;background:var(--key);opacity:.9}
+.cards{display:flex;flex-direction:column;gap:10px}
+.gcard{display:grid;grid-template-columns:46px minmax(0,1fr);column-gap:12px;padding:11px 12px 10px;border:1.5px solid var(--key);border-radius:4px;background:var(--stock)}
+.gcard h3{font-family:var(--f-display);font-weight:800;font-stretch:76%;font-size:22px;line-height:1;margin:3px 0 4px}
+.gcard p{font-size:12.5px;line-height:1.3;color:var(--key-2)}
+.gfoot{grid-column:1/-1;display:flex;align-items:center;gap:9px;margin-top:9px;padding-top:8px;border-top:1px dashed var(--edge);min-height:42px}
+.state{font:700 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.state i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.state.open i{background:transparent;border:1.5px solid currentColor}
+.gsub{font:500 12px/1.2 var(--f-text);font-stretch:94%;color:var(--key-2);margin-top:4px}
+.stamp{flex:none;display:inline-block;padding:6px 8px 5px;font:700 10px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;border-radius:2px;transform:rotate(-4deg)}
+.gscore{font:600 13px/1 var(--f-text);font-stretch:94%;font-variant-numeric:tabular-nums}
+.gscore b{font-family:var(--f-display);font-weight:900;font-stretch:80%;font-size:19px;letter-spacing:-.01em}
+.marks{display:flex;gap:4px;margin-left:auto}
+.nm{width:20px;height:20px;border-radius:3px;display:grid;place-items:center}
+.nm svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:square;stroke-linejoin:miter}
+.nm.lg{width:38px;height:38px;border-radius:4px}
+.nm.lg svg{width:20px;height:20px;stroke-width:2.6}
+.prog{display:inline-flex;gap:3px;margin-left:4px}
+.prog{gap:2px}
+.prog i{width:9px;height:6px;border:1px solid var(--key-2);border-radius:1px}
+.prog i.f{background:var(--green);border-color:var(--key)}
+
+/* buttons */
+.btn{appearance:none;cursor:pointer;position:relative;isolation:isolate;display:inline-flex;align-items:center;justify-content:center;gap:9px;height:48px;padding:0 20px;border:0;background:transparent;border-radius:4px;font:700 13px/1 var(--f-text);font-stretch:118%;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;text-decoration:none}
+.btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.btn::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-2;background:var(--fill,transparent);transform:translate(calc(var(--dx,0px) * var(--mis)),calc(var(--dy,0px) * var(--mis)));-webkit-mask:var(--tex-ink) 0 0/180px 180px;mask:var(--tex-ink) 0 0/180px 180px}
+.btn::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none}
+.btn-primary{color:var(--on-key)}
+.btn-primary::before{background:var(--pink);transform:translate(calc(3px * var(--mis)),calc(3px * var(--mis)))}
+.btn-primary::after{background:var(--key)}
+.btn-primary:hover::before{transform:translate(calc(4.5px * var(--mis)),calc(4.5px * var(--mis)))}
+.btn-primary:active::before{transform:translate(0,0)}
+.btn-secondary{color:var(--key)}
+.btn-secondary::after{border:2px solid var(--key)}
+.btn-secondary:hover::before{background:var(--stock-2)}
+.btn-accent{color:var(--on-pink);--fill:var(--pink);--dx:var(--pk-x);--dy:var(--pk-y)}
+.btn-accent::after{border:1.5px solid var(--key)}
+.btn-disabled,.btn[aria-disabled="true"]{cursor:not-allowed;color:var(--key-2)}
+.btn-disabled::before{background:radial-gradient(circle,var(--tint) 1.2px,transparent 1.5px) 0 0/4px 4px;transform:none}
+.btn-disabled::after{border:1.5px dashed var(--key-2)}
+.btn-sm{height:34px;padding:0 13px;font-size:11px;gap:6px}
+.btn-sm svg{width:14px;height:14px}
+.btn-block{width:100%}
+.btn.i-gr{color:var(--on-green)} .btn.i-bl{color:var(--on-blue)}
+.btn.i-gr::after,.btn.i-bl::after{border:1.5px solid var(--key)}
+
+/* =========================================================
+   B — Play
+   ========================================================= */
+.play .body{padding:2px 6px 0}
+.play .topbar{padding:0 10px}
+.pmeta{display:flex;justify-content:space-between;align-items:center;margin:8px 12px 12px;font:500 10px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2)}
+.pmeta b{color:var(--key);font-weight:700}
+.board-g{display:grid;grid-template-rows:repeat(6,auto);gap:7px;width:min(100%,304px);margin:0 auto}
+.row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.tile{position:relative;isolation:isolate;aspect-ratio:1;display:grid;place-items:center;border-radius:3px;font-family:var(--f-display);font-weight:800;font-stretch:112%;font-size:29px;line-height:1;text-transform:uppercase;color:var(--key)}
+.tile::after{border:2px solid var(--edge)}
+.tile[data-s="typed"]::after{border:2.5px solid var(--key)}
+.tile[data-s="correct"],.tile[data-s="present"],.tile[data-s="absent"]{}
+.tile[data-s="correct"]::after,.tile[data-s="present"]::after,.tile[data-s="absent"]::after{border:1.5px solid var(--key)}
+[data-s="correct"]{--fill:var(--green);--dx:var(--gr-x);--dy:var(--gr-y);color:var(--on-green)}
+[data-s="present"]{--fill:radial-gradient(circle,var(--dot) .95px,transparent 1.3px) 0 0/4px 4px,var(--sun);--dx:var(--sf-x);--dy:var(--sf-y);color:var(--on-sun)}
+[data-s="absent"]{--fill:repeating-linear-gradient(135deg,var(--hatch) 0 1.2px,transparent 1.2px 5px),var(--slate);--dx:var(--sl-x);--dy:var(--sl-y);color:var(--on-slate)}
+.lockchip{display:flex;align-items:center;justify-content:center;gap:8px;margin:14px auto 0;padding:7px 12px 6px;border:1.5px dashed var(--key-2);border-radius:999px;font:500 9.5px/1.2 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--key-2);width:max-content;max-width:100%}
+.lockchip svg{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2}
+.kb{margin-top:auto;display:flex;flex-direction:column;gap:7px;padding:12px 0 28px}
+.kr{display:flex;gap:5px;justify-content:center}
+.kr.mid{padding:0 15px}
+.key{appearance:none;cursor:pointer;position:relative;isolation:isolate;flex:1 1 0;min-width:0;height:52px;border:0;border-radius:4px;background:transparent;display:grid;place-items:center;font:700 15px/1 var(--f-text);font-stretch:105%;padding:0}
+.key::before{transform:translate(calc(var(--dx,0px) * var(--mis) * .6),calc(var(--dy,0px) * var(--mis) * .6))}
+.key:not([data-s]){--fill:var(--keycap);color:var(--key)}
+.key.w{flex:1.55 1 0;font:700 9.5px/1 var(--f-mono);letter-spacing:.06em}
+.key svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+
+/* =========================================================
+   C — Result
+   ========================================================= */
+.result .topbar .t{font-size:21px}
+.hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:end;padding:12px 2px 16px;border-bottom:1.5px solid var(--key)}
+.score{position:relative;isolation:isolate;padding-right:6px}
+.score-n{display:block;position:relative;font-family:var(--f-display);font-weight:900;font-stretch:54%;font-size:150px;line-height:.74;letter-spacing:-.02em;color:var(--key);font-variant-numeric:tabular-nums}
+.score-n::before{content:attr(data-t);position:absolute;left:0;top:0;z-index:-1;color:var(--pink);transform:translate(calc(5px * var(--mis)),calc(4px * var(--mis)))}
+.score-u{display:block;margin-top:10px;font:700 10px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase}
+.hside{display:flex;flex-direction:column;gap:6px;padding-bottom:2px}
+.hside .k{font:500 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--key-2)}
+.guesses{font-family:var(--f-display);font-weight:900;font-stretch:70%;font-size:44px;line-height:.86;font-variant-numeric:tabular-nums}
+.guesses small{font-size:.55em;font-weight:800;color:var(--key-2)}
+.hside .marks{margin:6px 0 0;gap:6px}
+.legend3{display:flex;gap:6px;font:500 8.5px/1.2 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--key-2)}
+.legend3 span{width:38px;text-align:center}
+.share-row{padding:14px 0 6px}
+.fr-head{display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 4px}
+.fr-head h3{font-family:var(--f-display);font-weight:800;font-stretch:72%;font-size:22px;line-height:1}
+.fr-head span{font:500 9.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2)}
+.fr li{display:grid;grid-template-columns:30px minmax(0,1fr) auto 64px;align-items:center;gap:10px;height:43px;border-bottom:1px dashed var(--edge)}
+.fr li:last-child{border-bottom:0}
+.fr .nm-n{font:600 14px/1.1 var(--f-text);font-stretch:94%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.you{display:inline-block;margin-left:5px;font:700 8.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding:3px 4px 2px;border:1px solid var(--key);border-radius:2px;vertical-align:2px}
+.gp{display:flex;gap:2px}
+.gp i{width:5px;height:12px;border:1px solid var(--key-2);border-radius:1px}
+.gp i.f{background:var(--key);border-color:var(--key)}
+.gp i.w{background:var(--green);border-color:var(--key)}
+.gp i.x{background:var(--slate);border-color:var(--key)}
+.fr .res{text-align:right;display:flex;align-items:baseline;justify-content:flex-end;gap:6px;font-variant-numeric:tabular-nums}
+.fr .res .g{font:500 10.5px/1 var(--f-mono);color:var(--key-2)}
+.fr .res b{font-family:var(--f-display);font-weight:900;font-stretch:76%;font-size:21px;line-height:1;min-width:24px}
+.fr .pend{grid-column:3/5;text-align:right;font:500 12px/1 var(--f-text);font-stretch:94%;color:var(--key-2);font-style:italic}
+.fr li.me .nm-n{font-weight:800}
+.dots i{animation:blink 1.4s infinite both;font-style:normal}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* =========================================================
+   D — Leaderboard
+   ========================================================= */
+.lbtop{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:8px 0 12px}
+.lbtop h2{font-family:var(--f-display);font-weight:900;font-stretch:56%;font-size:50px;line-height:.82;text-transform:uppercase}
+.lbtop span{font:500 9.5px/1.3 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2);text-align:right}
+.tabs{display:flex;gap:16px;border-bottom:1.5px solid var(--key);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{appearance:none;cursor:pointer;flex:none;position:relative;border:0;background:none;padding:10px 0 10px;font:600 13px/1 var(--f-text);font-stretch:88%;color:var(--key-2);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.tabs button i{width:7px;height:7px;border-radius:50%;background:var(--c);box-shadow:0 0 0 1px var(--key)}
+.tabs button[aria-selected="true"]{color:var(--key);font-weight:800}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1.5px;height:4px;background:var(--key)}
+.tabs button[aria-selected="true"]::before{content:"";position:absolute;left:0;right:0;bottom:-1.5px;height:4px;background:var(--pink);transform:translate(calc(var(--pk-x) * var(--mis)),calc(var(--pk-y) * var(--mis) + 1px))}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);margin:12px 0 4px;border:1.5px solid var(--key);border-radius:4px;overflow:hidden}
+.seg button{appearance:none;cursor:pointer;border:0;background:transparent;height:34px;font:500 10px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2)}
+.seg button + button{border-left:1.5px solid var(--key)}
+.seg button[aria-checked="true"]{background:var(--key);color:var(--on-key);font-weight:700}
+.lb li{display:grid;grid-template-columns:30px 30px minmax(0,1fr) auto;grid-template-rows:auto auto;column-gap:10px;align-items:center;padding:10px 0 9px;border-bottom:1px dashed var(--edge)}
+.lb li:last-child{border-bottom:0}
+.lb .rk{grid-row:1/3;font-family:var(--f-display);font-weight:900;font-stretch:60%;font-size:34px;line-height:.9;text-align:center;font-variant-numeric:tabular-nums}
+.lb .rk.op{color:var(--key)}
+.lb .rk.op::after{color:var(--pink)}
+.lb .av{grid-row:1/3}
+.lb .who{min-width:0}
+.lb .who b{display:block;font:700 15px/1.1 var(--f-text);font-stretch:94%;white-space:nowrap}
+.lb .who small{display:block;margin-top:3px;font:500 9.5px/1.2 var(--f-mono);letter-spacing:.03em;color:var(--key-2);white-space:nowrap}
+.lb .pts{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lb .pts b{font-family:var(--f-display);font-weight:900;font-stretch:72%;font-size:26px;line-height:1;letter-spacing:-.01em}
+.lb .pts span{font:500 9px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2);margin-left:3px}
+.bar{grid-column:3/5;height:6px;margin-top:7px;position:relative;isolation:isolate;border-radius:1px;width:var(--w)}
+.lb li.zero .rk{color:var(--key-2)}
+.lb li.zero .who b{color:var(--key-2)}
+.lbfoot{margin-top:auto;padding:8px 0 10px;font:500 9px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--key-2);text-align:center}
+.lb li.me .who b .hl{padding:0 1px}
+
+/* =========================================================
+   System section
+   ========================================================= */
+.sys{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:20px}
+.panel{grid-column:span 6;position:relative;border:1.5px solid var(--key);border-radius:4px;padding:clamp(16px,2vw,24px);background:var(--stock);min-width:0}
+.panel.w12{grid-column:1/-1}
+.panel.w7{grid-column:span 7}
+.panel.w5{grid-column:span 5}
+@media (max-width:1100px){.panel,.panel.w7,.panel.w5{grid-column:1/-1}}
+.ph{display:flex;align-items:baseline;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.ph .n{font:700 10.5px/1 var(--f-mono);letter-spacing:.08em;color:var(--key-2)}
+.ph h3{font-family:var(--f-display);font-weight:900;font-stretch:62%;font-size:32px;line-height:.9;text-transform:uppercase}
+.ph p{flex-basis:100%;font-size:13.5px;color:var(--key-2);max-width:62ch}
+
+/* palette */
+.pal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:640px){.pal{grid-template-columns:1fr}}
+.stockcol{border-radius:3px;padding:14px;border:1.5px solid var(--key)}
+.stockcol h4{font:700 10px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;display:flex;justify-content:space-between}
+.sw{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.sw .chip{height:30px;border-radius:2px;box-shadow:inset 0 0 0 1px var(--line);background:linear-gradient(90deg,var(--c) 0 55%,transparent 55%),radial-gradient(circle,var(--c) 1.2px,transparent 1.55px) 0 0/4px 4px}
+.sw .r{font:600 13px/1.15 var(--f-text);font-stretch:92%}
+.sw .r small{display:block;font:500 9.5px/1.3 var(--f-mono);letter-spacing:.02em;opacity:.78}
+.sw code{font:500 11px/1 var(--f-mono)}
+.pairs{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}
+.pair{display:flex;align-items:center;gap:8px;font:500 10.5px/1.2 var(--f-mono);padding:6px 8px;border:1px solid var(--edge);border-radius:2px}
+.pair .sample{flex:none;width:34px;height:22px;display:grid;place-items:center;font:800 12px/1 var(--f-display);border-radius:2px;box-shadow:inset 0 0 0 1px var(--edge)}
+.pair .ratio{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}
+.pair .aa{font-size:8.5px;letter-spacing:.08em;padding:2px 3px;border:1px solid currentColor;border-radius:2px}
+
+/* type */
+.spec{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 18px;padding:14px 0;border-top:1px solid var(--edge);align-items:center}
+.spec:first-of-type{border-top:0;padding-top:0}
+.spec .m{font:500 10px/1.45 var(--f-mono);letter-spacing:.03em;color:var(--key-2)}
+.spec .m b{display:block;color:var(--key);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+.spec .s{min-width:0;overflow-wrap:anywhere}
+.s-display{font-family:var(--f-display);font-weight:900;font-stretch:58%;font-size:58px;line-height:.86;text-transform:uppercase}
+.s-display span{font-size:.62em;margin-left:.2em}
+.s-tile{display:flex;gap:6px;flex-wrap:wrap;font-family:var(--f-display);font-weight:800;font-stretch:112%;font-size:30px;line-height:1}
+.s-tile span{width:46px;height:46px;display:grid;place-items:center;border:2px solid var(--key);border-radius:3px}
+.s-num{font-family:var(--f-display);font-weight:900;font-stretch:72%;font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.s-text p{font:400 15px/1.45 var(--f-text);max-width:44ch}
+.s-text p + p{font-size:13px;font-weight:600;font-stretch:92%;margin-top:4px;color:var(--key-2)}
+.s-marks{display:flex;gap:14px;flex-wrap:wrap}
+.s-marks > span{display:flex;flex-direction:column;align-items:center;gap:6px;font:600 10px/1.2 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;text-align:center;width:76px}
+.s-mono{font:500 11px/1.6 var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+@media (max-width:560px){.spec{grid-template-columns:1fr}}
+
+/* tiles panel */
+.tstates{display:grid;grid-template-columns:repeat(5,minmax(0,64px));gap:12px}
+.tstates figure{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.tstates figcaption{font:600 10px/1.25 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;text-align:center}
+.tstates figcaption small{display:block;font-weight:500;color:var(--key-2);letter-spacing:.02em;text-transform:none;margin-top:2px}
+.tstates .tile{font-size:30px}
+.legend{margin-top:18px;display:grid;gap:8px}
+.legend li{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;align-items:center;font-size:13px;line-height:1.3}
+.legend .tile{width:30px;font-size:14px}
+.legend b{font-weight:800}
+.keys-demo{display:flex;gap:6px;margin-top:16px;align-items:center;flex-wrap:wrap}
+.keys-demo .key{flex:none;width:36px;height:46px;cursor:default}
+.keys-demo .kcap{font:500 10px/1.3 var(--f-mono);color:var(--key-2);margin-left:6px;letter-spacing:.03em}
+
+/* buttons panel */
+.btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 16px}
+.btns figure{display:flex;flex-direction:column;gap:10px;align-items:flex-start;min-width:0}
+.btns figcaption{font:500 10px/1.35 var(--f-mono);letter-spacing:.03em;color:var(--key-2)}
+.btns figcaption b{color:var(--key);text-transform:uppercase;letter-spacing:.08em}
+@media (max-width:480px){.btns{grid-template-columns:1fr}}
+
+/* components */
+.comps{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:20px}
+.comp{display:flex;flex-direction:column;gap:10px;min-width:0}
+.comp > .cap{font:600 10px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2)}
+.comp .lb{border:1.5px solid var(--key);border-radius:4px;padding:0 12px}
+.streakbox{display:flex;align-items:center;gap:18px;padding:14px;border:1.5px solid var(--key);border-radius:4px;min-height:108px}
+.burst.lg{width:84px;height:84px;font-size:38px}
+.burst.lg .b2{stroke-width:2.4}
+.streakbox .t b{display:block;font-family:var(--f-display);font-weight:900;font-stretch:62%;font-size:30px;line-height:.9;text-transform:uppercase}
+.streakbox .t span{font:500 10px/1.4 var(--f-mono);color:var(--key-2);letter-spacing:.03em}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 4px;border:1.5px solid var(--key);border-radius:999px;font:700 11px/1 var(--f-mono);margin-top:8px}
+.pill .burst{width:20px;height:20px;font-size:10px}
+.cdbox{padding:14px;border:1.5px solid var(--key);border-radius:4px;min-height:108px;display:flex;flex-direction:column;gap:10px}
+.cdbox .k{font:500 10px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--key-2)}
+.cdd{display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.cdd span{min-width:46px;height:52px;padding:0 6px;display:grid;place-items:center;border:1.5px solid var(--key);border-radius:3px;font-family:var(--f-display);font-weight:900;font-stretch:70%;font-size:36px;line-height:1;background:radial-gradient(circle,var(--tint) 1px,transparent 1.3px) 0 0/4px 4px}
+.cdd i{font:900 26px/1 var(--f-display);font-style:normal}
+.cdbox small{font:500 10px/1.3 var(--f-mono);color:var(--key-2)}
+.spoiler{position:relative;padding:14px;border:1.5px solid var(--key);border-radius:4px;overflow:hidden}
+.spoiler .sh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.spoiler .sh b{font-family:var(--f-display);font-weight:800;font-stretch:72%;font-size:20px}
+.spoiler .sh span{font:500 9.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2)}
+.redact{display:grid;gap:9px}
+.redact div{display:grid;grid-template-columns:24px minmax(0,1fr) 40px;gap:10px;align-items:center}
+.redact i{display:block;height:12px;border-radius:2px;background:radial-gradient(circle,var(--key) 1.05px,transparent 1.35px) 0 0/3.5px 3.5px;opacity:.55}
+.redact i.c{width:24px;height:24px;border-radius:50%}
+.wall{position:absolute;inset:44px 10px 10px;display:grid;place-items:center;text-align:center}
+.wall > div{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 16px;background:var(--stock);border:1.5px solid var(--key);border-radius:4px;box-shadow:5px 5px 0 var(--pink)}
+.wall svg{width:22px;height:22px;fill:none;stroke:var(--key);stroke-width:2.2}
+.wall b{font:800 14px/1.2 var(--f-text);font-stretch:94%}
+.wall small{font:500 9.5px/1.2 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--key-2)}
+.bubble{align-self:flex-start;max-width:280px;padding:12px 14px;border-radius:18px 18px 18px 4px;background:var(--stock-2);border:1.5px solid var(--key);font:500 13px/1.45 var(--f-text)}
+.bubble .em{display:block;font-size:22px;letter-spacing:2px;line-height:1.3;margin:3px 0}
+.bubble small{display:block;font:500 9.5px/1.3 var(--f-mono);color:var(--key-2);margin-top:4px}
+
+/* motion */
+.motion{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;align-items:stretch}
+@media (max-width:900px){.motion{grid-template-columns:1fr}}
+.stage{display:flex;align-items:center;justify-content:center;align-content:center;gap:clamp(16px,3vw,40px);padding:clamp(16px,3vw,28px);border:1.5px solid var(--key);border-radius:4px;background:radial-gradient(circle,var(--tint) 1px,transparent 1.3px) 0 0/6px 6px;flex-wrap:wrap}
+.drow{display:grid;grid-template-columns:repeat(5,minmax(0,62px));gap:8px;flex:1 1 300px;max-width:350px}
+.drow .tile{font-size:32px;background:var(--stock);border-radius:3px}
+.dscore{position:relative;isolation:isolate;flex:none}
+.dscore .score-n{font-size:120px}
+.flip{animation:flip .46s cubic-bezier(.45,0,.55,1) both}
+@keyframes flip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+.stamped::before{animation:strike .44s cubic-bezier(.2,.9,.25,1.25) both}
+@keyframes strike{0%{transform:translate(calc(var(--dx) * 6 * var(--mis)),calc(var(--dy) * 6 * var(--mis))) scale(1.08);opacity:.15}100%{transform:translate(calc(var(--dx) * var(--mis)),calc(var(--dy) * var(--mis))) scale(1);opacity:1}}
+.run .score-n::before{animation:plate .6s cubic-bezier(.2,.8,.2,1) both}
+.run .score-n{animation:keydrop .5s .28s cubic-bezier(.3,.7,.2,1.2) both}
+@keyframes plate{0%{transform:translate(-30px,0);opacity:0}100%{transform:translate(calc(5px * var(--mis)),calc(4px * var(--mis)));opacity:1}}
+@keyframes keydrop{0%{transform:translate(-4px,-10px);opacity:0}100%{transform:none;opacity:1}}
+.mside{display:flex;flex-direction:column;gap:14px}
+.mside p{font-size:14px;color:var(--key-2);max-width:52ch}
+.mside p b{color:var(--key)}
+.knobs{display:grid;gap:10px;padding-top:6px;border-top:1px solid var(--edge)}
+.knob{display:grid;grid-template-columns:130px minmax(0,1fr) 44px;gap:12px;align-items:center;font:600 10px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.knob input{width:100%;accent-color:var(--key)}
+.knob output{text-align:right;font-variant-numeric:tabular-nums}
+
+/* notes */
+.notes{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px}
+@media (max-width:900px){.notes{grid-template-columns:1fr}}
+.nlist{counter-reset:n}
+.nlist li{counter-increment:n;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:14px 0;border-top:1px solid var(--edge)}
+.nlist li:first-child{border-top:0;padding-top:0}
+.nlist li::before{content:counter(n,decimal-leading-zero);font-family:var(--f-display);font-weight:900;font-stretch:62%;font-size:30px;line-height:.9;color:var(--key)}
+.nlist b{display:block;font-family:var(--f-display);font-weight:800;font-stretch:78%;font-size:19px;line-height:1.1;margin-bottom:3px}
+.nlist p{font-size:14px;color:var(--key-2)}
+.klist li{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;padding:12px 0;border-top:1px solid var(--edge)}
+.klist li:first-child{border-top:0;padding-top:0}
+.klist b{font:700 11px/1.2 var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+.klist p{font-size:13.5px;color:var(--key-2)}
+.dial{display:flex;justify-content:space-between;font:500 9.5px/1 var(--f-mono);letter-spacing:.04em;color:var(--key-2);margin-top:4px;gap:8px}
+.dial::before{content:"";order:1;flex:1;align-self:center;height:1.5px;background:repeating-linear-gradient(90deg,var(--key) 0 2px,transparent 2px 5px)}
+.dial span:last-child{order:2}
+.calls{margin-top:18px;padding:12px 14px;border:1.5px dashed var(--key-2);border-radius:4px;font-size:13px;color:var(--key-2)}
+.calls b{color:var(--key)}
+.foot{margin-top:56px;padding-top:14px;border-top:2px solid var(--key);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font:500 10px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--key-2)}
+
+/* small screens */
+@media (max-width:760px){
+  .mast-row{grid-template-columns:1fr}
+  .sec-head{grid-template-columns:1fr}
+  .sec-head p{grid-column:1}
+  .sec-no{justify-self:start}
+}
+@media (max-width:480px){
+  .board{padding:0 16px 48px}
+  .mast-meta{grid-template-columns:1fr}
+  .knob{grid-template-columns:96px minmax(0,1fr) 40px}
+  .phone{height:778px}
+  .tstates{gap:8px}
+}
+
+@media (max-width:400px){
+  .key{height:48px}
+  .lockchip{font-size:8.5px;letter-spacing:.03em}
+  .board-g{width:min(100%,292px)}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-delay:0s !important;transition-duration:.001ms !important}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== SVG sprite ===================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="g-nh" viewBox="0 0 28 28"><path d="M6.5 11.2L14 5l7.5 6.2M6.5 16.8L14 23l7.5-6.2" fill="none" stroke="currentColor" stroke-width="2.7"/><rect x="11.3" y="11.3" width="5.4" height="5.4" fill="currentColor"/></symbol>
+    <symbol id="g-fl" viewBox="0 0 28 28">
+      <g fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1.6" y="6.1" width="2.8" height="2.8"/><rect x="7.1" y="6.1" width="2.8" height="2.8"/><rect x="18.1" y="6.1" width="2.8" height="2.8"/><rect x="23.6" y="6.1" width="2.8" height="2.8"/><rect x="7.1" y="12.6" width="2.8" height="2.8"/><rect x="23.6" y="12.6" width="2.8" height="2.8"/></g>
+      <g fill="currentColor"><rect x="12" y="5.5" width="4" height="4"/><rect x="1" y="12" width="4" height="4"/><rect x="12" y="12" width="4" height="4"/><rect x="17.5" y="12" width="4" height="4"/><rect x="1" y="18.5" width="4" height="4"/><rect x="6.5" y="18.5" width="4" height="4"/><rect x="12" y="18.5" width="4" height="4"/><rect x="17.5" y="18.5" width="4" height="4"/><rect x="23" y="18.5" width="4" height="4"/></g>
+    </symbol>
+    <symbol id="g-gl" viewBox="0 0 28 28"><rect x="3" y="3" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10.3 3v22M17.7 3v22M3 10.3h22M3 17.7h22" stroke="currentColor" stroke-width="1.3"/><path d="M5 5l3.4 3.4M8.4 5L5 8.4" stroke="currentColor" stroke-width="1.7"/><circle cx="14" cy="14" r="2.3" fill="currentColor"/><rect x="18.9" y="18.9" width="4.9" height="4.9" fill="currentColor"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><path d="M9.2 9.3a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1-1.3 1.9v.7"/><path d="M12 17.6v.1"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3.5v11M7.5 8L12 3.5 16.5 8M5 12.5V20h14v-7.5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="1"/><path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5"/></symbol>
+    <symbol id="i-today" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 9.8h16M8.3 3v4M15.7 3v4"/><rect x="8" y="12.8" width="4" height="4" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-board" viewBox="0 0 24 24"><path d="M3.8 20.2h16.4"/><rect x="4.6" y="12" width="4.2" height="8.2"/><rect x="9.9" y="5" width="4.2" height="15.2"/><rect x="15.2" y="9" width="4.2" height="11.2"/></symbol>
+    <symbol id="i-me" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.9"/><path d="M4.5 20.5c.9-4.2 3.9-6.6 7.5-6.6s6.6 2.4 7.5 6.6"/></symbol>
+    <symbol id="i-del" viewBox="0 0 24 24"><path d="M9 5.5h11.5v13H9L3 12z"/><path d="M12 9.3l5.2 5.4M17.2 9.3L12 14.7"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v15M5.5 12.5L12 19l6.5-6.5"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V5M5.5 11.5L12 5l6.5 6.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z" fill="currentColor"/></symbol>
+    <symbol id="i-replay" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 3.5v4.2h4.2"/></symbol>
+    <symbol id="i-burst" viewBox="0 0 100 100"><path d="M50.0 2.0L58.7 12.0L70.8 6.8L74.3 19.5L87.5 20.1L85.1 33.1L96.8 39.3L89.0 50.0L96.8 60.7L85.1 66.9L87.5 79.9L74.3 80.5L70.8 93.2L58.7 88.0L50.0 98.0L41.3 88.0L29.2 93.2L25.7 80.5L12.5 79.9L14.9 66.9L3.2 60.7L11.0 50.0L3.2 39.3L14.9 33.1L12.5 20.1L25.7 19.5L29.2 6.8L41.3 12.0Z"/></symbol>
+    <symbol id="i-reg" viewBox="0 0 26 26"><circle cx="13" cy="13" r="6.5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="13" cy="13" r="2.6" fill="currentColor"/><path d="M13 0v26M0 13h26" stroke="currentColor" stroke-width="1.2"/></symbol>
+    <symbol id="i-sig" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx=".7"/><rect x="5" y="5.5" width="3" height="6.5" rx=".7"/><rect x="10" y="3" width="3" height="9" rx=".7"/><rect x="15" y="0" width="3" height="12" rx=".7"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 16 12"><path d="M8 11.4l2.3-2.7a3.3 3.3 0 0 0-4.6 0z"/><path d="M3.2 6.3a7 7 0 0 1 9.6 0l-1.5 1.7a4.8 4.8 0 0 0-6.6 0z"/><path d="M.6 3.4a10.8 10.8 0 0 1 14.8 0l-1.5 1.7a8.6 8.6 0 0 0-11.8 0z"/></symbol>
+    <symbol id="i-batt" viewBox="0 0 27 12"><rect x=".6" y=".6" width="22.8" height="10.8" rx="3.2" fill="none" stroke="currentColor" stroke-width="1.1" opacity=".5"/><rect x="2.4" y="2.4" width="17" height="7.2" rx="1.6"/><path d="M24.8 4.1v3.8c.9-.3 1.5-1 1.5-1.9s-.6-1.6-1.5-1.9z" opacity=".5"/></symbol>
+  </defs>
+</svg>
+
+<div class="board">
+
+<!-- ===================== MASTHEAD ===================== -->
+<header class="mast">
+  <div class="mast-bar">
+    <div class="mast-kick">
+      <span class="ctrl" aria-hidden="true">
+        <i style="--c:var(--key)"></i><i style="--c:var(--pink)"></i><i style="--c:var(--green)"></i><i style="--c:var(--sun)"></i><i style="--c:var(--slate)"></i><i style="--c:var(--blue)"></i><i class="t" style="--c:var(--key)"></i>
+      </span>
+      <b>Daily</b><span>Style exploration</span><span>/</span><span>Wordle-elevated</span><span>/</span><span>Variant: wordle-riso</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-pressed="false">
+      <span class="sw" aria-hidden="true"></span><span id="themeLabel">Print on black stock</span>
+    </button>
+  </div>
+  <svg class="reg tr" aria-hidden="true"><use href="#i-reg"/></svg>
+
+  <h1 class="mast-title"><span class="op" data-t="Riso">Riso</span> <span class="op" data-t="Overprint">Overprint</span></h1>
+
+  <div class="mast-row">
+    <p class="mast-concept">Wordle’s grid, flip and green&nbsp;/&nbsp;yellow&nbsp;/&nbsp;gray — re-inked as a <em>risograph puzzle zine</em>. Every tile is a two-plate print: the colour drum first, the key plate on top, a hair out of register on purpose.</p>
+    <dl class="mast-meta">
+      <div><dt>Drums</dt><dd>Green · Sunflower · Slate + Fluoro Pink · Medium Blue + Key</dd></div>
+      <div><dt>Stock</dt><dd>Natural #F1EDE3 / Black #121214</dd></div>
+      <div><dt>Type</dt><dd>Anybody · Archivo · Martian Mono</dd></div>
+      <div><dt>Signature</dt><dd>The print pass — flip, strike, settle 2px off</dd></div>
+    </dl>
+  </div>
+  <svg class="reg bl" aria-hidden="true"><use href="#i-reg"/></svg>
+</header>
+
+<!-- ===================== 01 SCREENS ===================== -->
+<section class="sec" id="screens" aria-labelledby="h-screens">
+  <header class="sec-head">
+    <span class="sec-no">01</span>
+    <h2 id="h-screens">Screens</h2>
+    <p>One Monday morning, pulled as four sheets. The triad stays exactly where Wordle trained your eye to look for it; everything around it is paper, key ink and two spot colours.</p>
+  </header>
+
+  <div class="phones">
+
+    <!-- A — TODAY -->
+    <figure class="shot">
+      <figcaption class="shot-cap"><span class="idx i-k ink">A</span><b>Today</b><span class="m">Home · 1 of 3 done</span></figcaption>
+      <div class="phone">
+        <div class="screen">
+          <div class="sbar" aria-hidden="true"><span>9:41</span><span class="isl"></span><span class="ic"><svg width="18" height="12"><use href="#i-sig"/></svg><svg width="16" height="12"><use href="#i-wifi"/></svg><svg width="27" height="12"><use href="#i-batt"/></svg></span></div>
+          <div class="body">
+            <div class="apptop">
+              <span class="logo op" data-t="Daily">Daily</span>
+              <span class="issue">No. 278</span>
+              <span class="av ink ol i-sf" aria-label="Ashwin">A</span>
+            </div>
+            <p class="date">Monday, October 5</p>
+            <h2 class="greet">Hey <span class="hl">Ashwin</span></h2>
+            <div class="strip" role="group" aria-label="1 of 3 done today, 5-day streak, next puzzles in 7:42:10">
+              <div class="c"><span class="pips" aria-hidden="true"><i class="f"></i><i></i><i></i></span><span><b>1 of 3</b> done today</span></div>
+              <div class="c"><span class="burst" aria-hidden="true"><svg viewBox="0 0 100 100"><use class="b1" href="#i-burst"/><use class="b2" href="#i-burst"/></svg>5</span><span><b>5-day</b> streak</span></div>
+              <div class="c"><span>next puzzles in</span><span class="cd">7:42:10</span></div>
+            </div>
+            <p class="label">Today’s puzzles</p>
+            <div class="cards">
+              <article class="gcard">
+                <span class="gm ink ol i-pk" aria-hidden="true"><svg><use href="#g-nh"/></svg></span>
+                <div><h3>Number Hunt</h3><p>Find the number 1–100 in 7 guesses</p></div>
+                <div class="gfoot">
+                  <span class="stamp ink i-pk">Done</span>
+                  <span class="gscore"><b>3/7</b> · <b>80</b> pts</span>
+                  <span class="marks" aria-label="Lower, higher, correct">
+                    <span class="nm ink ol i-bl"><svg viewBox="0 0 24 24"><use href="#i-down"/></svg></span>
+                    <span class="nm ink ol i-pk"><svg viewBox="0 0 24 24"><use href="#i-up"/></svg></span>
+                    <span class="nm ink ol i-gr"><svg viewBox="0 0 24 24"><use href="#i-check"/></svg></span>
+                  </span>
+                </div>
+              </article>
+              <article class="gcard">
+                <span class="gm ink ol i-gr" aria-hidden="true"><svg><use href="#g-fl"/></svg></span>
+                <div><h3>Five Letters</h3><p>Guess the five-letter word in 6 tries</p></div>
+                <div class="gfoot">
+                  <div>
+                    <span class="state">In progress<span class="prog" aria-hidden="true"><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i></span></span>
+                    <span class="gsub" style="display:block">2 of 6 guesses used</span>
+                  </div>
+                  <button class="btn btn-sm ink i-gr" type="button" style="margin-left:auto">Continue</button>
+                </div>
+              </article>
+              <article class="gcard">
+                <span class="gm ink ol i-bl" aria-hidden="true"><svg><use href="#g-gl"/></svg></span>
+                <div><h3>Grid Lock</h3><p>Crack the logic grid from five clues</p></div>
+                <div class="gfoot">
+                  <div><span class="state open"><i></i>Not started</span><span class="gsub" style="display:block">Fresh grid today</span></div>
+                  <button class="btn btn-sm ink i-bl" type="button" style="margin-left:auto"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg>Play</button>
+                </div>
+              </article>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="Primary">
+            <button class="tab on" type="button" aria-current="page"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-today"/></svg></span>Today</button>
+            <button class="tab" type="button"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-board"/></svg></span>Leaderboard</button>
+            <button class="tab" type="button"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-me"/></svg></span>Me</button>
+            <span class="homebar" aria-hidden="true"></span>
+          </nav>
+        </div>
+      </div>
+    </figure>
+
+    <!-- B — PLAY -->
+    <figure class="shot play">
+      <figcaption class="shot-cap"><span class="idx i-k ink">B</span><b>Play</b><span class="m">Five Letters · guess 3 of 6</span></figcaption>
+      <div class="phone">
+        <div class="screen">
+          <div class="sbar" aria-hidden="true"><span>9:41</span><span class="isl"></span><span class="ic"><svg width="18" height="12"><use href="#i-sig"/></svg><svg width="16" height="12"><use href="#i-wifi"/></svg><svg width="27" height="12"><use href="#i-batt"/></svg></span></div>
+          <div class="body">
+            <div class="topbar">
+              <button class="icon-btn" type="button" aria-label="Back to Today"><svg viewBox="0 0 24 24"><use href="#i-back"/></svg></button>
+              <div class="t"><span class="gm xs ink ol i-gr" aria-hidden="true"><svg><use href="#g-fl"/></svg></span>Five Letters</div>
+              <button class="icon-btn" type="button" aria-label="How to play"><svg viewBox="0 0 24 24"><use href="#i-help"/></svg></button>
+            </div>
+            <div class="pmeta"><span>No. 278 · Mon 5 Oct</span><span><b>2</b> of 6 guesses used</span></div>
+            <div class="board-g" role="grid" aria-label="Five Letters board">
+              <div class="row" role="row">
+                <span class="tile" role="gridcell" data-s="absent" aria-label="C, absent">C</span>
+                <span class="tile" role="gridcell" data-s="present" aria-label="R, present">R</span>
+                <span class="tile" role="gridcell" data-s="present" aria-label="A, present">A</span>
+                <span class="tile" role="gridcell" data-s="absent" aria-label="N, absent">N</span>
+                <span class="tile" role="gridcell" data-s="absent" aria-label="E, absent">E</span>
+              </div>
+              <div class="row" role="row">
+                <span class="tile" role="gridcell" data-s="present" aria-label="T, present">T</span>
+                <span class="tile" role="gridcell" data-s="correct" aria-label="A, correct">A</span>
+                <span class="tile" role="gridcell" data-s="correct" aria-label="R, correct">R</span>
+                <span class="tile" role="gridcell" data-s="absent" aria-label="D, absent">D</span>
+                <span class="tile" role="gridcell" data-s="correct" aria-label="Y, correct">Y</span>
+              </div>
+              <div class="row" role="row">
+                <span class="tile" role="gridcell" data-s="typed">P</span>
+                <span class="tile" role="gridcell" data-s="typed">A</span>
+                <span class="tile" role="gridcell" data-s="typed">R</span>
+                <span class="tile" role="gridcell" aria-label="empty"></span>
+                <span class="tile" role="gridcell" aria-label="empty"></span>
+              </div>
+              <div class="row" role="row"><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span></div>
+              <div class="row" role="row"><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span></div>
+              <div class="row" role="row"><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span><span class="tile" role="gridcell"></span></div>
+            </div>
+            <div class="lockchip"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"/></svg>4 friends done · unlocks when you finish</div>
+            <div class="kb" aria-label="Keyboard">
+              <div class="kr">
+                <button class="key" type="button">Q</button><button class="key" type="button">W</button><button class="key" type="button" data-s="absent">E</button><button class="key" type="button" data-s="correct">R</button><button class="key" type="button" data-s="present">T</button><button class="key" type="button" data-s="correct">Y</button><button class="key" type="button">U</button><button class="key" type="button">I</button><button class="key" type="button">O</button><button class="key" type="button">P</button>
+              </div>
+              <div class="kr mid">
+                <button class="key" type="button" data-s="correct">A</button><button class="key" type="button">S</button><button class="key" type="button" data-s="absent">D</button><button class="key" type="button">F</button><button class="key" type="button">G</button><button class="key" type="button">H</button><button class="key" type="button">J</button><button class="key" type="button">K</button><button class="key" type="button">L</button>
+              </div>
+              <div class="kr">
+                <button class="key w" type="button">ENTER</button><button class="key" type="button">Z</button><button class="key" type="button">X</button><button class="key" type="button" data-s="absent">C</button><button class="key" type="button">V</button><button class="key" type="button">B</button><button class="key" type="button" data-s="absent">N</button><button class="key" type="button">M</button><button class="key w" type="button" aria-label="Delete">DEL</button>
+              </div>
+            </div>
+          </div>
+          <span class="homebar" aria-hidden="true"></span>
+        </div>
+      </div>
+    </figure>
+
+    <!-- C — RESULT -->
+    <figure class="shot result">
+      <figcaption class="shot-cap"><span class="idx i-k ink">C</span><b>Result</b><span class="m">Number Hunt · solved</span></figcaption>
+      <div class="phone">
+        <div class="screen">
+          <div class="sbar" aria-hidden="true"><span>9:41</span><span class="isl"></span><span class="ic"><svg width="18" height="12"><use href="#i-sig"/></svg><svg width="16" height="12"><use href="#i-wifi"/></svg><svg width="27" height="12"><use href="#i-batt"/></svg></span></div>
+          <div class="body">
+            <div class="topbar">
+              <button class="icon-btn" type="button" aria-label="Back to Today"><svg viewBox="0 0 24 24"><use href="#i-back"/></svg></button>
+              <div class="t"><span class="gm xs ink ol i-pk" aria-hidden="true"><svg><use href="#g-nh"/></svg></span>Number Hunt</div>
+              <span></span>
+            </div>
+            <div class="hero">
+              <div class="score"><span class="score-n" data-t="80">80</span><span class="score-u">Points</span></div>
+              <div class="hside">
+                <span class="k">Found it in</span>
+                <span class="guesses num">3<small>/7</small></span>
+                <span class="marks" aria-label="Share grid: lower, higher, correct">
+                  <span class="nm lg ink ol i-bl"><svg viewBox="0 0 24 24"><use href="#i-down"/></svg></span>
+                  <span class="nm lg ink ol i-pk"><svg viewBox="0 0 24 24"><use href="#i-up"/></svg></span>
+                  <span class="nm lg ink ol i-gr"><svg viewBox="0 0 24 24"><use href="#i-check"/></svg></span>
+                </span>
+                <span class="legend3" aria-hidden="true"><span>Lower</span><span>Higher</span><span>Got it</span></span>
+              </div>
+            </div>
+            <div class="share-row"><button class="btn btn-primary btn-block" type="button"><svg viewBox="0 0 24 24"><use href="#i-share"/></svg>Share result</button></div>
+            <div class="fr-head"><h3>How everyone did</h3><span>4 of 6 in</span></div>
+            <ol class="fr">
+              <li><span class="av ink ol i-bl">P</span><span class="nm-n">Priya</span><span class="gp" aria-hidden="true"><i class="f"></i><i class="w"></i><i></i><i></i><i></i><i></i><i></i></span><span class="res"><span class="g">2/7</span><b>87</b></span></li>
+              <li class="me"><span class="av ink ol i-sf">A</span><span class="nm-n">Ashwin<span class="you">you</span></span><span class="gp" aria-hidden="true"><i class="f"></i><i class="f"></i><i class="w"></i><i></i><i></i><i></i><i></i></span><span class="res"><span class="g">3/7</span><b>80</b></span></li>
+              <li><span class="av ink ol i-gr">M</span><span class="nm-n">Marco</span><span class="gp" aria-hidden="true"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="w"></i><i></i><i></i></span><span class="res"><span class="g">5/7</span><b>60</b></span></li>
+              <li><span class="av ink ol i-pk">J</span><span class="nm-n">Jess</span><span class="gp" aria-hidden="true"><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></span><span class="res"><span class="g">X/7</span><b>0</b></span></li>
+              <li><span class="av ink ol i-sl">D</span><span class="nm-n">Dev</span><span class="pend">Playing<span class="dots"><i>.</i><i>.</i><i>.</i></span></span></li>
+              <li><span class="av ghost">S</span><span class="nm-n" style="color:var(--key-2)">Sam</span><span class="pend">Not played yet</span></li>
+            </ol>
+          </div>
+          <nav class="tabbar" aria-label="Primary">
+            <button class="tab on" type="button" aria-current="page"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-today"/></svg></span>Today</button>
+            <button class="tab" type="button"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-board"/></svg></span>Leaderboard</button>
+            <button class="tab" type="button"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-me"/></svg></span>Me</button>
+            <span class="homebar" aria-hidden="true"></span>
+          </nav>
+        </div>
+      </div>
+    </figure>
+
+    <!-- D — LEADERBOARD -->
+    <figure class="shot">
+      <figcaption class="shot-cap"><span class="idx i-k ink">D</span><b>Leaderboard</b><span class="m">Overall · this week</span></figcaption>
+      <div class="phone">
+        <div class="screen">
+          <div class="sbar" aria-hidden="true"><span>9:41</span><span class="isl"></span><span class="ic"><svg width="18" height="12"><use href="#i-sig"/></svg><svg width="16" height="12"><use href="#i-wifi"/></svg><svg width="27" height="12"><use href="#i-batt"/></svg></span></div>
+          <div class="body">
+            <div class="lbtop"><h2>Leader&shy;board</h2><span>Week of<br>Oct 5 – 11</span></div>
+            <div class="tabs" role="tablist" aria-label="Game">
+              <button role="tab" type="button" aria-selected="true">Overall</button>
+              <button role="tab" type="button" aria-selected="false"><i style="--c:var(--pink)"></i>Number Hunt</button>
+              <button role="tab" type="button" aria-selected="false"><i style="--c:var(--green)"></i>Five Letters</button>
+              <button role="tab" type="button" aria-selected="false"><i style="--c:var(--blue)"></i>Grid Lock</button>
+            </div>
+            <div class="seg" role="radiogroup" aria-label="Period">
+              <button role="radio" type="button" aria-checked="false">Today</button>
+              <button role="radio" type="button" aria-checked="true">This week</button>
+              <button role="radio" type="button" aria-checked="false">All time</button>
+            </div>
+            <ol class="lb">
+              <li><span class="rk op" data-t="1">1</span><span class="av ink ol i-bl">P</span><span class="who"><b>Priya</b><small>6 played · streak 12</small></span><span class="pts"><b>247</b><span>pts</span></span><span class="bar ink i-bl" style="--w:100%"></span></li>
+              <li class="me"><span class="rk">2</span><span class="av ink ol i-sf">A</span><span class="who"><b><span class="hl">Ashwin</span> <span class="you">you</span></b><small>6 played · streak 5</small></span><span class="pts"><b>231</b><span>pts</span></span><span class="bar ink i-sf" style="--w:93.5%"></span></li>
+              <li><span class="rk">3</span><span class="av ink ol i-gr">M</span><span class="who"><b>Marco</b><small>5 played</small></span><span class="pts"><b>198</b><span>pts</span></span><span class="bar ink i-gr" style="--w:80.2%"></span></li>
+              <li><span class="rk">4</span><span class="av ink ol i-pk">J</span><span class="who"><b>Jess</b><small>5 played</small></span><span class="pts"><b>156</b><span>pts</span></span><span class="bar ink i-pk" style="--w:63.2%"></span></li>
+              <li><span class="rk">5</span><span class="av ink ol i-sl">D</span><span class="who"><b>Dev</b><small>4 played</small></span><span class="pts"><b>140</b><span>pts</span></span><span class="bar ink i-sl" style="--w:56.7%"></span></li>
+              <li class="zero"><span class="rk" aria-label="unranked">–</span><span class="av ghost">S</span><span class="who"><b>Sam</b><small>Hasn’t played</small></span><span class="pts"><b>0</b><span>pts</span></span></li>
+            </ol>
+            <p class="lbfoot">Overall = sum of each game’s 0–100 score</p>
+          </div>
+          <nav class="tabbar" aria-label="Primary">
+            <button class="tab" type="button"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-today"/></svg></span>Today</button>
+            <button class="tab on" type="button" aria-current="page"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-board"/></svg></span>Leaderboard</button>
+            <button class="tab" type="button"><span class="ti"><svg viewBox="0 0 24 24"><use href="#i-me"/></svg></span>Me</button>
+            <span class="homebar" aria-hidden="true"></span>
+          </nav>
+        </div>
+      </div>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ===================== 02 SYSTEM ===================== -->
+<section class="sec" id="system" aria-labelledby="h-system">
+  <header class="sec-head">
+    <span class="sec-no">02</span>
+    <h2 id="h-system">System</h2>
+    <p>Five drums and a key plate. Colour fills are always a separate pass with mottled coverage and a small, consistent offset per ink; text and outlines are always the key plate, so legibility never depends on registration.</p>
+  </header>
+
+  <div class="sys">
+    <!-- Inks -->
+    <div class="panel w7">
+      <div class="ph"><span class="n">02.1</span><h3>Inks</h3><p>Each swatch shows the solid and a 4px halftone tint — the only two ways an ink is ever used. Contrast pairs are computed live from the hex values below.</p></div>
+      <div class="pal" id="palette"></div>
+      <div class="pairs" id="pairs" aria-label="Contrast pairs"></div>
+    </div>
+
+    <!-- Type -->
+    <div class="panel w5">
+      <div class="ph"><span class="n">02.2</span><h3>Type</h3><p>One variable grotesk stretched between poster-condensed and tile-expanded; a text face; a mono for every label that would be set by a typewriter on a real zine.</p></div>
+      <div class="spec"><div class="m"><b>Display</b>Anybody 900 · wdth 56–62<br>60 / 44 / 32 px · lh .84</div><div class="s s-display">Hey Ashwin<span>80</span></div></div>
+      <div class="spec"><div class="m"><b>Tile &amp; keys</b>Anybody 800 · wdth 112<br>29–32 px · caps</div><div class="s s-tile"><span>P</span><span>A</span><span>R</span><span>T</span><span>Y</span></div></div>
+      <div class="spec"><div class="m"><b>Numerals</b>Anybody 900 · wdth 72<br>21–34 px · tabular</div><div class="s s-num">247 · 231 · 198 · 3/7</div></div>
+      <div class="spec"><div class="m"><b>Text</b>Archivo 400 / 600<br>15 / 13 px · wdth 92–100</div><div class="s s-text"><p>Same puzzles for everyone, every day. Friends’ results stay under the wall until you finish.</p><p>Find the number 1–100 in 7 guesses</p></div></div>
+      <div class="spec"><div class="m"><b>Marks</b>Inline SVG · 2.7px stroke<br>on the game’s drum</div><div class="s s-marks">
+        <span><span class="gm ink ol i-pk"><svg><use href="#g-nh"/></svg></span>Number Hunt</span>
+        <span><span class="gm ink ol i-gr"><svg><use href="#g-fl"/></svg></span>Five Letters</span>
+        <span><span class="gm ink ol i-bl"><svg><use href="#g-gl"/></svg></span>Grid Lock</span>
+      </div></div>
+      <div class="spec"><div class="m"><b>Label</b>Martian Mono 500 / 700<br>9.5–11 px · +8% track</div><div class="s s-mono">Next puzzles in 7:42:10<br>No. 278 · Mon 5 Oct</div></div>
+    </div>
+
+    <!-- Tiles -->
+    <div class="panel">
+      <div class="ph"><span class="n">02.3</span><h3>Tile states</h3><p>Same order, same meaning as Wordle. Each state is also printed with a different <b>screen</b>, so it reads without colour.</p></div>
+      <div class="tstates">
+        <figure><span class="tile" aria-label="empty"></span><figcaption>Empty<small>edge only</small></figcaption></figure>
+        <figure><span class="tile" data-s="typed">P</span><figcaption>Typed<small>key outline</small></figcaption></figure>
+        <figure><span class="tile" data-s="correct">A</span><figcaption>Correct<small>solid ink</small></figcaption></figure>
+        <figure><span class="tile" data-s="present">R</span><figcaption>Present<small>dot screen</small></figcaption></figure>
+        <figure><span class="tile" data-s="absent">E</span><figcaption>Absent<small>line screen</small></figcaption></figure>
+      </div>
+      <ul class="legend">
+        <li><span class="tile" data-s="correct">A</span><span><b>Correct</b> — right letter, right spot. Green, solid coverage.</span></li>
+        <li><span class="tile" data-s="present">R</span><span><b>Present</b> — in the word, wrong spot. Sunflower with a 4px dot screen.</span></li>
+        <li><span class="tile" data-s="absent">E</span><span><b>Absent</b> — not in the word. Slate with a 45° line screen; the letter is knocked out to paper.</span></li>
+      </ul>
+      <div class="keys-demo" aria-label="Keyboard key states">
+        <span class="key" role="img" aria-label="Q, unused">Q</span><span class="key" data-s="present" role="img" aria-label="T, present">T</span><span class="key" data-s="correct" role="img" aria-label="A, correct">A</span><span class="key" data-s="absent" role="img" aria-label="D, absent">D</span>
+        <span class="kcap">Keys: unused · present · correct · absent</span>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="panel">
+      <div class="ph"><span class="n">02.4</span><h3>Buttons</h3><p>Primary is the key plate with a pink plate struck 3px behind — on press the plates come into register. Tab through to see focus.</p></div>
+      <div class="btns">
+        <figure><button class="btn btn-primary" type="button"><svg viewBox="0 0 24 24"><use href="#i-share"/></svg>Share result</button><figcaption><b>Primary</b> · key fill, pink plate offset</figcaption></figure>
+        <figure><button class="btn btn-secondary" type="button">See the board</button><figcaption><b>Secondary</b> · 2px key outline</figcaption></figure>
+        <figure><button class="btn btn-accent" type="button"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg>Play now</button><figcaption><b>Accent</b> · fluoro pink drum + key text</figcaption></figure>
+        <figure><button class="btn btn-disabled" type="button" aria-disabled="true"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg>Locked</button><figcaption><b>Disabled</b> · 15% halftone, dashed edge</figcaption></figure>
+        <figure><button class="btn btn-sm ink i-gr" type="button">Continue</button><figcaption><b>Game small</b> · takes the game’s drum</figcaption></figure>
+        <figure><button class="icon-btn" type="button" aria-label="Back"><svg viewBox="0 0 24 24"><use href="#i-back"/></svg></button><figcaption><b>Icon</b> · 40px, 1.5px key ring</figcaption></figure>
+      </div>
+    </div>
+
+    <!-- Components -->
+    <div class="panel w12">
+      <div class="ph"><span class="n">02.5</span><h3>Components</h3></div>
+      <div class="comps">
+        <div class="comp"><span class="cap">Game card · not started</span>
+          <article class="gcard">
+            <span class="gm ink ol i-bl" aria-hidden="true"><svg><use href="#g-gl"/></svg></span>
+            <div><h3>Grid Lock</h3><p>Crack the logic grid from five clues</p></div>
+            <div class="gfoot">
+              <div><span class="state open"><i></i>Not started</span><span class="gsub" style="display:block">Fresh grid today</span></div>
+              <button class="btn btn-sm ink i-bl" type="button" style="margin-left:auto"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg>Play</button>
+            </div>
+          </article>
+        </div>
+        <div class="comp"><span class="cap">Leaderboard row · you</span>
+          <ol class="lb"><li class="me"><span class="rk">2</span><span class="av ink ol i-sf">A</span><span class="who"><b><span class="hl">Ashwin</span> <span class="you">you</span></b><small>6 played · streak 5</small></span><span class="pts"><b>231</b><span>pts</span></span><span class="bar ink i-sf" style="--w:93.5%"></span></li></ol>
+        </div>
+        <div class="comp"><span class="cap">Spoiler wall · locked</span>
+          <div class="spoiler">
+            <div class="sh"><b>How everyone did</b><span>Five Letters</span></div>
+            <div class="redact" aria-hidden="true">
+              <div><i class="c"></i><i style="width:62%"></i><i></i></div>
+              <div><i class="c"></i><i style="width:48%"></i><i></i></div>
+              <div><i class="c"></i><i style="width:70%"></i><i></i></div>
+              <div><i class="c"></i><i style="width:40%"></i><i></i></div>
+            </div>
+            <div class="wall"><div><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-lock"/></svg><b>Finish to see how your friends did</b><small>4 friends finished · no peeking</small></div></div>
+          </div>
+        </div>
+        <div class="comp"><span class="cap">Streak badge</span>
+          <div class="streakbox">
+            <span class="burst lg" aria-hidden="true"><svg viewBox="0 0 100 100"><use class="b1" href="#i-burst"/><use class="b2" href="#i-burst"/></svg>5</span>
+            <div class="t"><b>5-day streak</b><span>Sticker re-prints with a new number each day you finish all three.</span><br><span class="pill"><span class="burst" aria-hidden="true"><svg viewBox="0 0 100 100"><use class="b1" href="#i-burst"/><use class="b2" href="#i-burst"/></svg></span>streak 12</span></div>
+          </div>
+        </div>
+        <div class="comp"><span class="cap">Countdown</span>
+          <div class="cdbox">
+            <span class="k">Next puzzles in</span>
+            <div class="cdd" role="timer" aria-label="7 hours 42 minutes 10 seconds"><span>7</span><i>:</i><span>42</span><i>:</i><span>10</span></div>
+            <small>No. 279 goes to press at 00:00 local</small>
+          </div>
+        </div>
+        <div class="comp"><span class="cap">Share preview · what lands in the group chat</span>
+          <div class="bubble">Daily No. 278 · Number Hunt 3/7
+            <span class="em" aria-label="lower, higher, correct">⬇️⬆️🟩</span>80 pts · streak 5
+            <small>Copied as plain text — the riso tiles become their nearest emoji.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Motion -->
+    <div class="panel w12">
+      <div class="ph"><span class="n">02.6</span><h3>Motion · the print pass</h3></div>
+      <div class="motion">
+        <div class="stage" id="stage">
+          <div class="drow" id="drow" aria-label="Demo row TARDY">
+            <span class="tile" data-s="present" data-final="present">T</span>
+            <span class="tile" data-s="correct" data-final="correct">A</span>
+            <span class="tile" data-s="correct" data-final="correct">R</span>
+            <span class="tile" data-s="absent" data-final="absent">D</span>
+            <span class="tile" data-s="correct" data-final="correct">Y</span>
+          </div>
+          <div class="dscore" id="dscore"><span class="score-n" data-t="80">80</span></div>
+        </div>
+        <div class="mside">
+          <p><b>Flip, strike, settle.</b> Each tile turns on its X axis (460ms, 260ms stagger). At the edge-on frame the colour drum strikes — it lands six times further out of register, then settles to its resting 1–2px offset with a small overshoot. The score prints the same way: pink plate first, key plate dropped on 280ms later.</p>
+          <p><b>Reduced motion:</b> no rotation or travel — plates simply appear in place, one tile at a time.</p>
+          <div><button class="btn btn-accent" type="button" id="replay"><svg viewBox="0 0 24 24"><use href="#i-replay"/></svg>Replay</button></div>
+          <div class="knobs">
+            <label class="knob"><span>Misregistration</span><input type="range" id="kMis" min="0" max="3" step="0.1" value="1"><output id="oMis">1.0×</output></label>
+            <label class="knob"><span>Paper grain</span><input type="range" id="kGrain" min="0" max="2" step="0.1" value="1"><output id="oGrain">1.0×</output></label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 03 NOTES ===================== -->
+<section class="sec" id="notes" aria-labelledby="h-notes">
+  <header class="sec-head">
+    <span class="sec-no">03</span>
+    <h2 id="h-notes">Notes</h2>
+    <p>Where the print metaphor earns its keep — and where it should stay out of the way.</p>
+  </header>
+  <div class="notes">
+    <div class="panel" style="grid-column:auto">
+      <div class="ph"><span class="n">03.1</span><h3>Signature moments</h3></div>
+      <ol class="nlist">
+        <li><div><b>Result reveal</b><p>The score is pulled in two passes: the pink plate slides in, then the key “80” drops on top and never quite lands in register. Guesses count up underneath like a page number.</p></div></li>
+        <li><div><b>Share</b><p>“Share result” pulls a small print off the tray — a card with grain and a crop mark slides up; the clipboard gets the emoji version so it still works in any group chat.</p></div></li>
+        <li><div><b>Daily rollover</b><p>At 00:00 the countdown hits zero, the control strip wipes across the masthead and the issue number re-prints (No. 278 → 279). Yesterday’s cards drop to a 15% tint, today’s print fresh.</p></div></li>
+        <li><div><b>Rank change</b><p>The old rank numeral gets struck through in slate; the new one is stamped on in pink at a 3° tilt, then the score bar re-inks to its new length.</p></div></li>
+        <li><div><b>Spoiler wall</b><p>Friends’ rows sit under a dense halftone. When you finish, the dots shrink to nothing row by row — the reveal is the halftone dissolving, not a modal.</p></div></li>
+      </ol>
+    </div>
+    <div class="panel" style="grid-column:auto">
+      <div class="ph"><span class="n">03.2</span><h3>Tweak knobs</h3></div>
+      <ul class="klist">
+        <li><b>Misregistration</b><p>0px reads clean and corporate; 3px reads loud zine. Default is 1.3–2.1px per drum (live slider above).</p><div class="dial"><span>registered</span><span>sloppy</span></div></li>
+        <li><b>Grain &amp; ink mottle</b><p>Coverage texture inside fills plus paper speckle. Dial down for small Android screens.</p><div class="dial"><span>flat</span><span>gritty</span></div></li>
+        <li><b>Drum count</b><p>Strict 3-drum (green / sunflower / slate + key) for maximum Wordle recall, or keep pink + blue for per-game identity.</p><div class="dial"><span>3 inks</span><span>5 inks</span></div></li>
+        <li><b>Type width</b><p>Anybody’s width axis: push display to 50 for posters, pull to 80 if names need to breathe.</p><div class="dial"><span>condensed</span><span>expanded</span></div></li>
+        <li><b>Paper stock</b><p>Natural, bright white, or kraft for light; black stock for dark.</p><div class="dial"><span>natural</span><span>kraft</span></div></li>
+      </ul>
+      <p class="calls"><b>Call made:</b> the Play screen hides the bottom nav — the keyboard owns the thumb zone, and Back returns to Today. Nav returns on the Result screen.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="foot"><span>wordle-riso · v0.1 · pulled Mon 5 Oct</span><span>Daily — style exploration · placeholder names</span></footer>
+</div>
+
+<script>
+(function(){
+  var root = document.documentElement;
+  var btn = document.getElementById('themeToggle');
+  var label = document.getElementById('themeLabel');
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  function effective(){ return root.dataset.theme || (mq.matches ? 'dark' : 'light'); }
+  function sync(){
+    var t = effective();
+    label.textContent = t === 'dark' ? 'Print on natural stock' : 'Print on black stock';
+    btn.setAttribute('aria-pressed', t === 'dark' ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function(){ root.dataset.theme = effective() === 'dark' ? 'light' : 'dark'; sync(); });
+  window.addEventListener('hashchange', function(){ var h = location.hash; if (h === '#light' || h === '#dark'){ root.dataset.theme = h.slice(1); sync(); } });
+  if (mq.addEventListener) mq.addEventListener('change', sync);
+  sync();
+
+  /* ---------- palette + live contrast ---------- */
+  var INKS = [
+    ['Stock','paper · page','#F1EDE3','#121214'],
+    ['Stock 2','cards · panels','#E7E1D3','#1C1C21'],
+    ['Keycap','unused keys','#DCD5C5','#2A2A31'],
+    ['Edge','empty tiles · rules','#B4AD9C','#4A4A54'],
+    ['Key','text · outlines','#1C2140','#EFE9DB'],
+    ['Key soft','secondary text','#4A5468','#A7A9B4'],
+    ['Green','correct · Five Letters','#00A95C','#1EBF6E'],
+    ['Sunflower','present · streaks','#FFB511','#FFC02E'],
+    ['Slate','absent','#5E695E','#56605A'],
+    ['Fluoro Pink','brand · Number Hunt','#FF48B0','#FF5CB9'],
+    ['Medium Blue','Grid Lock · focus','#3255A4','#6AA4EC']
+  ];
+  function lum(h){ h=h.replace('#',''); var c=[0,2,4].map(function(i){var v=parseInt(h.substr(i,2),16)/255; return v<=.03928? v/12.92 : Math.pow((v+.055)/1.055,2.4);}); return .2126*c[0]+.7152*c[1]+.0722*c[2]; }
+  function ratio(a,b){ var x=lum(a), y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); }
+  var pal = document.getElementById('palette');
+  [['Natural stock · light',2,'#F1EDE3','#1C2140','rgba(28,33,64,.16)'],['Black stock · dark',3,'#121214','#EFE9DB','rgba(239,233,219,.16)']].forEach(function(col){
+    var box = document.createElement('div');
+    box.className = 'stockcol';
+    box.style.background = col[2]; box.style.color = col[3]; box.style.borderColor = col[3];
+    box.style.setProperty('--line', col[4]);
+    var html = '<h4><span>'+col[0]+'</span><span>'+(col[1]===2?'A':'B')+'</span></h4>';
+    INKS.forEach(function(ink){
+      var hex = ink[col[1]];
+      html += '<div class="sw"><span class="chip" style="--c:'+hex+'"></span><span class="r">'+ink[0]+'<small>'+ink[1]+'</small></span><code>'+hex+'</code></div>';
+    });
+    box.innerHTML = html;
+    pal.appendChild(box);
+  });
+  var PAIRS = [
+    ['Text','Aa','#1C2140','#F1EDE3','#EFE9DB','#121214'],
+    ['Soft text','Aa','#4A5468','#F1EDE3','#A7A9B4','#121214'],
+    ['Correct','A','#1C2140','#00A95C','#121214','#1EBF6E'],
+    ['Present','R','#1C2140','#FFB511','#121214','#FFC02E'],
+    ['Absent','E','#F1EDE3','#5E695E','#EFE9DB','#56605A'],
+    ['Pink drum','80','#1C2140','#FF48B0','#121214','#FF5CB9'],
+    ['Blue drum','Go','#F1EDE3','#3255A4','#121214','#6AA4EC'],
+    ['Link','Aa','#3255A4','#F1EDE3','#6AA4EC','#121214']
+  ];
+  var pairs = document.getElementById('pairs');
+  var out = '';
+  PAIRS.forEach(function(p){
+    [[p[2],p[3],'L'],[p[4],p[5],'D']].forEach(function(q){
+      var r = ratio(q[0],q[1]);
+      out += '<div class="pair"><span class="sample" style="color:'+q[0]+';background:'+q[1]+'">'+p[1]+'</span><span>'+p[0]+' · '+q[2]+'</span><span class="ratio">'+r.toFixed(1)+':1</span><span class="aa">'+(r>=7?'AAA':r>=4.5?'AA':'AA-L')+'</span></div>';
+    });
+  });
+  pairs.innerHTML = out;
+
+  /* ---------- motion: the print pass ---------- */
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var timers = [];
+  function clear(){ timers.forEach(clearTimeout); timers = []; }
+  document.getElementById('replay').addEventListener('click', function(){
+    clear();
+    var tiles = [].slice.call(document.querySelectorAll('#drow .tile'));
+    var score = document.getElementById('dscore');
+    tiles.forEach(function(t){ t.classList.remove('flip','stamped'); t.dataset.s = 'typed'; });
+    score.classList.remove('run');
+    score.style.visibility = 'hidden';
+    void score.offsetWidth;
+    var step = reduce.matches ? 140 : 260;
+    tiles.forEach(function(t,i){
+      timers.push(setTimeout(function(){
+        if (reduce.matches){ t.dataset.s = t.dataset.final; return; }
+        t.classList.add('flip');
+        timers.push(setTimeout(function(){ t.dataset.s = t.dataset.final; t.classList.add('stamped'); }, 230));
+        timers.push(setTimeout(function(){ t.classList.remove('flip','stamped'); }, 900));
+      }, 250 + i*step));
+    });
+    timers.push(setTimeout(function(){
+      score.style.visibility = '';
+      if (!reduce.matches) score.classList.add('run');
+      timers.push(setTimeout(function(){ score.classList.remove('run'); }, 1000));
+    }, 250 + tiles.length*step + 200));
+  });
+
+  /* ---------- live knobs ---------- */
+  function knob(id, outId, prop){
+    var el = document.getElementById(id), o = document.getElementById(outId);
+    el.addEventListener('input', function(){ root.style.setProperty(prop, el.value); o.textContent = Number(el.value).toFixed(1) + '×'; });
+  }
+  knob('kMis','oMis','--mis');
+  knob('kGrain','oGrain','--grain-k');
+})();
+</script>
+</body>
+</html>

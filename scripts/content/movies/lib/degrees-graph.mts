@@ -1,0 +1,202 @@
+import type { Rng } from "@/core/random";
+
+/**
+ * The actor–film graph behind Degrees of Separation, and the daily puzzle picker. Pure (the caller
+ * loads the catalog and supplies a seeded rng), so every rule here is unit-tested.
+ *
+ * The graph is bipartite: people on one side, films on the other, an edge per cast credit. A *link*
+ * is person → film → co-star, so the distance between two people in links is half their distance
+ * in the bipartite graph. The game accepts any catalog credit as a link, so par is computed over
+ * **all** credits: a player can never beat par by finding a credit the generator ignored.
+ */
+
+export interface Credit {
+  filmId: number;
+  personId: number;
+  /** Cast-list position, 0 = top billed; null when unknown. */
+  billing: number | null;
+}
+
+export interface FilmInfo {
+  id: number;
+  title: string;
+  year: number | null;
+  popularity: number;
+}
+
+export interface PersonInfo {
+  id: number;
+  name: string;
+  popularity: number;
+}
+
+export interface CastGraph {
+  /** personId → films they're credited in (ascending ids). */
+  readonly filmsOf: ReadonlyMap<number, readonly number[]>;
+  /** filmId → its cast (ascending ids). */
+  readonly castOf: ReadonlyMap<number, readonly number[]>;
+  billing(filmId: number, personId: number): number | null;
+}
+
+export function buildGraph(credits: Iterable<Credit>): CastGraph {
+  const filmsOf = new Map<number, number[]>();
+  const castOf = new Map<number, number[]>();
+  const billing = new Map<string, number | null>();
+  for (const { filmId, personId, billing: position } of credits) {
+    const key = `${filmId}:${personId}`;
+    if (billing.has(key)) continue;
+    billing.set(key, position);
+    (filmsOf.get(personId) ?? filmsOf.set(personId, []).get(personId)!).push(filmId);
+    (castOf.get(filmId) ?? castOf.set(filmId, []).get(filmId)!).push(personId);
+  }
+  for (const list of filmsOf.values()) list.sort((a, b) => a - b);
+  for (const list of castOf.values()) list.sort((a, b) => a - b);
+  return { filmsOf, castOf, billing: (filmId, personId) => billing.get(`${filmId}:${personId}`) ?? null };
+}
+
+/** Breadth-first search from `from`: link distance to every person within `maxLinks`. */
+export function linkDistances(graph: CastGraph, from: number, maxLinks: number): Map<number, number> {
+  const distance = new Map<number, number>([[from, 0]]);
+  const seenFilms = new Set<number>();
+  let frontier = [from];
+  for (let depth = 1; depth <= maxLinks && frontier.length > 0; depth++) {
+    const next: number[] = [];
+    for (const person of frontier) {
+      for (const film of graph.filmsOf.get(person) ?? []) {
+        if (seenFilms.has(film)) continue; // every co-star of this film is already at ≤ depth
+        seenFilms.add(film);
+        for (const costar of graph.castOf.get(film) ?? []) {
+          if (!distance.has(costar)) {
+            distance.set(costar, depth);
+            next.push(costar);
+          }
+        }
+      }
+    }
+    frontier = next;
+  }
+  return distance;
+}
+
+export interface PathLink {
+  filmId: number;
+  personId: number;
+}
+
+/** Scores one link (person → film → co-star); the stored solution is the shortest chain scoring highest. */
+export type LinkScore = (from: number, filmId: number, to: number) => number;
+
+/** Prefers famous films, famous intermediate co-stars, and credits near the top of the bill. */
+export function popularityLinkScore(graph: CastGraph, films: ReadonlyMap<number, FilmInfo>, people: ReadonlyMap<number, PersonInfo>): LinkScore {
+  const fame = (popularity: number | undefined) => Math.log1p(popularity ?? 0);
+  const billingPenalty = (filmId: number, personId: number) => Math.min(graph.billing(filmId, personId) ?? 20, 20) * 0.12;
+  return (from, filmId, to) =>
+    fame(films.get(filmId)?.popularity) + 0.5 * fame(people.get(to)?.popularity) - billingPenalty(filmId, from) - billingPenalty(filmId, to);
+}
+
+/**
+ * The best-scoring shortest chain from `start` to `end`, or null if they're more than `maxLinks`
+ * apart (or the same person). Ties break on ids, so the result is deterministic.
+ */
+export function bestShortestPath(
+  graph: CastGraph,
+  start: number,
+  end: number,
+  maxLinks: number,
+  linkScore: LinkScore,
+): PathLink[] | null {
+  if (start === end) return null;
+  const fromStart = linkDistances(graph, start, maxLinks);
+  const length = fromStart.get(end);
+  if (length === undefined) return null;
+  const toEnd = linkDistances(graph, end, length);
+
+  // best[p] = best score of a shortest chain from p to `end`, and its first link. Walk the layers of
+  // the shortest-path DAG backwards from `end`.
+  const best = new Map<number, { score: number; next: PathLink | null }>([[end, { score: 0, next: null }]]);
+  for (let depth = length - 1; depth >= 0; depth--) {
+    const layer = depth === 0 ? [start] : [...fromStart].filter(([p, d]) => d === depth && toEnd.get(p) === length - depth).map(([p]) => p);
+    for (const person of layer.sort((a, b) => a - b)) {
+      let choice: { score: number; next: PathLink } | null = null;
+      for (const filmId of graph.filmsOf.get(person) ?? []) {
+        for (const costar of graph.castOf.get(filmId) ?? []) {
+          if (costar === person || fromStart.get(costar) !== depth + 1) continue;
+          const rest = best.get(costar);
+          if (!rest) continue;
+          const score = linkScore(person, filmId, costar) + rest.score;
+          if (!choice || score > choice.score + 1e-9) choice = { score, next: { filmId, personId: costar } };
+        }
+      }
+      if (choice) best.set(person, choice);
+    }
+  }
+
+  const path: PathLink[] = [];
+  for (let at = best.get(start); at?.next; at = best.get(at.next.personId)) path.push(at.next);
+  return path.length === length ? path : null;
+}
+
+/**
+ * People eligible as start or end: well known (top `size` by popularity) *and* genuinely actors in
+ * this catalog, with at least `minFilms` credits of which `minLeads` are top-`leadBilling` billed.
+ * The film minimum also guarantees the player has real choices at every step.
+ */
+export function actorPool(
+  graph: CastGraph,
+  people: ReadonlyMap<number, PersonInfo>,
+  options: { size: number; minFilms: number; minLeads: number; leadBilling: number },
+): number[] {
+  const eligible: PersonInfo[] = [];
+  for (const [personId, films] of graph.filmsOf) {
+    const person = people.get(personId);
+    if (!person || films.length < options.minFilms) continue;
+    const leads = films.filter((filmId) => (graph.billing(filmId, personId) ?? Infinity) < options.leadBilling).length;
+    if (leads >= options.minLeads) eligible.push(person);
+  }
+  return eligible
+    .sort((a, b) => b.popularity - a.popularity || a.id - b.id)
+    .slice(0, options.size)
+    .map((p) => p.id)
+    .sort((a, b) => a - b);
+}
+
+export interface PickedPuzzle {
+  start: number;
+  end: number;
+  par: number;
+  path: PathLink[];
+}
+
+/**
+ * Picks one day's puzzle: a start and an end from `pool` whose shortest chain is `targetPar` links
+ * (falling back to the other allowed pars), neither of them in `exclude` (recent and scheduled
+ * puzzles). The rng drives every choice, so a seeded rng reproduces the day.
+ */
+export function pickPuzzle(params: {
+  graph: CastGraph;
+  pool: readonly number[];
+  rng: Rng;
+  pars: readonly number[];
+  targetPar: number;
+  exclude: ReadonlySet<number>;
+  linkScore: LinkScore;
+  maxStarts?: number;
+}): PickedPuzzle | null {
+  const { graph, rng, pars, targetPar, exclude, linkScore, maxStarts = 60 } = params;
+  const pool = params.pool.filter((p) => !exclude.has(p));
+  const poolSet = new Set(pool);
+  const maxPar = Math.max(...pars);
+  const order = [targetPar, ...pars.filter((p) => p !== targetPar)];
+  const starts = rng.shuffle(pool).slice(0, maxStarts);
+  for (const par of order) {
+    for (const start of starts) {
+      const distances = linkDistances(graph, start, maxPar);
+      const ends = [...distances].filter(([p, d]) => d === par && p !== start && poolSet.has(p)).map(([p]) => p).sort((a, b) => a - b);
+      if (ends.length === 0) continue;
+      const end = rng.pick(ends);
+      const path = bestShortestPath(graph, start, end, maxPar, linkScore);
+      if (path && path.length === par) return { start, end, par, path };
+    }
+  }
+  return null;
+}

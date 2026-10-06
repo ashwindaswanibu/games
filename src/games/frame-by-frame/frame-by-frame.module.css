@@ -1,0 +1,227 @@
+/*
+ * Frame by Frame's board, inside the Movies kit's MoviesStage (which defines the --mv-* tokens and
+ * fonts). A projection booth: frame counter in film-title type over a letterboxed screen, the reel
+ * strip beneath, then the guess controls. Nothing is ever drawn over a frame.
+ */
+
+/* ─────────────────────────── Screen ─────────────────────────── */
+
+.viewer {
+  display: grid;
+  gap: 8px;
+}
+
+.caption {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.frameNo {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  line-height: 1;
+}
+.frameNoLabel,
+.frameNoOf,
+.captionNote {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mv-fg-dim);
+}
+.frameNoValue {
+  font-family: var(--mv-font-film), "Six Caps", Impact, sans-serif;
+  font-size: 46px;
+  line-height: 0.8;
+  letter-spacing: 0.04em;
+  color: var(--mv-accent);
+  font-variant-numeric: tabular-nums;
+}
+.captionNote {
+  margin: 0 0 2px;
+}
+
+.backToLatest {
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--mv-signal);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+/* ─────────────────────────── Title card (after the play) ─────────────────────────── */
+
+.titleCard {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.cardKicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mv-signal);
+}
+.cardTitle {
+  margin: 0;
+  font-family: var(--mv-font-film), "Six Caps", Impact, "Arial Narrow", sans-serif;
+  font-size: clamp(56px, 17vw, 96px);
+  line-height: 0.84;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  color: var(--mv-fg);
+  animation: fbf-wipe 0.8s cubic-bezier(0.76, 0, 0.24, 1) both 0.1s;
+}
+.cardMeta {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-stretch: 88%;
+  color: var(--mv-fg-dim);
+}
+
+/* ─────────────────────────── Contact sheet (after the play) ─────────────────────────── */
+
+.sheet {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  list-style: none;
+  background: var(--mv-raised);
+}
+@media (min-width: 640px) {
+  .sheet {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.thumb {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 3px;
+  border: 2px solid var(--mv-rule);
+  background: none;
+  color: var(--mv-fg);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.thumb[data-status="solved"] {
+  border-color: var(--mv-signal);
+}
+.thumb[data-status="seen"] {
+  border-style: dashed;
+}
+.thumb[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--mv-surface),
+    0 0 0 5px var(--mv-accent);
+}
+.thumbLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 2px 1px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--mv-fg-dim);
+}
+.thumb[data-status="solved"] .thumbLabel {
+  color: var(--mv-signal);
+}
+.thumbNo {
+  font-family: var(--mv-font-film), "Six Caps", Impact, sans-serif;
+  font-size: 22px;
+  line-height: 0.8;
+  letter-spacing: 0;
+  color: var(--mv-accent);
+}
+
+/* ─────────────────────────── Controls ─────────────────────────── */
+
+.controls {
+  display: grid;
+  gap: 12px;
+}
+
+.confirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1.5px dashed var(--mv-rule);
+}
+.confirmText {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.confirmActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--mv-accent);
+  background: var(--mv-field);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ─────────────────────────── Guess log ─────────────────────────── */
+
+.log {
+  display: grid;
+  gap: 4px;
+}
+.logTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mv-fg-dim);
+}
+
+/* ─────────────────────────── Motion ─────────────────────────── */
+
+@keyframes fbf-wipe {
+  from {
+    clip-path: inset(-20% 100% -20% 0);
+  }
+  to {
+    clip-path: inset(-20% 0 -20% 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardTitle {
+    animation: none;
+  }
+}

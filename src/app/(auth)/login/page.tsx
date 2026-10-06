@@ -1,0 +1,28 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Divider, GoogleButton } from "../google-button";
+import { LoginForm } from "./login-form";
+
+export const metadata: Metadata = { title: "Sign in" };
+
+const ERRORS: Record<string, string> = {
+  google: "Google sign-in didn't work. Try again.",
+  oauth: "Sign-in link expired or was already used. Try again.",
+};
+
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  const { error } = await searchParams;
+  return (
+    <div className="grid gap-6">
+      <GoogleButton />
+      <Divider />
+      <LoginForm initialError={typeof error === "string" ? ERRORS[error] : undefined} />
+      <p className="text-center text-sm text-muted">
+        New here?{" "}
+        <Link href="/signup" className="font-medium text-fg underline underline-offset-4">
+          Create an account
+        </Link>
+      </p>
+    </div>
+  );
+}

@@ -1,0 +1,311 @@
+/*
+ * Color Barcode's board. It sits inside the kit's neutral MoviesStage and uses only its --mv-*
+ * tokens plus neutral grays (R = G = B), so nothing around the barcode tints how it reads. Texture
+ * (the perforated rails) lives beside the picture, never on it.
+ */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─────────────────────────── The strip of film ─────────────────────────── */
+
+.film {
+  display: grid;
+  /* minmax(0, …): the SVG's viewBox must not widen the strip past the screen. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  margin: 0 -16px;
+  animation: cb-unspool 0.9s cubic-bezier(0.76, 0, 0.24, 1) both 0.1s;
+}
+
+/* Perforated rails: darker neutral base with see-through sprocket holes. */
+.rail {
+  height: 16px;
+  background-color: #565656;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='16'%3E%3Crect x='5' y='5' width='8' height='6' rx='1.6' fill='%23767676'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: 6px 0;
+}
+
+.barcode {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: clamp(220px, 64vw, 320px);
+  background: #000;
+}
+
+.axis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--mv-fg-dim);
+}
+.axisLine {
+  flex: 1;
+  min-width: 8px;
+  height: 1px;
+  background: var(--mv-rule);
+}
+
+/* ─────────────────────────── Edge code ─────────────────────────── */
+
+.edge {
+  display: grid;
+  gap: 12px;
+  padding: 14px 14px 16px;
+  border: 1.5px solid var(--mv-rule);
+  background: var(--mv-field);
+}
+
+.edgeHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.edgeTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.edgeNote {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  font-stretch: 90%;
+  color: var(--mv-fg-dim);
+}
+
+/* Locked: one notch per miss toward the edge code. */
+.notches {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.notches li {
+  flex: 1;
+  height: 8px;
+  border: 1.5px dashed var(--mv-fg-dim);
+}
+.notches li[data-filled="true"] {
+  border-style: solid;
+  border-color: var(--mv-fg);
+  background: var(--mv-fg);
+}
+
+/* The century rule: one cell per decade, the answer's filled. */
+.century {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.decade {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  /* One track no wider than the cell, so a crowded decade can never spill onto its neighbours. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: end;
+  justify-items: center;
+  overflow: hidden;
+}
+.decadeLabel {
+  width: 100%;
+  padding: 5px 0 4px;
+  border-top: 2px solid var(--mv-rule);
+  border-left: 1px solid var(--mv-rule);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  /* Condensed, so a four-digit year ("2000") fits a decade cell at 390px. */
+  font-stretch: 70%;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--mv-fg-dim);
+}
+.decade:first-child .decadeLabel {
+  border-left: 0;
+}
+.decade[data-answer="true"] .decadeLabel {
+  border-top-color: var(--mv-fg);
+  background: var(--mv-fg);
+  color: var(--mv-on-accent);
+  font-weight: 900;
+}
+.pins {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 1px;
+  max-width: 100%;
+  min-height: 18px;
+}
+.pinsMore {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+.pins b {
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 2px;
+  border: 1.5px solid var(--mv-fg);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* The answer's decade, year by year. */
+.years {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.year {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 0 5px;
+  border: 1.5px solid var(--mv-fg);
+}
+.yearNo {
+  font-family: var(--mv-font-film), "Six Caps", Impact, "Arial Narrow", sans-serif;
+  font-size: 26px;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+.yearMark {
+  min-height: 11px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+}
+.year[data-status="ruled-out"] {
+  border-style: dashed;
+  border-color: var(--mv-rule);
+  color: var(--mv-fg-dim);
+}
+.year[data-status="ruled-out"] .yearNo {
+  opacity: 0.55;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+/* ─────────────────────────── Guessing ─────────────────────────── */
+
+.guessArea {
+  display: grid;
+  gap: 8px;
+}
+
+.confirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 2px dashed var(--mv-rule);
+}
+.confirm p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.confirmButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--mv-fg);
+  background: var(--mv-field);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* ─────────────────────────── Reveal ─────────────────────────── */
+
+.reveal {
+  display: grid;
+  gap: 6px;
+  padding: 16px 14px 18px;
+  background: #f2f2f2;
+  color: #111111;
+}
+.revealKicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.revealTitle {
+  margin: 0;
+  font-family: var(--mv-font-film), "Six Caps", Impact, "Arial Narrow", sans-serif;
+  font-weight: 400;
+  font-size: clamp(48px, 15vw, 72px);
+  line-height: 0.86;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.revealMeta {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  font-stretch: 90%;
+}
+
+/* ─────────────────────────── Motion ─────────────────────────── */
+
+/* The strip unspools left to right, like film pulled through a gate. */
+@keyframes cb-unspool {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .film {
+    animation: none;
+  }
+}

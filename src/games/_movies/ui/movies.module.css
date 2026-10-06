@@ -1,0 +1,860 @@
+/*
+ * Movies world, after the "Title Sequence" direction: Saul Bass cut paper and kinetic type.
+ * Ink and ochre, with a cool cyan projector beam as the signal color; film-leader countdowns,
+ * perforations and an iris for transitions. Images are never covered: grain, beams and other
+ * texture live only on chrome, never over a picture.
+ *
+ * Every kit root carries `.root` and `data-variant`. Components only use the semantic --mv-*
+ * tokens below, so the neutral (colorist's suite) variant is a token swap.
+ */
+
+@property --mv-sweep {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.root {
+  --mv-ochre: #e9a31e;
+  --mv-ink: #15110e;
+  --mv-ink-2: #211b16;
+  --mv-ink-3: #2d251f;
+  --mv-cream: #f7efdd;
+  --mv-cyan: #86e3f0;
+  --mv-ease-cut: cubic-bezier(0.16, 0.92, 0.2, 1);
+  --mv-ease-io: cubic-bezier(0.76, 0, 0.24, 1);
+
+  /* Semantic tokens: the Movies world. */
+  --mv-surface: var(--mv-ink);
+  --mv-fg: var(--mv-cream);
+  --mv-fg-dim: rgb(247 239 221 / 0.68);
+  --mv-rule: rgb(247 239 221 / 0.2);
+  --mv-field: var(--mv-ink-2);
+  --mv-raised: var(--mv-ink-3);
+  --mv-accent: var(--mv-ochre);
+  --mv-on-accent: var(--mv-ink);
+  --mv-signal: var(--mv-cyan);
+  --mv-on-signal: var(--mv-ink);
+  --mv-slate: var(--mv-ochre);
+  --mv-on-slate: var(--mv-ink);
+  --mv-image-bg: #000;
+
+  font-family: var(--mv-font-sans), "Archivo", "Arial Narrow", Arial, sans-serif;
+  color: var(--mv-fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A colorist's suite: R = G = B everywhere, white type (4.9:1 on the gray). */
+.root[data-variant="neutral"] {
+  --mv-surface: #707070;
+  --mv-fg: #ffffff;
+  --mv-fg-dim: rgb(255 255 255 / 0.94);
+  --mv-rule: rgb(255 255 255 / 0.34);
+  --mv-field: #5c5c5c;
+  --mv-raised: #5c5c5c;
+  --mv-accent: #ffffff;
+  --mv-on-accent: #111111;
+  --mv-signal: #ffffff;
+  --mv-on-signal: #111111;
+  --mv-slate: #5c5c5c;
+  --mv-on-slate: #ffffff;
+  --mv-image-bg: #707070;
+}
+
+.root :focus-visible {
+  outline: 3px solid var(--mv-signal);
+  outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─────────────────────────── Stage ─────────────────────────── */
+
+.stage {
+  position: relative;
+  display: grid;
+  isolation: isolate;
+  background: var(--mv-surface);
+}
+
+.slate {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 26px;
+  background: var(--mv-slate);
+  color: var(--mv-on-slate);
+  /* A hand-cut bottom edge. */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), 81% 100%, 37% calc(100% - 2px), 0 calc(100% - 4px));
+}
+
+/* Paper grain, on the slate only. */
+.slate::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-size: 180px 180px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .07 0 0 0 0 .04 1.4 0 0 0 -.7'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Film perforations along the slate's foot. */
+.slate::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 10px;
+  height: 5px;
+  z-index: 0;
+  opacity: 0.85;
+  background: repeating-linear-gradient(90deg, currentColor 0 9px, transparent 9px 19px);
+}
+
+.root[data-variant="neutral"] .slate {
+  clip-path: none;
+}
+.root[data-variant="neutral"] .slate::before {
+  display: none;
+}
+
+.slateText {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.fixtureTag {
+  padding: 2px 6px;
+  border: 1.5px dashed currentColor;
+  letter-spacing: 0.18em;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--mv-font-film), "Six Caps", Impact, "Arial Narrow", sans-serif;
+  font-weight: 400;
+  font-size: clamp(58px, 17vw, 84px);
+  line-height: 0.82;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  animation: mv-wipe 0.7s var(--mv-ease-io) both 0.05s;
+}
+
+/*
+ * During play the slate shrinks to one line: the page header already names the game, and the
+ * phone screen belongs to the puzzle. The full title card returns once the play is over.
+ */
+.slate[data-compact="true"] {
+  align-items: center;
+  padding-top: 10px;
+  padding-bottom: 18px;
+}
+.slate[data-compact="true"] .title {
+  font-size: clamp(30px, 9vw, 40px);
+  line-height: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+}
+.slate[data-compact="true"] .leader {
+  width: 48px;
+  height: 48px;
+}
+.slate[data-compact="true"] .leaderValue {
+  font-size: 30px;
+}
+
+.slateAside {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.screen {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  padding: 22px 16px 22px;
+  color: var(--mv-fg);
+}
+
+/*
+ * The projector beam: a cyan line and a soft cone, confined to the screen's top padding. It sits
+ * at z-index -1 inside the stage's isolated stacking context: above the stage's background, below
+ * all of the screen's content. The content itself must not get a z-index: that would make each
+ * child its own stacking context, and an open search list would be painted under the next sibling
+ * (the guess log, say) whatever its own z-index.
+ */
+.screen::before,
+.screen::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.screen::before {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--mv-signal) 18%, var(--mv-signal) 82%, transparent);
+  opacity: 0.9;
+}
+.screen::after {
+  height: 20px;
+  background: radial-gradient(ellipse 55% 100% at 50% 0, rgb(134 227 240 / 0.2), transparent 75%);
+}
+.root[data-variant="neutral"] .screen::before,
+.root[data-variant="neutral"] .screen::after {
+  display: none;
+}
+.screen > * {
+  position: relative;
+  min-width: 0;
+}
+
+/* ─────────────────────────── Film leader ─────────────────────────── */
+
+.leader {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.leader::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+.leaderCross {
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background:
+    linear-gradient(currentColor, currentColor) center / 1.5px 100% no-repeat,
+    linear-gradient(currentColor, currentColor) center / 100% 1.5px no-repeat;
+}
+.leaderSweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(rgb(21 17 14 / 0.3) 0 var(--mv-sweep), transparent 0);
+  animation: mv-sweep 6s linear infinite;
+}
+.root[data-variant="neutral"] .leaderSweep {
+  background: conic-gradient(rgb(255 255 255 / 0.25) 0 var(--mv-sweep), transparent 0);
+}
+.leaderValue {
+  position: relative;
+  z-index: 1;
+  padding: 0 3px;
+  background: var(--mv-slate);
+  font-family: var(--mv-font-film), "Six Caps", Impact, sans-serif;
+  font-size: 36px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  animation: mv-rise 0.45s var(--mv-ease-cut) both;
+}
+
+/* ─────────────────────────── Iris ─────────────────────────── */
+
+.iris {
+  /* Fill "backwards" only: once open, no clip remains to trap dropdowns or focus rings. */
+  animation: mv-iris 0.62s var(--mv-ease-io) backwards;
+}
+
+/* ─────────────────────────── Image ─────────────────────────── */
+
+.frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  overflow: hidden;
+  background: var(--mv-image-bg);
+}
+.frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+.frame[data-state="loaded"] img {
+  opacity: 1;
+}
+.frameNote {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mv-fg-dim);
+}
+
+/* ─────────────────────────── Buttons ─────────────────────────── */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 18px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-family: var(--mv-font-sans), "Archivo", "Arial Narrow", Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.button[data-kind="primary"] {
+  background: var(--mv-accent);
+  color: var(--mv-on-accent);
+}
+.button[data-kind="secondary"] {
+  border-color: var(--mv-fg);
+  color: var(--mv-fg);
+}
+.button[data-kind="quiet"] {
+  min-width: 44px;
+  padding: 0 10px;
+  color: var(--mv-fg);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1.5px;
+}
+.button[data-block="true"] {
+  width: 100%;
+}
+
+/* ─────────────────────────── Search (combobox) ─────────────────────────── */
+
+.search {
+  position: relative;
+  display: grid;
+  /* Lets the field shrink below the input's intrinsic width when placed in a narrow column. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.searchLabel {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mv-fg-dim);
+}
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 12px 0 14px;
+  background: var(--mv-field);
+  border: 2px solid var(--mv-rule);
+  transition: border-color 0.15s ease;
+}
+.searchField:focus-within {
+  border-color: var(--mv-accent);
+}
+.searchField[data-disabled="true"] {
+  opacity: 0.5;
+}
+.searchIcon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--mv-fg-dim);
+}
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--mv-fg);
+  font: inherit;
+  /* 16px+ keeps iOS from zooming on focus. */
+  font-size: 17px;
+  font-weight: 600;
+}
+.searchInput::placeholder {
+  color: var(--mv-fg-dim);
+  font-weight: 500;
+}
+.searchInput:focus-visible {
+  outline: none;
+}
+.searchInput::-webkit-search-cancel-button {
+  display: none;
+}
+.clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -8px;
+  border: 0;
+  background: none;
+  color: var(--mv-fg-dim);
+  cursor: pointer;
+}
+.clear svg {
+  width: 14px;
+  height: 14px;
+}
+.spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--mv-rule);
+  border-top-color: var(--mv-accent);
+  border-radius: 50%;
+  animation: mv-spin 0.7s linear infinite;
+}
+
+.listbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  max-height: min(50vh, 344px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  background: var(--mv-raised);
+  border: 2px solid var(--mv-accent);
+  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.7);
+  animation: mv-drop 0.18s var(--mv-ease-cut) both;
+}
+.listbox[data-placement="above"] {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.option {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-height: 54px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--mv-rule);
+  cursor: pointer;
+}
+.option:last-child {
+  border-bottom: 0;
+}
+.option[aria-selected="true"] {
+  background: var(--mv-accent);
+  color: var(--mv-on-accent);
+}
+.option[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+.option[aria-disabled="true"] .optionPrimary {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.optionPrimary {
+  font-size: 16px;
+  font-weight: 750;
+  font-stretch: 88%;
+  line-height: 1.2;
+}
+.optionSecondary {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--mv-fg-dim);
+}
+.option[aria-selected="true"] .optionSecondary {
+  color: inherit;
+  opacity: 0.85;
+}
+.listNote {
+  padding: 14px;
+  font-size: 14px;
+  color: var(--mv-fg-dim);
+}
+
+/* ─────────────────────────── Reveal strip ─────────────────────────── */
+
+.strip {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 8px;
+  list-style: none;
+  background: var(--mv-raised);
+}
+/* Sprocket holes along both edges. */
+.strip::before,
+.strip::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, var(--mv-surface) 0 7px, transparent 7px 15px);
+}
+.strip::before {
+  top: 3px;
+}
+.strip::after {
+  bottom: 3px;
+}
+.stripItem {
+  flex: 1 1 0;
+  min-width: 44px;
+  display: flex;
+}
+.cell {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  min-height: 54px;
+  padding: 4px 2px;
+  border: 2px solid var(--mv-rule);
+  background: none;
+  color: var(--mv-fg);
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+button.cell {
+  cursor: pointer;
+}
+.cellNumber {
+  font-family: var(--mv-font-film), "Six Caps", Impact, sans-serif;
+  font-size: 30px;
+  line-height: 0.9;
+}
+.cellLabel {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cellGlyph {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+.cell[data-labelled="true"] .cellNumber {
+  font-size: 24px;
+}
+.cell[data-status="current"] {
+  border-color: var(--mv-accent);
+  background: var(--mv-accent);
+  color: var(--mv-on-accent);
+}
+.cell[data-status="solved"] {
+  border-color: var(--mv-signal);
+  background: var(--mv-signal);
+  color: var(--mv-on-signal);
+}
+.cell[data-status="missed"],
+.cell[data-status="skipped"],
+.cell[data-status="seen"] {
+  border-color: var(--mv-fg-dim);
+}
+.cell[data-status="locked"] {
+  border-style: dashed;
+  color: var(--mv-fg-dim);
+}
+.cell[data-status="locked"] .cellNumber {
+  opacity: 0.6;
+}
+.cell[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--mv-surface),
+    0 0 0 5px var(--mv-signal);
+}
+
+/* ─────────────────────────── Clues ─────────────────────────── */
+
+.clues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 10px 3px 8px;
+  border: 1.5px solid var(--mv-rule);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--mv-fg);
+}
+.chipGlyph {
+  width: 1em;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+}
+.chip[data-tone="match"] {
+  border-color: var(--mv-signal);
+  background: var(--mv-signal);
+  color: var(--mv-on-signal);
+}
+.chip[data-tone="near"] {
+  border-color: var(--mv-signal);
+}
+.chip[data-tone="miss"] {
+  color: var(--mv-fg-dim);
+}
+.chip[data-tone="unknown"] {
+  border-style: dashed;
+  color: var(--mv-fg-dim);
+}
+
+/* ─────────────────────────── Guess log ─────────────────────────── */
+
+.log {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.entry {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid var(--mv-rule);
+  animation: mv-slide 0.45s var(--mv-ease-cut) both;
+}
+.entryNo {
+  font-family: var(--mv-font-film), "Six Caps", Impact, sans-serif;
+  font-size: 28px;
+  line-height: 0.8;
+  color: var(--mv-accent);
+}
+.entryTitle {
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 800;
+  font-stretch: 82%;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.entryYear {
+  margin-left: 6px;
+  font-weight: 600;
+  color: var(--mv-fg-dim);
+}
+.entryVerdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.entry[data-correct="true"] .entryVerdict {
+  color: var(--mv-signal);
+}
+.entryClues {
+  grid-column: 2 / -1;
+}
+/* The newest move, under the search: the verdict and clues land where the player is looking. */
+.lastGuess {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-left: 3px solid var(--mv-accent);
+  background: var(--mv-raised);
+  /* With the page's scroll-padding, keeps it a little clear of the bottom nav when scrolled to. */
+  scroll-margin-bottom: 12px;
+  animation: mv-slide 0.45s var(--mv-ease-cut) both;
+}
+.lastGuessTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  font-stretch: 82%;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.lastGuessTitle .entryYear {
+  margin-left: 0;
+}
+.lastGuessGlyph {
+  font-size: 13px;
+  font-weight: 900;
+}
+.logEmpty {
+  padding: 12px 0;
+  border-top: 1px solid var(--mv-rule);
+  font-size: 13px;
+  color: var(--mv-fg-dim);
+}
+
+/* ─────────────────────────── Motion ─────────────────────────── */
+
+@keyframes mv-wipe {
+  from {
+    clip-path: inset(-20% 100% -20% 0);
+  }
+  to {
+    clip-path: inset(-20% 0 -20% 0);
+  }
+}
+@keyframes mv-sweep {
+  0% {
+    --mv-sweep: 0deg;
+  }
+  22% {
+    --mv-sweep: 360deg;
+  }
+  22.1%,
+  100% {
+    --mv-sweep: 0deg;
+  }
+}
+@keyframes mv-rise {
+  from {
+    transform: translateY(70%);
+    opacity: 0;
+  }
+}
+@keyframes mv-iris {
+  from {
+    clip-path: circle(0% at 50% 50%);
+  }
+  to {
+    clip-path: circle(75% at 50% 50%);
+  }
+}
+@keyframes mv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mv-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes mv-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title,
+  .leaderSweep,
+  .leaderValue,
+  .iris,
+  .listbox,
+  .entry {
+    animation: none;
+  }
+  .spinner {
+    animation-duration: 2.4s;
+  }
+  .frame img,
+  .button,
+  .searchField {
+    transition: none;
+  }
+}

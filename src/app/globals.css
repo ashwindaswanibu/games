@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Components use the semantic Tailwind colors below (bg-surface, text-muted,
+ * border-border, bg-accent …), never raw palette values, so light/dark and per-game accents
+ * are handled in one place. A game page overrides --accent with the game's own color.
+ */
+:root {
+  --bg: #f7f5f0;
+  --surface: #ffffff;
+  --surface-2: #efece6;
+  --border: #e3dfd7;
+  --fg: #1c1a17;
+  --muted: #77716a;
+  --accent: #7c5cff;
+  --good: #16a34a;
+  --bad: #dc2626;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0e0d;
+    --surface: #1a1917;
+    --surface-2: #24221f;
+    --border: #2f2c28;
+    --fg: #f4f2ee;
+    --muted: #a19b93;
+    --accent: #9b82ff;
+    --good: #4ade80;
+    --bad: #f87171;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * The signed-in app has a sticky header (50px) and a fixed bottom nav (66px, plus the safe area).
+ * Whatever the browser scrolls into view (a focused field, an opened search list, find-in-page)
+ * lands clear of both instead of underneath them.
+ */
+html:has([data-app-chrome="bottom-nav"]) {
+  scroll-padding-top: calc(max(env(safe-area-inset-top), 0.75rem) + 3rem);
+  scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Hide number-input spinners; games provide their own controls. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
