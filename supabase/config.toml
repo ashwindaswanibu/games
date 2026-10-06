@@ -174,11 +174,15 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-# Off: players are created by the app's sign-up action through the admin API (after the invite
-# code), which works regardless. Public sign-up would let anyone mint an `authenticated` session and
-# squat <username>@users.daily.invalid. Keep the hosted project in sync (Auth > Sign In / Providers >
-# "Allow new users to sign up"). Turning on Google sign-in for new players needs this on again.
-enable_signup = false
+# On: sign-up is open, and a new player's first "Continue with Google" creates their Supabase user,
+# which this gates. It also opens Supabase's public email sign-up endpoint (callable with the
+# publishable key), which the app never uses: password accounts are created by the app's sign-up
+# action through the admin API. What keeps that endpoint harmless: `enable_confirmations` below (no
+# session for an address the caller doesn't control), the lock-down migration (an account without
+# the server can read nothing), /auth/welcome (only Google accounts get a profile; others are signed
+# out), and sign-up reclaiming a squatted `<username>@users.daily.invalid` (reclaimSignInEmail).
+# Keep the hosted project in sync (Auth > Sign In / Providers > "Allow new users to sign up").
+enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -223,12 +227,24 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
+# Must stay on: it also gates every email/password sign-in ("Email logins are disabled"), and
+# username accounts sign in with a synthetic email. The app creates those accounts itself through
+# the admin API (which is unaffected by the confirmation setting below).
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# On, so Supabase's public sign-up endpoint (callable with the publishable key, bypassing the app)
+# can't mint a usable (signed-in) account for an address its caller doesn't control, such as a
+# player's `<username>@users.daily.invalid` sign-in name or a friend's Gmail address. It also stops
+# pre-registering a friend's Gmail address with a password: Supabase links that friend's first
+# Google sign-in to the existing account, and only strips identities it can't trust (the
+# pre-registered password) while the account is unconfirmed. Email changes need confirming too
+# (`double_confirm_changes`), so a session can't move itself onto an undeliverable username email.
+# The app's own accounts are created confirmed. Hosted projects: keep Auth -> Providers -> Email ->
+# "Confirm email" and "Secure email change" on (the defaults) for the same reasons.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 # On, but it only demands reauthentication from sessions older than 24 hours. What actually stops a
 # stolen session from changing the password is the trigger in the password-change-guard migration

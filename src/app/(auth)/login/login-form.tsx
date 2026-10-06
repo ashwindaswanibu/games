@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { Field, FormMessage } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { signInWithPassword, type FormState } from "../actions";
+import type { FormState } from "@/lib/form-state";
+import { signInWithPassword } from "../actions";
 
 export function LoginForm({ initialError }: { initialError?: string }) {
   const [state, action] = useActionState<FormState, FormData>(signInWithPassword, { error: initialError });

@@ -6,18 +6,10 @@ import { passwordSchema } from "@/lib/validation";
 import { canResetPassword, canSetAdmin, type ManagedAccount } from "@/server/admin-policy";
 import { isPasswordAccountEmail, requireAdmin } from "@/server/auth";
 import { serverEnv } from "@/server/env";
-import { createInvite as storeInvite } from "@/server/invite";
 import { db } from "@/server/supabase/admin";
 
 export interface AdminFormState {
   ok?: string;
-  error?: string;
-}
-
-export interface InviteFormState {
-  /** The new invite code: shown once, never stored. */
-  code?: string;
-  note?: string;
   error?: string;
 }
 
@@ -66,30 +58,5 @@ export async function setAdmin(formData: FormData): Promise<void> {
   const { error } = await db().from("profiles").update({ is_admin: makeAdmin }).eq("id", parsed.userId);
   if (error) throw new Error(`Failed to update admin flag: ${error.message}`);
   console.info(`admin: ${me.id} ${makeAdmin ? "made" : "removed"} ${target.id} ${makeAdmin ? "an admin" : "as admin"}`);
-  revalidatePath("/admin");
-}
-
-const inviteSchema = z.object({ note: z.string().normalize("NFC").trim().min(1, "Say who it's for.").max(40, "Keep it under 40 characters.") });
-
-/** One invite per new player; it works once. The code is only ever shown in this response. */
-export async function createInvite(_prev: InviteFormState, formData: FormData): Promise<InviteFormState> {
-  const me = await requireAdmin();
-  const parsed = inviteSchema.safeParse({ note: formData.get("note") ?? "" });
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
-  const code = await storeInvite(me.id, parsed.data.note);
-  console.info(`admin: ${me.id} created an invite for "${parsed.data.note}"`);
-  revalidatePath("/admin");
-  return { code, note: parsed.data.note };
-}
-
-const revokeSchema = z.object({ inviteId: z.uuid() });
-
-export async function revokeInvite(formData: FormData): Promise<void> {
-  const me = await requireAdmin();
-  const { inviteId } = revokeSchema.parse({ inviteId: formData.get("inviteId") });
-  // Only unused invites: a used one is the record of where an account came from.
-  const { error } = await db().from("invites").delete().eq("id", inviteId).is("used_at", null);
-  if (error) throw new Error(`Failed to revoke invite: ${error.message}`);
-  console.info(`admin: ${me.id} revoked invite ${inviteId}`);
   revalidatePath("/admin");
 }

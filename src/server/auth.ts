@@ -22,8 +22,15 @@ export function isPasswordAccountEmail(email: string | undefined): boolean {
 
 export interface SessionUser {
   id: string;
-  /** Name from the identity provider (Google), used to prefill onboarding. */
-  suggestedName: string | null;
+  /** The account email (synthetic for username/password accounts). */
+  email: string | null;
+  /** Name from the identity provider (Google), used to set up a new player's profile. */
+  providerName: string | null;
+  /**
+   * The account's sign-in providers (`app_metadata.providers`: "google", "email"). Set by Supabase
+   * Auth, not the user, so it says how the account was really made.
+   */
+  providers: readonly string[];
 }
 
 /** The verified caller, or null. Memoized per request. */
@@ -33,7 +40,16 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   if (error || !data?.claims?.sub) return null;
   const meta = (data.claims.user_metadata ?? {}) as Record<string, unknown>;
   const name = meta.full_name ?? meta.name;
-  return { id: data.claims.sub, suggestedName: typeof name === "string" ? name : null };
+  const appMeta = (data.claims.app_metadata ?? {}) as Record<string, unknown>;
+  const providers = new Set<string>();
+  if (typeof appMeta.provider === "string") providers.add(appMeta.provider);
+  if (Array.isArray(appMeta.providers)) for (const p of appMeta.providers) if (typeof p === "string") providers.add(p);
+  return {
+    id: data.claims.sub,
+    email: typeof data.claims.email === "string" && data.claims.email ? data.claims.email : null,
+    providerName: typeof name === "string" ? name : null,
+    providers: [...providers],
+  };
 });
 
 export const getProfile = cache(async (userId: string): Promise<ProfileRow | null> => {
@@ -43,8 +59,8 @@ export const getProfile = cache(async (userId: string): Promise<ProfileRow | nul
 });
 
 /**
- * For route handlers, which answer with a status code rather than a redirect: the signed-in,
- * onboarded caller, or null (respond 401).
+ * For route handlers, which answer with a status code rather than a redirect: the signed-in
+ * caller with a profile, or null (respond 401).
  */
 export async function getCurrentProfile(): Promise<ProfileRow | null> {
   const user = await getSessionUser();
@@ -57,11 +73,17 @@ export async function requireUser(): Promise<SessionUser> {
   return user;
 }
 
-/** A signed-in player who has finished onboarding. Use at the top of every app page/action. */
+/**
+ * Where a signed-in account without a profile (a first Google sign-in) gets one set up
+ * automatically: `src/app/auth/welcome/route.ts`.
+ */
+export const WELCOME_PATH = "/auth/welcome";
+
+/** A signed-in player with a profile. Use at the top of every app page/action. */
 export async function requireProfile(): Promise<ProfileRow> {
   const user = await requireUser();
   const profile = await getProfile(user.id);
-  if (!profile) redirect("/onboarding");
+  if (!profile) redirect(WELCOME_PATH);
   return profile;
 }
 

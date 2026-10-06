@@ -1,13 +1,16 @@
 /**
  * Integration smoke test for the database contract the app relies on: auth with synthetic
- * username emails, RLS, the password-change guard, single-use invites, puzzle upsert semantics, optimistic concurrency on plays, check
- * constraints, the leaderboard/streak functions, puzzle assets, and the movie catalog search.
+ * username emails (including renames, which move the sign-in email), the lock-down of the public
+ * API roles, what Supabase Auth's public sign-up can and can't do, the password-change guard,
+ * display-name rules, puzzle upsert semantics, optimistic concurrency on plays, check constraints,
+ * the leaderboard/streak functions (with the spoiler wall), puzzle assets, and the movie catalog
+ * search.
  *
  * Runs against a live Supabase (local by default) and cleans up after itself.
  *   npm run db:start && npm run test:db
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -30,10 +33,19 @@ function check(name: string, ok: boolean, detail?: unknown) {
 
 /** Display names are unique (ignoring case), so tag them like usernames. */
 const displayNameFor = (name: string) => `${name} ${tag}`;
+const emailFor = (username: string) => `${username}@users.daily.invalid`;
 
-async function makePlayer(name: string): Promise<{ id: string; client: SupabaseClient; email: string; password: string }> {
+interface Player {
+  id: string;
+  username: string;
+  email: string;
+  password: string;
+  client: SupabaseClient;
+}
+
+async function makePlayer(name: string): Promise<Player> {
   const username = `smoke_${name}_${tag}`;
-  const email = `${username}@users.daily.invalid`;
+  const email = emailFor(username);
   const password = randomBytes(12).toString("hex");
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
@@ -43,7 +55,54 @@ async function makePlayer(name: string): Promise<{ id: string; client: SupabaseC
   const client = createClient(url, publishableKey, opts);
   const { error: signInError } = await client.auth.signInWithPassword({ email, password });
   if (signInError) throw new Error(`signIn failed: ${signInError.message}`);
-  return { id: data.user.id, client, email, password };
+  return { id: data.user.id, username, email, password, client };
+}
+
+/** Username changes and first-sign-in provisioning (src/server/profiles.ts) rely on these. */
+async function accountChecks(alice: Player, bob: Player) {
+  const signsIn = async (username: string, password: string) => {
+    const client = createClient(url, publishableKey, opts);
+    const { error } = await client.auth.signInWithPassword({ email: emailFor(username), password });
+    return !error;
+  };
+
+  const { error: takenRename } = await admin.from("profiles").update({ username: bob.username }).eq("id", alice.id);
+  check("renaming a profile to a taken username is a unique violation (23505)", takenRename?.code === "23505", takenRename);
+
+  // GoTrue's admin endpoint doesn't pre-check this; the unique index refuses it (as a 500).
+  const { error: takenEmail } = await admin.auth.admin.updateUserById(alice.id, { email: emailFor(bob.username), email_confirm: true });
+  check(
+    "moving a sign-in email onto another account's is refused, and both still sign in",
+    Boolean(takenEmail) && (await signsIn(alice.username, alice.password)) && (await signsIn(bob.username, bob.password)),
+    takenEmail,
+  );
+
+  const renamed = `smoke_renamed_${tag}`;
+  const { error: emailMove } = await admin.auth.admin.updateUserById(alice.id, { email: emailFor(renamed), email_confirm: true });
+  check("the admin API moves a sign-in email without confirmation", !emailMove, emailMove);
+  check("the new username signs in", await signsIn(renamed, alice.password));
+  check("the old username no longer signs in", !(await signsIn(alice.username, alice.password)));
+  const { data: stillSignedIn, error: sessionError } = await alice.client.auth.getUser();
+  check("an existing session survives the email move", !sessionError && stillSignedIn.user?.id === alice.id, sessionError);
+  const { error: moveBack } = await admin.auth.admin.updateUserById(alice.id, { email: emailFor(alice.username), email_confirm: true });
+  check("the email moves back (the rename rollback path)", !moveBack && (await signsIn(alice.username, alice.password)), moveBack);
+
+  const { data: collisions, error: matchError } = await admin
+    .from("profiles")
+    .select("username")
+    .filter("username", "match", `^smoke_(alice|bob)_${tag}[0-9]*$`);
+  check(
+    "the regex filter used for username collisions works through PostgREST",
+    !matchError && collisions?.map((r) => r.username).sort().join() === [alice.username, bob.username].sort().join(),
+    { matchError, collisions },
+  );
+
+  const { error: duplicateProfile } = await admin.from("profiles").insert({ id: alice.id, username: `smoke_dup_${tag}`, display_name: displayNameFor("dup") });
+  check("a second profile for the same account is a unique violation (23505)", duplicateProfile?.code === "23505", duplicateProfile);
+  const { error: orphanProfile } = await admin
+    .from("profiles")
+    .insert({ id: "00000000-0000-4000-8000-000000000000", username: `smoke_orphan_${tag}`, display_name: displayNameFor("orphan") });
+  check("a profile for a deleted account is a foreign-key violation (23503)", orphanProfile?.code === "23503", orphanProfile);
 }
 
 async function main() {
@@ -51,6 +110,7 @@ async function main() {
   const alice = await makePlayer("alice");
   const bob = await makePlayer("bob");
   check("password accounts on the .invalid domain can be created and sign in", true);
+  await accountChecks(alice, bob);
 
   // --- Puzzles: upsert ignores duplicates, RLS hides them ----------------------------------
   const day = (n: number) => `2001-01-${String(n).padStart(2, "0")}`;
@@ -161,16 +221,16 @@ async function main() {
   check("a streak broken by a missed day resets to 0", later?.find((s: { user_id: string }) => s.user_id === alice.id)?.current_streak === 0, later);
   await lockdownChecks(alice);
   await passwordChecks(alice);
-  await inviteChecks(alice);
+  await publicSignUpChecks(alice);
   await profileChecks(alice);
   await assetChecks(alice.client);
   await catalogChecks(alice.client);
 }
 
 // --- Public roles: the publishable key and a user session reach nothing in `public` -----------
-async function lockdownChecks(alice: { id: string; client: SupabaseClient }) {
+async function lockdownChecks(alice: Player) {
   const anon = createClient(url, publishableKey, opts);
-  const tables = ["profiles", "plays", "puzzles", "puzzle_assets", "movie_films", "movie_people", "movie_credits", "rate_limits", "invites", "password_change_grants"];
+  const tables = ["profiles", "plays", "puzzles", "puzzle_assets", "movie_films", "movie_people", "movie_credits", "rate_limits", "password_change_grants"];
   for (const table of tables) {
     const { error: userRead } = await alice.client.from(table).select("*").limit(1);
     const { error: anonRead } = await anon.from(table).select("*").limit(1);
@@ -186,7 +246,6 @@ async function lockdownChecks(alice: { id: string; client: SupabaseClient }) {
     ["orphan_auth_user_for_email", { p_email: `smoke_alice_${tag}@users.daily.invalid` }],
     ["take_rate_limit", { p_key: "x", p_limit: 1, p_window_seconds: 1 }],
     ["allow_password_change", { p_user_id: alice.id }],
-    ["redeem_invite", { p_token_hash: "0".repeat(64), p_user_id: alice.id, p_username: "x", p_display_name: "x" }],
   ] as const) {
     const { error: anonCall } = await anon.rpc(fn, args);
     const { error: userCall } = await alice.client.rpc(fn, args);
@@ -195,15 +254,10 @@ async function lockdownChecks(alice: { id: string; client: SupabaseClient }) {
   const { data: key, error: keyError } = await admin.rpc("catalog_search_key", { value: "Amélie!" });
   check("the server can still call catalog_search_key()", !keyError && key === "amelie", { key, keyError });
 
-  // The app creates players with the admin API; public sign-up would hand outsiders a session and
-  // let them squat <username>@users.daily.invalid. (supabase/config.toml: [auth] enable_signup.)
-  const { data: signup, error: signupError } = await anon.auth.signUp({ email: `smoke_squat_${tag}@users.daily.invalid`, password: randomBytes(12).toString("hex") });
-  if (signup?.user) userIds.push(signup.user.id);
-  check("public sign-up through Supabase Auth is disabled", Boolean(signupError) && !signup?.user, { signupError, user: signup?.user?.id });
 }
 
 // --- Passwords: only the server's admin reset can change one -------------------------------------
-async function passwordChecks(alice: { id: string; client: SupabaseClient; email: string; password: string }) {
+async function passwordChecks(alice: Player) {
   // What a stolen session would do: call Supabase Auth directly with the player's access token.
   const { data: session } = await alice.client.auth.getSession();
   const stolen = await fetch(`${url}/auth/v1/user`, {
@@ -234,57 +288,66 @@ async function passwordChecks(alice: { id: string; client: SupabaseClient; email
   alice.password = newPassword;
 }
 
-// --- Invites: single use, expiring, and they create the profile atomically ---------------------
-async function inviteChecks(alice: { id: string }) {
-  const hash = (code: string) => createHash("sha256").update(code).digest("hex");
-  const newAuthUser = async (name: string) => {
-    const { data, error } = await admin.auth.admin.createUser({ email: `smoke_${name}_${tag}@users.daily.invalid`, password: randomBytes(12).toString("hex"), email_confirm: true });
-    if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
-    userIds.push(data.user.id);
-    return data.user.id;
+// --- Supabase Auth's public sign-up: open (new Google players need it), but it can't make a player --
+/**
+ * Anyone can call Supabase Auth with the publishable key, so these check what that reaches without
+ * the app. The settings half depends on how this Supabase is configured (supabase/config.toml
+ * locally, the dashboard when hosted): with sign-up open, "Confirm email" must be on.
+ */
+async function publicSignUpChecks(alice: Player) {
+  const settings = (await (await fetch(`${url}/auth/v1/settings`, { headers: { apikey: publishableKey } })).json()) as {
+    disable_signup: boolean;
+    mailer_autoconfirm: boolean;
   };
-  const inviteFor = async (code: string, expiresInMs: number) => {
-    const now = Date.now();
-    const { error } = await admin.from("invites").insert({
-      token_hash: hash(code),
-      note: `smoke ${tag}`,
-      created_by: alice.id,
-      created_at: new Date(now - 60_000).toISOString(),
-      expires_at: new Date(now + expiresInMs).toISOString(),
-    });
-    if (error) throw new Error(`invite insert failed: ${error.message}`);
-  };
-  const redeem = (code: string, userId: string, name: string) =>
-    admin.rpc("redeem_invite", { p_token_hash: hash(code), p_user_id: userId, p_username: `smoke_${name}_${tag}`, p_display_name: displayNameFor(name) });
+  const signUpOpen = !settings.disable_signup;
+  console.log(`  · this Supabase: public sign-up ${signUpOpen ? "open" : "closed"}, Confirm email ${settings.mailer_autoconfirm ? "off" : "on"}`);
+  check("public sign-up is closed, or open with Confirm email on (never a session for an unproven address)", !signUpOpen || !settings.mailer_autoconfirm, settings);
 
-  const code = `smoke-invite-${tag}`;
-  await inviteFor(code, 3_600_000);
-  const carol = await newAuthUser("carol");
-  const { data: first, error: firstError } = await redeem(code, carol, "carol");
-  const { data: carolProfile } = await admin.from("profiles").select("id").eq("id", carol).maybeSingle();
-  const { data: spent } = await admin.from("invites").select("used_by, used_at").eq("token_hash", hash(code)).single();
-  check("an invite creates its player's profile and records who used it", first === true && !firstError && Boolean(carolProfile) && spent?.used_by === carol && Boolean(spent.used_at), { first, firstError, spent });
+  const outsider = createClient(url, publishableKey, opts);
+  const password = randomBytes(12).toString("hex");
 
-  const dave = await newAuthUser("dave");
-  const { data: second } = await redeem(code, dave, "dave");
-  const { data: daveProfile } = await admin.from("profiles").select("id").eq("id", dave).maybeSingle();
-  check("an invite works only once", second === false && !daveProfile, { second, daveProfile });
+  // (a) Can't take over or sign in as an existing player by registering their sign-in email.
+  const { data: copy } = await outsider.auth.signUp({ email: alice.email, password });
+  check("signing up with a player's sign-in email gives no session", !copy?.session, { session: Boolean(copy?.session) });
+  const { error: theirPassword } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password });
+  check("…and the outsider's password doesn't open the player's account", Boolean(theirPassword));
+  const { error: ownPassword } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password: alice.password });
+  check("…and the player still signs in with their own password", !ownPassword, ownPassword);
 
-  const expired = `smoke-expired-${tag}`;
-  await inviteFor(expired, -1_000);
-  const { data: late } = await redeem(expired, dave, "dave");
-  check("an expired invite doesn't work", late === false, late);
+  // (b) Can't get a usable account holding a free username's sign-in email; sign-up reclaims it.
+  const squatEmail = emailFor(`smoke_squat_${tag}`);
+  const { data: squat, error: squatError } = await outsider.auth.signUp({ email: squatEmail, password });
+  if (squat?.user) userIds.push(squat.user.id);
+  check("squatting a username's sign-in email gives no session", !squat?.session, { session: Boolean(squat?.session), squatError });
+  if (signUpOpen && squat?.user) {
+    const { error: squatSignIn } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: squatEmail, password });
+    check("…and the squatter can't sign in with it (unconfirmed)", Boolean(squatSignIn), squatSignIn);
+    const { data: profile } = await admin.from("profiles").select("id").eq("id", squat.user.id).maybeSingle();
+    const { data: orphan } = await admin.rpc("orphan_auth_user_for_email", { p_email: squatEmail });
+    check("…and it has no profile, so sign-up can find and remove it", !profile && orphan?.[0]?.id === squat.user.id, { profile, orphan });
+  } else {
+    check("…and with sign-up closed no auth user is created at all", !squat?.user && Boolean(squatError), { user: squat?.user?.id, squatError });
+  }
 
-  const taken = `smoke-taken-${tag}`;
-  await inviteFor(taken, 3_600_000);
-  const { error: dupName } = await admin.rpc("redeem_invite", { p_token_hash: hash(taken), p_user_id: dave, p_username: `smoke_carol_${tag}`, p_display_name: displayNameFor("dave") });
-  const { data: stillOpen } = await admin.from("invites").select("used_at").eq("token_hash", hash(taken)).single();
-  check("a taken username fails the redeem (23505) and leaves the invite unused", dupName?.code === "23505" && stillOpen?.used_at === null, { dupName, stillOpen });
-  await admin.from("invites").delete().eq("note", `smoke ${tag}`);
+  // (c) A session can't move itself onto another sign-in email without confirming it (undeliverable).
+  if (settings.mailer_autoconfirm) {
+    console.log("  · skipped the email-change check: Confirm email is off on this Supabase (config.toml turns it on; restart Supabase to apply)");
+    return;
+  }
+  const { data: fresh, error: freshError } = await createClient(url, publishableKey, opts).auth.signInWithPassword({ email: alice.email, password: alice.password });
+  if (freshError || !fresh.session) throw new Error(`signIn failed: ${freshError?.message}`);
+  const move = await fetch(`${url}/auth/v1/user`, {
+    method: "PUT",
+    headers: { apikey: publishableKey, authorization: `Bearer ${fresh.session.access_token}`, "content-type": "application/json" },
+    body: JSON.stringify({ email: emailFor(`smoke_moved_${tag}`) }),
+  });
+  console.log(`  · email change through Supabase Auth answered ${move.status}`);
+  const { data: after } = await admin.auth.admin.getUserById(alice.id);
+  check("a session can't move its account onto another username's sign-in email", after.user?.email === alice.email, after.user?.email);
 }
 
 // --- Profiles: visible display names, unique ignoring case; orphan auth users can be found ------
-async function profileChecks(alice: { id: string }) {
+async function profileChecks(alice: Player) {
   const { error: hidden } = await admin.from("profiles").update({ display_name: "\u200B" }).eq("id", alice.id);
   check("a display name can't be invisible (23514)", hidden?.code === "23514", hidden);
   const { error: bidi } = await admin.from("profiles").update({ display_name: "\u202Enimda" }).eq("id", alice.id);

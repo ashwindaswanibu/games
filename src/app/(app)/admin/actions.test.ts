@@ -14,7 +14,6 @@ vi.mock("@/server/auth", () => ({
   requireAdmin: async () => ({ id: ME, is_admin: true }),
   isPasswordAccountEmail: (email: string) => email.endsWith("@users.daily.invalid"),
 }));
-vi.mock("@/server/invite", () => ({ createInvite: async () => "code" }));
 vi.mock("@/server/supabase/admin", () => ({
   db: () => ({
     from: () => ({

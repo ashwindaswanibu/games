@@ -18,7 +18,7 @@ vi.mock("./rate-limit", () => ({
   },
 }));
 
-const { takeSignInAttempt } = await import("./sign-in-limit");
+const { takeSignInAttempt, takeSignUpAttempt } = await import("./auth-limits");
 const { RATE_LIMITS } = await vi.importActual<typeof import("./rate-limit")>("./rate-limit");
 
 beforeEach(() => {
@@ -41,8 +41,38 @@ describe("takeSignInAttempt", () => {
     expect(await takeSignInAttempt("sam")).toBe(true);
   });
 
+  it("counts an IPv6 client by its /64", async () => {
+    mocks.headers = new Headers({ "x-real-ip": "2001:db8:1:2:aaaa::9" });
+    await takeSignInAttempt("priya");
+    expect(mocks.taken[0]).toBe("signIn:ip:2001:db8:1:2::/64");
+  });
+
   it("keeps the limits tight enough to make guessing slow", () => {
     expect(RATE_LIMITS.signIn.limit / RATE_LIMITS.signIn.windowSeconds).toBeLessThanOrEqual(10 / 300);
     expect(RATE_LIMITS.signInAccount.limit / RATE_LIMITS.signInAccount.windowSeconds).toBeLessThanOrEqual(10 / 900);
+  });
+});
+
+describe("takeSignUpAttempt", () => {
+  it("counts the sign-up per client network, then overall", async () => {
+    expect(await takeSignUpAttempt()).toBe(true);
+    expect(mocks.taken).toEqual(["signUpsPerIp:ip:203.0.113.7", "signUps:all"]);
+  });
+
+  it("doesn't charge the overall limit when the client's own limit refuses", async () => {
+    mocks.exhausted.add("signUpsPerIp:ip:203.0.113.7");
+    expect(await takeSignUpAttempt()).toBe(false);
+    expect(mocks.taken).toEqual(["signUpsPerIp:ip:203.0.113.7"]);
+  });
+
+  it("refuses once the overall limit is used up", async () => {
+    mocks.exhausted.add("signUps:all");
+    expect(await takeSignUpAttempt()).toBe(false);
+  });
+
+  it("puts callers without a known IP in one shared bucket", async () => {
+    mocks.headers = new Headers();
+    await takeSignUpAttempt();
+    expect(mocks.taken[0]).toBe("signUpsPerIp:ip:unknown");
   });
 });

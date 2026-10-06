@@ -26,7 +26,7 @@ Open **http://localhost:3300**. The disk had only 1.9 GB free this morning, so f
     and puzzle_date = '2026-10-06'
     and game_id in ('degrees','frame-by-frame','color-grade','color-barcode');
   ```
-- **Your own account.** Sign up at `/signup` with the `INVITE_CODE` from `.env.local`, then run `update public.profiles set is_admin = true where username = '<you>';`.
+- **Your own account.** Sign up at `/signup` (no invite code since sign-up opened), then run `update public.profiles set is_admin = true where username = '<you>';`.
 
 **Where the games are.** On the Today page (`/`) there's a **Movies** section under Words, and each card is tagged TESTING. Direct links: `/play/degrees`, `/play/frame-by-frame`, `/play/color-grade`, `/play/color-barcode`. The leaderboard now has Overall, per-bucket and per-game tabs, but testing games score nothing there.
 
