@@ -1,4 +1,6 @@
-# Color Barcode: daily film selection (first pass, for Ashwin's review)
+# Color Barcode: daily film selection
+
+> **Approved by Ashwin 2026-10-06**, including the fixes: no repeat of the same franchise or director within 30 days, and skip black-and-white films. Still open: optional genre caps, TMDB vote-count blend once a key exists.
 
 ## 1. Which films are possible at all
 A film needs **frames from the whole movie** to make a barcode. Today's source is **movie-screencaps.com**, which has 1,385 films from 1902–2026. MovieNet (1,100 films, pre-2019) gets added later.
