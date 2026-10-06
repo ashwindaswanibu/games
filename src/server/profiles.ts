@@ -11,7 +11,7 @@ import {
   suffixedDisplayName,
   usernameCollisionPattern,
 } from "@/lib/username";
-import { emailForUsername, isPasswordAccountEmail, type SessionUser } from "./auth";
+import { emailForUsername, isEmailTaken, isPasswordAccountEmail, type SessionUser } from "./auth";
 import type { ProfileRow } from "./database.types";
 import { db } from "./supabase/admin";
 
@@ -160,23 +160,37 @@ export async function provisionProfile(user: SessionUser): Promise<ProvisionResu
  */
 const ORPHAN_MIN_AGE_MS = 2 * 60 * 1000;
 
+/** The auth user without a profile that holds `email`, if any (players are never returned). */
+async function orphanHolding(email: string): Promise<{ id: string; created_at: string } | null> {
+  const { data, error } = await db().rpc("orphan_auth_user_for_email", { p_email: email });
+  if (error) throw new Error(`Failed to look up the holder of ${email}: ${error.message}`);
+  return data[0] ?? null;
+}
+
+/**
+ * - `free`: no profile-less auth user holds the email (a player's account still might).
+ * - `reclaimed`: one did, and it was removed.
+ * - `held`: one does, but it is too recent to remove: treat the username as taken for now.
+ */
+export type ReclaimResult = "free" | "reclaimed" | "held";
+
 /**
  * Frees `username`'s sign-in email (`<username>@users.daily.invalid`) when an auth user without a
  * profile holds it. The app never leaves one behind for long (sign-up deletes the auth user if its
  * profile can't be created), so such a user was registered straight through Supabase Auth's public
  * sign-up endpoint (open, because new Google players need it) to squat the name, or is debris from
- * a crash. It can't be a player, so it is deleted. Returns whether one was removed.
+ * a crash. It can't be a player, so it is deleted once it is old enough not to be a sign-up in
+ * flight.
  */
-export async function reclaimSignInEmail(username: string, now = Date.now()): Promise<boolean> {
+export async function reclaimSignInEmail(username: string, now = Date.now()): Promise<ReclaimResult> {
   const email = emailForUsername(username);
-  const { data, error } = await db().rpc("orphan_auth_user_for_email", { p_email: email });
-  if (error) throw new Error(`Failed to look up the holder of ${email}: ${error.message}`);
-  const orphan = data[0];
-  if (!orphan || now - new Date(orphan.created_at).getTime() < ORPHAN_MIN_AGE_MS) return false;
+  const orphan = await orphanHolding(email);
+  if (!orphan) return "free";
+  if (now - new Date(orphan.created_at).getTime() < ORPHAN_MIN_AGE_MS) return "held";
   const { error: deleteError } = await db().auth.admin.deleteUser(orphan.id);
   if (deleteError) throw new Error(`Failed to remove profile-less auth user ${orphan.id}: ${deleteError.message}`);
   console.warn(`Removed profile-less auth user ${orphan.id} holding ${email}`);
-  return true;
+  return "reclaimed";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -274,17 +288,20 @@ export async function updateProfile(
   const passwordAccount = isPasswordAccountEmail(account.user.email);
 
   if (passwordAccount) {
+    const email = emailForUsername(next.username);
     try {
-      await reclaimSignInEmail(next.username);
+      // No profile has the name, but an auth user too recent to reclaim may hold its sign-in email.
+      if ((await reclaimSignInEmail(next.username)) === "held") return { ok: false, reason: "username_taken" };
     } catch (error) {
       console.error(`Sign-in email check failed for ${profile.id}:`, error);
       return { ok: false, reason: "failed" };
     }
     const { error } = await setSignInEmail(profile.id, next.username);
     if (error) {
-      // No profile has the name, but an auth user too recent to reclaim holds its sign-in email.
-      // Supabase reports that as `email_exists`, or as a 500 from the admin endpoint.
-      if (error.code === "email_exists") return { ok: false, reason: "username_taken" };
+      // Someone took the email since the check above. The admin endpoint may say `email_exists`,
+      // or just 500 when the unique index refuses it, so look again before calling it a failure.
+      const taken = isEmailTaken(error) || Boolean(await orphanHolding(email).catch(() => null));
+      if (taken) return { ok: false, reason: "username_taken" };
       console.error(`Sign-in email update failed for ${profile.id}: ${error.message}`);
       return { ok: false, reason: "failed" };
     }

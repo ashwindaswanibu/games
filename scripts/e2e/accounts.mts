@@ -31,6 +31,8 @@ import { Report } from "./lib/report.mjs";
 
 const PASSWORD_DOMAIN = "users.daily.invalid";
 const tag = randomBytes(3).toString("hex");
+/** Random, and always meets the hosted password rule (at least one letter and one digit). */
+const randomPassword = () => `pw1-${randomBytes(12).toString("hex")}`;
 
 interface Ctx {
   env: E2eAccountsEnv;
@@ -83,7 +85,7 @@ async function waitForPath(page: Page, pathname: string): Promise<void> {
  * claims carry; it's the one part of a Google account this can't make for real.)
  */
 async function createGoogleLikeUser(ctx: Ctx, email: string, fullName: string, google = true): Promise<{ id: string; password: string }> {
-  const password = randomBytes(12).toString("hex");
+  const password = randomPassword();
   const { data, error } = await ctx.db.auth.admin.createUser({
     email,
     password,
@@ -154,7 +156,7 @@ interface PasswordAccount {
 async function passwordSignUp(ctx: Ctx): Promise<PasswordAccount> {
   const { report, env } = ctx;
   const username = `e2e_pw_${tag}`;
-  const password = randomBytes(10).toString("hex");
+  const password = randomPassword();
   const { context, page } = await freshPage(ctx);
 
   await page.goto(`${env.E2E_BASE_URL}/signup`, { waitUntil: "networkidle0" });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayNameSchema } from "./validation";
+import { displayNameSchema, passwordSchema } from "./validation";
 
 const ok = (name: string) => displayNameSchema.safeParse(name).success;
 
@@ -29,5 +29,24 @@ describe("displayNameSchema", () => {
 
   it("rejects a zero-width joiner that isn't joining two emoji", () => {
     expect(ok("Ash‍win")).toBe(false);
+  });
+});
+
+describe("passwordSchema", () => {
+  const issue = (password: string) => passwordSchema.safeParse(password).error?.issues[0]?.message;
+
+  it("accepts 8–72 characters with at least one letter and one digit", () => {
+    for (const password of ["abcdefg1", "1234567a", "Correct horse 7", "x".repeat(71) + "1"]) expect(issue(password), password).toBeUndefined();
+  });
+
+  it("matches Supabase's letters-and-digits rule, which counts ASCII letters and digits only", () => {
+    expect(issue("abcdefgh")).toMatch(/letter and one number/);
+    expect(issue("12345678")).toMatch(/letter and one number/);
+    expect(issue("éééééé١٢")).toMatch(/letter and one number/);
+  });
+
+  it("refuses passwords bcrypt would truncate or that are too short", () => {
+    expect(issue("abc1")).toMatch(/at least 8/);
+    expect(issue("a1".repeat(37))).toMatch(/at most 72/);
   });
 });

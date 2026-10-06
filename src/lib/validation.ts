@@ -54,8 +54,17 @@ export function tidyDisplayName(raw: string): string {
     .trim();
 }
 
-// bcrypt (used by Supabase Auth) ignores bytes past 72.
+export const PASSWORD_MIN = 8;
+export const PASSWORD_NEEDS_LETTER_AND_DIGIT = "Use at least one letter and one number.";
+
+/**
+ * Mirrors the hosted Supabase Auth password rule ("letters and digits", which counts ASCII ones
+ * only), so most weak passwords are refused here rather than by Supabase. Supabase still has the
+ * last word (leaked-password protection, say): see `weakPasswordMessage`. bcrypt (used by
+ * Supabase Auth) ignores bytes past 72.
+ */
 export const passwordSchema = z
   .string()
-  .min(8, "Use at least 8 characters.")
-  .max(72, "Use at most 72 characters.");
+  .min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters.`)
+  .max(72, "Use at most 72 characters.")
+  .refine((password) => /[A-Za-z]/.test(password) && /[0-9]/.test(password), PASSWORD_NEEDS_LETTER_AND_DIGIT);

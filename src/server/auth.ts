@@ -1,6 +1,7 @@
 import "server-only";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
+import { PASSWORD_MIN, PASSWORD_NEEDS_LETTER_AND_DIGIT } from "@/lib/validation";
 import { db } from "./supabase/admin";
 import { sessionClient } from "./supabase/session";
 import type { ProfileRow } from "./database.types";
@@ -18,6 +19,34 @@ export function emailForUsername(username: string): string {
 
 export function isPasswordAccountEmail(email: string | undefined): boolean {
   return Boolean(email?.endsWith(`@${PASSWORD_ACCOUNT_DOMAIN}`));
+}
+
+interface AuthErrorLike {
+  code?: string;
+  /** Set on Supabase's `AuthWeakPasswordError`: which password rules failed. */
+  reasons?: readonly string[];
+}
+
+/**
+ * Supabase Auth refused to create an account because one already has that email. Only these
+ * codes mean that: a 422 on its own can be anything else, such as a weak password.
+ */
+export function isEmailTaken(error: AuthErrorLike | null | undefined): boolean {
+  return error?.code === "email_exists" || error?.code === "user_already_exists";
+}
+
+/**
+ * What to tell the player when Supabase Auth refuses a password against the project's own rules
+ * (hosted: letters and digits, leaked-password protection), or null when that isn't the error.
+ * `passwordSchema` mirrors the character rule, so in practice this is a breached password.
+ */
+export function weakPasswordMessage(error: AuthErrorLike | null | undefined): string | null {
+  if (error?.code !== "weak_password") return null;
+  const reasons = error.reasons ?? [];
+  if (reasons.includes("pwned")) return "That password has appeared in a data breach. Pick another.";
+  if (reasons.includes("characters")) return PASSWORD_NEEDS_LETTER_AND_DIGIT;
+  if (reasons.includes("length")) return `Use at least ${PASSWORD_MIN} characters.`;
+  return "Pick a stronger password.";
 }
 
 export interface SessionUser {

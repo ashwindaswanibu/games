@@ -13,7 +13,7 @@ export function SignupForm() {
     <form action={action} className="grid gap-4">
       <FormMessage>{state.error}</FormMessage>
       <Field label="Username" name="username" autoComplete="username" autoCapitalize="none" required defaultValue={state.values?.username} error={err.username} hint="How you sign in. You can change it later." />
-      <Field label="Password" name="password" type="password" autoComplete="new-password" required minLength={8} error={err.password} />
+      <Field label="Password" name="password" type="password" autoComplete="new-password" required minLength={8} error={err.password} hint="At least 8 characters, with a letter and a number." />
       <Field label="Display name (optional)" name="displayName" autoComplete="nickname" defaultValue={state.values?.displayName} error={err.displayName} hint="What friends see on the leaderboard. Defaults to your username." />
       <SubmitButton pendingText="Creating account…">Create account</SubmitButton>
     </form>

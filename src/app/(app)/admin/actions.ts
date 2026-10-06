@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { passwordSchema } from "@/lib/validation";
 import { canResetPassword, canSetAdmin, type ManagedAccount } from "@/server/admin-policy";
-import { isPasswordAccountEmail, requireAdmin } from "@/server/auth";
+import { isPasswordAccountEmail, requireAdmin, weakPasswordMessage } from "@/server/auth";
 import { serverEnv } from "@/server/env";
 import { db } from "@/server/supabase/admin";
 
@@ -41,7 +41,7 @@ export async function resetPassword(_prev: AdminFormState, formData: FormData): 
   const { error: allowError } = await db().rpc("allow_password_change", { p_user_id: parsed.data.userId });
   if (allowError) throw new Error(`Failed to authorise the password change: ${allowError.message}`);
   const { error } = await db().auth.admin.updateUserById(parsed.data.userId, { password: parsed.data.password });
-  if (error) return { error: "Couldn't update the password." };
+  if (error) return { error: weakPasswordMessage(error) ?? "Couldn't update the password." };
   console.info(`admin: ${me.id} reset the password of ${target.id}`);
   return { ok: "Password updated. Send it to them privately." };
 }

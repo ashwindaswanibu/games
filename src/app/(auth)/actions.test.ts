@@ -42,7 +42,7 @@ vi.mock("@/server/auth-limits", () => ({
 }));
 vi.mock("@/server/profiles", async () => {
   const actual = await vi.importActual<typeof import("@/server/profiles")>("@/server/profiles");
-  return { profileConflict: actual.profileConflict, reclaimSignInEmail: async () => mocks.reclaimed };
+  return { profileConflict: actual.profileConflict, reclaimSignInEmail: async () => (mocks.reclaimed ? "reclaimed" : "held") };
 });
 
 const { signInWithPassword, signUp } = await import("./actions");
@@ -53,7 +53,7 @@ function form(fields: Record<string, string>): FormData {
   return data;
 }
 
-const signUpForm = (displayName = "Priya") => form({ username: "priya", displayName, password: "a-long-password" });
+const signUpForm = (displayName = "Priya") => form({ username: "priya", displayName, password: "a-long-password-1" });
 const EMAIL_EXISTS = { data: { user: null }, error: { code: "email_exists", status: 422, message: "exists" } };
 
 beforeEach(() => {
@@ -88,7 +88,7 @@ describe("signUp", () => {
     expect(mocks.createUser).toHaveBeenCalledOnce();
     expect(mocks.insertProfile).toHaveBeenCalledWith({ id: "new-user", username: "priya", display_name: "Priya" });
     expect(mocks.deleteUser).not.toHaveBeenCalled();
-    expect(mocks.signIn).toHaveBeenCalledWith({ email: "priya@users.daily.invalid", password: "a-long-password" });
+    expect(mocks.signIn).toHaveBeenCalledWith({ email: "priya@users.daily.invalid", password: "a-long-password-1" });
   });
 
   it("defaults a blank display name to the username", async () => {
@@ -119,6 +119,32 @@ describe("signUp", () => {
     mocks.createUser.mockResolvedValue(EMAIL_EXISTS);
     const state = await signUp({}, signUpForm());
     expect(state.fieldErrors?.username).toMatch(/taken/);
+    expect(mocks.createUser).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a password without a letter and a digit before creating anything", async () => {
+    const state = await signUp({}, form({ username: "priya", password: "abcdefghij" }));
+    expect(state.fieldErrors?.password).toMatch(/letter and one number/);
+    expect(mocks.createUser).not.toHaveBeenCalled();
+  });
+
+  it("reports Supabase's weak-password refusal on the password, not as a taken username", async () => {
+    // Hosted Supabase answers 422 `weak_password` too, e.g. with leaked-password protection on.
+    mocks.createUser.mockResolvedValue({
+      data: { user: null },
+      error: { code: "weak_password", status: 422, message: "Password is known to be weak", reasons: ["pwned"] },
+    });
+    const state = await signUp({}, signUpForm());
+    expect(state.fieldErrors?.password).toMatch(/data breach/);
+    expect(state.fieldErrors?.username).toBeUndefined();
+    expect(mocks.createUser).toHaveBeenCalledOnce();
+  });
+
+  it("treats other 422s as a failure, not a taken username", async () => {
+    mocks.createUser.mockResolvedValue({ data: { user: null }, error: { code: "validation_failed", status: 422, message: "bad" } });
+    const state = await signUp({}, signUpForm());
+    expect(state.error).toMatch(/Couldn't create/);
+    expect(state.fieldErrors).toBeUndefined();
     expect(mocks.createUser).toHaveBeenCalledOnce();
   });
 

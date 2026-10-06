@@ -30,6 +30,8 @@ class FakeStore {
   beforeProfileWrite: (() => void | Promise<void>) | null = null;
   failProfileUpdate: DbError | null = null;
   failEmailUpdates = 0;
+  /** Runs just before an email update, to stage a race. */
+  onEmailUpdate: (() => void) | null = null;
   authCalls: string[] = [];
 
   addUser(id: string, email: string, createdAt = Date.parse("2026-10-01T00:00:00Z")) {
@@ -178,6 +180,8 @@ const fakeDb = {
       },
       async updateUserById(id: string, attributes: { email?: string }) {
         store.authCalls.push(`update:${attributes.email}`);
+        store.onEmailUpdate?.();
+        store.onEmailUpdate = null;
         if (store.failEmailUpdates > 0) {
           store.failEmailUpdates--;
           return { data: { user: null }, error: { status: 500, code: "unexpected_failure", message: "Error updating user" } };
@@ -400,11 +404,21 @@ describe("updateProfile", () => {
     expect(store.users.get("p1")?.email).toBe(PASSWORD("patty"));
   });
 
-  it("leaves a very recent holder of the new sign-in email alone, and changes nothing", async () => {
+  it("calls the username taken while a very recent auth user holds its sign-in email, and changes nothing", async () => {
     store.addUser("in-flight", PASSWORD("patty"), Date.now());
-    expect(await updateProfile(pat(), { username: "patty", displayName: "Pat" })).toEqual({ ok: false, reason: "failed" });
+    expect(await updateProfile(pat(), { username: "patty", displayName: "Pat" })).toEqual({ ok: false, reason: "username_taken" });
     expect(store.users.has("in-flight")).toBe(true);
+    expect(store.authCalls.some((call) => call.startsWith("update:"))).toBe(false);
     expect(pat().username).toBe("pat");
+    expect(store.users.get("p1")?.email).toBe(PASSWORD("pat"));
+  });
+
+  it("calls the username taken when its sign-in email is claimed between the check and the move", async () => {
+    // GoTrue's admin update answers 500 when the unique index refuses the email.
+    store.onEmailUpdate = () => store.addUser("racer", PASSWORD("patty"), Date.now());
+    expect(await updateProfile(pat(), { username: "patty", displayName: "Pat" })).toEqual({ ok: false, reason: "username_taken" });
+    expect(pat().username).toBe("pat");
+    expect(store.users.get("p1")?.email).toBe(PASSWORD("pat"));
   });
 });
 
@@ -413,20 +427,20 @@ describe("reclaimSignInEmail", () => {
 
   it("removes a profile-less auth user holding the username's sign-in email once it's a couple of minutes old", async () => {
     store.addUser("squatter", PASSWORD("ana"), now - 3 * 60_000);
-    expect(await reclaimSignInEmail("ana", now)).toBe(true);
+    expect(await reclaimSignInEmail("ana", now)).toBe("reclaimed");
     expect(store.users.has("squatter")).toBe(false);
   });
 
   it("leaves a sign-up that may still be in flight alone", async () => {
     store.addUser("new", PASSWORD("ana"), now - 30_000);
-    expect(await reclaimSignInEmail("ana", now)).toBe(false);
+    expect(await reclaimSignInEmail("ana", now)).toBe("held");
     expect(store.users.has("new")).toBe(true);
   });
 
   it("never removes a player", async () => {
     store.addUser("p1", PASSWORD("ana"), now - 86_400_000);
     store.addProfile("p1", "ana", "Ana");
-    expect(await reclaimSignInEmail("ana", now)).toBe(false);
+    expect(await reclaimSignInEmail("ana", now)).toBe("free");
     expect(store.users.has("p1")).toBe(true);
     expect(store.authCalls).toEqual([]);
   });

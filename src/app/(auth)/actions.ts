@@ -7,7 +7,7 @@ import { fieldErrors, formText as text, type FormState } from "@/lib/form-state"
 import { publicEnv } from "@/lib/public-env";
 import { optionalDisplayNameSchema, passwordSchema, usernameSchema } from "@/lib/validation";
 import { takeSignInAttempt, takeSignUpAttempt, TOO_MANY_SIGN_IN_ATTEMPTS, TOO_MANY_SIGN_UPS } from "@/server/auth-limits";
-import { emailForUsername } from "@/server/auth";
+import { emailForUsername, isEmailTaken, weakPasswordMessage } from "@/server/auth";
 import { profileConflict, reclaimSignInEmail } from "@/server/profiles";
 import { db } from "@/server/supabase/admin";
 import { sessionClient } from "@/server/supabase/session";
@@ -65,8 +65,6 @@ function createPasswordUser(username: string, password: string) {
   });
 }
 
-const isEmailExists = (error: { code?: string; status?: number } | null) => error?.code === "email_exists" || error?.status === 422;
-
 export async function signUp(_prev: FormState, formData: FormData): Promise<FormState> {
   const values = { username: text(formData, "username"), displayName: text(formData, "displayName") };
   const parsed = signUpSchema.safeParse({ ...values, password: text(formData, "password") });
@@ -90,19 +88,23 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   if (taken) return { fieldErrors: { username: USERNAME_TAKEN }, values };
 
   let { data: created, error: createError } = await createPasswordUser(username, password);
-  if (isEmailExists(createError)) {
+  if (isEmailTaken(createError)) {
     // No player has the name, but an auth user holds its sign-in email: free it if it's a squatter
     // made through Supabase Auth's public sign-up (see `reclaimSignInEmail`), then try once more.
     let reclaimed = false;
     try {
-      reclaimed = await reclaimSignInEmail(username);
+      reclaimed = (await reclaimSignInEmail(username)) === "reclaimed";
     } catch (error) {
       console.error("signUp: couldn't reclaim a held sign-in email:", error);
     }
     if (reclaimed) ({ data: created, error: createError } = await createPasswordUser(username, password));
   }
   if (createError || !created.user) {
-    return isEmailExists(createError) ? { fieldErrors: { username: USERNAME_TAKEN }, values } : { error: CREATE_FAILED, values };
+    if (isEmailTaken(createError)) return { fieldErrors: { username: USERNAME_TAKEN }, values };
+    const weak = weakPasswordMessage(createError);
+    if (weak) return { fieldErrors: { password: weak }, values };
+    console.error(`signUp: couldn't create @${username}: ${createError?.message ?? "no user returned"}`);
+    return { error: CREATE_FAILED, values };
   }
 
   const { error: profileError } = await db().from("profiles").insert({ id: created.user.id, username, display_name: displayName });
