@@ -219,12 +219,20 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
+# Must stay on: it also gates every email/password sign-in ("Email logins are disabled"), and
+# username accounts sign in with a synthetic email. The app creates those accounts itself through
+# the admin API (which is unaffected by the confirmation setting below).
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# On, so Supabase's public sign-up endpoint (callable with the publishable key, bypassing the app)
+# can't mint a usable (signed-in) account for an address its caller doesn't control, such as a
+# player's `<username>@users.daily.invalid` sign-in name or a friend's Gmail address. The app's
+# own accounts are created confirmed. Hosted projects: keep Auth -> Providers -> Email ->
+# "Confirm email" on (the default) for the same reason.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.

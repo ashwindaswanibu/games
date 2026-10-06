@@ -3,28 +3,15 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { fieldErrors, formText as text, type FormState } from "@/lib/form-state";
 import { publicEnv } from "@/lib/public-env";
-import { displayNameSchema, passwordSchema, usernameSchema } from "@/lib/validation";
-import { emailForUsername, getProfile, isValidInviteCode, requireUser } from "@/server/auth";
+import { optionalDisplayNameSchema, passwordSchema, usernameSchema } from "@/lib/validation";
+import { emailForUsername } from "@/server/auth";
+import { clientIp } from "@/server/client-ip";
+import { profileConflict } from "@/server/profiles";
+import { takeSignUpAllowance } from "@/server/rate-limit";
 import { db } from "@/server/supabase/admin";
 import { sessionClient } from "@/server/supabase/session";
-
-export interface FormState {
-  error?: string;
-  fieldErrors?: Partial<Record<string, string>>;
-  /** Echo of non-secret inputs so the form keeps them after a failed submit. */
-  values?: Record<string, string>;
-}
-
-const UNIQUE_VIOLATION = "23505";
-
-function fieldErrors(error: z.ZodError): Partial<Record<string, string>> {
-  const out: Partial<Record<string, string>> = {};
-  for (const issue of error.issues) out[String(issue.path[0])] ??= issue.message;
-  return out;
-}
-
-const text = (formData: FormData, key: string) => String(formData.get(key) ?? "");
 
 // ---------------------------------------------------------------------------------------------
 
@@ -58,22 +45,33 @@ export async function signInWithGoogle(): Promise<void> {
 
 // ---------------------------------------------------------------------------------------------
 
+/** Sign-up is open: a username and password, and optionally a display name (else the username). */
 const signUpSchema = z.object({
   username: usernameSchema,
-  displayName: displayNameSchema,
+  displayName: optionalDisplayNameSchema,
   password: passwordSchema,
-  inviteCode: z.string().min(1, "Ask a friend for the invite code."),
 });
 
 export async function signUp(_prev: FormState, formData: FormData): Promise<FormState> {
   const values = { username: text(formData, "username"), displayName: text(formData, "displayName") };
-  const parsed = signUpSchema.safeParse({ ...values, password: text(formData, "password"), inviteCode: text(formData, "inviteCode") });
+  const parsed = signUpSchema.safeParse({ ...values, password: text(formData, "password") });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values };
-  const { username, displayName, password, inviteCode } = parsed.data;
+  const { username, password } = parsed.data;
+  const displayName = parsed.data.displayName ?? username;
 
-  if (!isValidInviteCode(inviteCode)) return { fieldErrors: { inviteCode: "That invite code isn't right." }, values };
+  // Open sign-up makes a real account (auth user + profile) per call, so it's metered per client
+  // IP and overall. Supabase Auth's own per-IP limits don't cover the admin API used below.
+  let allowed: boolean;
+  try {
+    allowed = await takeSignUpAllowance(await clientIp());
+  } catch (error) {
+    console.error("Sign-up rate limit check failed:", error);
+    return { error: "Couldn't create your account. Try again.", values };
+  }
+  if (!allowed) return { error: "Too many new accounts from here. Try again in an hour.", values };
 
-  const { data: taken } = await db().from("profiles").select("id").eq("username", username).maybeSingle();
+  const { data: taken, error: takenError } = await db().from("profiles").select("id").eq("username", username).maybeSingle();
+  if (takenError) return { error: "Couldn't create your account. Try again.", values };
   if (taken) return { fieldErrors: { username: "That username is taken." }, values };
 
   // Admin API: creates a confirmed account without sending email (the address is synthetic).
@@ -94,9 +92,19 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
   if (profileError) {
     // Don't leave an auth user without a profile behind.
     await db().auth.admin.deleteUser(created.user.id);
-    return profileError.code === UNIQUE_VIOLATION
-      ? { fieldErrors: { username: "That username is taken." }, values }
-      : { error: "Couldn't create your account. Try again.", values };
+    switch (profileConflict(profileError)) {
+      case "username":
+        return { fieldErrors: { username: "That username is taken." }, values };
+      case "display_name":
+        return {
+          fieldErrors: {
+            displayName: parsed.data.displayName ? "Someone already goes by that name." : `Someone already goes by "${username}". Add a display name.`,
+          },
+          values,
+        };
+      default:
+        return { error: "Couldn't create your account. Try again.", values };
+    }
   }
 
   const supabase = await sessionClient();
@@ -106,33 +114,6 @@ export async function signUp(_prev: FormState, formData: FormData): Promise<Form
 }
 
 // ---------------------------------------------------------------------------------------------
-
-const onboardingSchema = z.object({
-  username: usernameSchema,
-  displayName: displayNameSchema,
-  inviteCode: z.string().min(1, "Ask a friend for the invite code."),
-});
-
-/** Google users land here after their first sign-in to claim a username. */
-export async function completeOnboarding(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireUser();
-  if (await getProfile(user.id)) redirect("/");
-
-  const values = { username: text(formData, "username"), displayName: text(formData, "displayName") };
-  const parsed = onboardingSchema.safeParse({ ...values, inviteCode: text(formData, "inviteCode") });
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values };
-  const { username, displayName, inviteCode } = parsed.data;
-
-  if (!isValidInviteCode(inviteCode)) return { fieldErrors: { inviteCode: "That invite code isn't right." }, values };
-
-  const { error } = await db().from("profiles").insert({ id: user.id, username, display_name: displayName });
-  if (error) {
-    return error.code === UNIQUE_VIOLATION
-      ? { fieldErrors: { username: "That username is taken." }, values }
-      : { error: "Couldn't save your profile. Try again.", values };
-  }
-  redirect("/");
-}
 
 export async function signOut(): Promise<void> {
   const supabase = await sessionClient();

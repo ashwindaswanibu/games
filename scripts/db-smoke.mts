@@ -1,7 +1,8 @@
 /**
  * Integration smoke test for the database contract the app relies on: auth with synthetic
- * username emails, RLS, puzzle upsert semantics, optimistic concurrency on plays, check
- * constraints, the leaderboard/streak functions, puzzle assets, and the movie catalog search.
+ * username emails (including renames, which move the sign-in email), RLS, puzzle upsert semantics,
+ * optimistic concurrency on plays, check constraints, the leaderboard/streak functions, puzzle
+ * assets, and the movie catalog search.
  *
  * Runs against a live Supabase (local by default) and cleans up after itself.
  *   npm run db:start && npm run test:db
@@ -28,7 +29,14 @@ function check(name: string, ok: boolean, detail?: unknown) {
   console.log(`${ok ? "✓" : "✗"} ${name}${!ok && detail !== undefined ? ` — ${JSON.stringify(detail)}` : ""}`);
 }
 
-async function makePlayer(name: string): Promise<{ id: string; client: SupabaseClient }> {
+interface Player {
+  id: string;
+  username: string;
+  password: string;
+  client: SupabaseClient;
+}
+
+async function makePlayer(name: string): Promise<Player> {
   const username = `smoke_${name}_${tag}`;
   const email = `${username}@users.daily.invalid`;
   const password = randomBytes(12).toString("hex");
@@ -40,7 +48,56 @@ async function makePlayer(name: string): Promise<{ id: string; client: SupabaseC
   const client = createClient(url, publishableKey, opts);
   const { error: signInError } = await client.auth.signInWithPassword({ email, password });
   if (signInError) throw new Error(`signIn failed: ${signInError.message}`);
-  return { id: data.user.id, client };
+  return { id: data.user.id, username, password, client };
+}
+
+const emailFor = (username: string) => `${username}@users.daily.invalid`;
+
+/** Username changes and first-sign-in provisioning (src/server/profiles.ts) rely on these. */
+async function accountChecks(alice: Player, bob: Player) {
+  const signsIn = async (username: string, password: string) => {
+    const client = createClient(url, publishableKey, opts);
+    const { error } = await client.auth.signInWithPassword({ email: emailFor(username), password });
+    return !error;
+  };
+
+  const { error: takenRename } = await admin.from("profiles").update({ username: bob.username }).eq("id", alice.id);
+  check("renaming a profile to a taken username is a unique violation (23505)", takenRename?.code === "23505", takenRename);
+
+  // GoTrue's admin endpoint doesn't pre-check this; the unique index refuses it (as a 500).
+  const { error: takenEmail } = await admin.auth.admin.updateUserById(alice.id, { email: emailFor(bob.username), email_confirm: true });
+  check(
+    "moving a sign-in email onto another account's is refused, and both still sign in",
+    Boolean(takenEmail) && (await signsIn(alice.username, alice.password)) && (await signsIn(bob.username, bob.password)),
+    takenEmail,
+  );
+
+  const renamed = `smoke_renamed_${tag}`;
+  const { error: emailMove } = await admin.auth.admin.updateUserById(alice.id, { email: emailFor(renamed), email_confirm: true });
+  check("the admin API moves a sign-in email without confirmation", !emailMove, emailMove);
+  check("the new username signs in", await signsIn(renamed, alice.password));
+  check("the old username no longer signs in", !(await signsIn(alice.username, alice.password)));
+  const { data: stillSignedIn, error: sessionError } = await alice.client.auth.getUser();
+  check("an existing session survives the email move", !sessionError && stillSignedIn.user?.id === alice.id, sessionError);
+  const { error: moveBack } = await admin.auth.admin.updateUserById(alice.id, { email: emailFor(alice.username), email_confirm: true });
+  check("the email moves back (the rename rollback path)", !moveBack && (await signsIn(alice.username, alice.password)), moveBack);
+
+  const { data: collisions, error: matchError } = await admin
+    .from("profiles")
+    .select("username")
+    .filter("username", "match", `^smoke_(alice|bob)_${tag}[0-9]*$`);
+  check(
+    "the regex filter used for username collisions works through PostgREST",
+    !matchError && collisions?.map((r) => r.username).sort().join() === [alice.username, bob.username].sort().join(),
+    { matchError, collisions },
+  );
+
+  const { error: duplicateProfile } = await admin.from("profiles").insert({ id: alice.id, username: `smoke_dup_${tag}`, display_name: "dup" });
+  check("a second profile for the same account is a unique violation (23505)", duplicateProfile?.code === "23505", duplicateProfile);
+  const { error: orphanProfile } = await admin
+    .from("profiles")
+    .insert({ id: "00000000-0000-4000-8000-000000000000", username: `smoke_orphan_${tag}`, display_name: "orphan" });
+  check("a profile for a deleted account is a foreign-key violation (23503)", orphanProfile?.code === "23503", orphanProfile);
 }
 
 async function main() {
@@ -48,6 +105,7 @@ async function main() {
   const alice = await makePlayer("alice");
   const bob = await makePlayer("bob");
   check("password accounts on the .invalid domain can be created and sign in", true);
+  await accountChecks(alice, bob);
 
   // --- Puzzles: upsert ignores duplicates, RLS hides them ----------------------------------
   const day = (n: number) => `2001-01-${String(n).padStart(2, "0")}`;

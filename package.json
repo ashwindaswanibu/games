@@ -17,6 +17,7 @@
     "db:types": "supabase gen types typescript --local > src/server/database.types.generated.ts",
     "test:db": "node --env-file=.env.local scripts/db-smoke.mts",
     "test:e2e": "tsx --conditions=react-server --env-file=.env.local scripts/e2e/movies.mts",
+    "test:e2e:accounts": "tsx --conditions=react-server --env-file=.env.local scripts/e2e/accounts.mts",
     "content:fixtures": "tsx --conditions=react-server --env-file=.env.local scripts/content/fixtures.mts",
     "content:movies:catalog": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/catalog.mts",
     "content:movies:degrees": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/degrees.mts",

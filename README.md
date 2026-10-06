@@ -17,7 +17,11 @@ one overall leaderboard plus one per game.
 - **Scores are normalized.** Every finished play scores 0–100. The overall board sums them; each
   game also keeps its own result label (like `4/7`) for its own board.
 - **Spoiler wall.** You can't see friends' results for a game until you've finished it.
-- **Friends only.** Signing up (password or Google) requires `INVITE_CODE`.
+- **Open sign-up, no forms on the way in.** Anyone who reaches the site can create an account:
+  a username and password, or Google. A first Google sign-in gets a profile automatically (username
+  and display name from the Google name, falling back to the email; `GET /auth/welcome`) and lands
+  on Today with a note saying how to change them. Players change their username and display name
+  later from their own profile page. To keep the group to friends, see [Who can join](#who-can-join).
 - **Buckets.** Every game belongs to one bucket (Words, Movies, Geography, Chess;
   `src/games/buckets.ts`). Today groups games by bucket, and each bucket has its own board (the
   same leaderboard, limited to that bucket's games).
@@ -56,7 +60,7 @@ src/
     (auth)/        /login, /signup, plus server actions for all auth flows
     (app)/         Signed-in app: Today (/), /play/[gameId], /leaderboard, /u/[username], /admin
     auth/callback  OAuth code exchange
-    onboarding/    Google users pick a username and enter the invite code
+    auth/welcome   First sign-in: creates the profile from the Google identity, then Today
   proxy.ts         Session refresh; redirects signed-out visitors to /login
 supabase/
   migrations/      Schema, RLS, the leaderboard/streak SQL functions, puzzle assets, movie catalog
@@ -87,7 +91,7 @@ Requires Node 20.9+ and Docker.
 ```bash
 npm install
 npm run db:start                 # local Supabase; prints the URL and keys
-cp .env.example .env.local       # fill in the keys printed above, plus INVITE_CODE and PUZZLE_SEED_SECRET
+cp .env.example .env.local       # fill in the keys printed above, plus PUZZLE_SEED_SECRET
 npm run dev                      # http://localhost:3000
 ```
 
@@ -102,10 +106,15 @@ database from migrations), `npm run db:types` (regenerate DB types to diff again
 `src/server/database.types.ts`).
 
 `npm run test:e2e` plays every Movies game end to end in the installed Chrome at phone size, against
-a dev server on port 3300 (`npx next dev -p 3300`), as the local admin test account
-(`E2E_TEST_USERNAME` / `E2E_TEST_PASSWORD` in `.env.local`). It checks the spoiler wall throughout,
-resets that account's plays of today's Movies puzzles first (local database only), and saves
-screenshots to `design/overnight-shots/`.
+a local dev server (`npx next dev -p 3300`; set `E2E_BASE_URL` to use another port), as the local
+admin test account (`E2E_TEST_USERNAME` / `E2E_TEST_PASSWORD` in `.env.local`). It checks the
+spoiler wall throughout, resets that account's plays of today's Movies puzzles first (local database
+only), and saves screenshots to `design/overnight-shots/`.
+
+`npm run test:e2e:accounts` checks the account flows against the same dev server: password sign-up
+lands on Today, a first sign-in without a profile gets one automatically (including name collisions
+and two tabs at once), and username / display name changes for both kinds of account (a password
+account then signs in with its new username). It creates its own throwaway accounts and deletes them.
 
 ### Google sign-in
 
@@ -116,6 +125,24 @@ screenshots to `design/overnight-shots/`.
    ID and secret. Local: set `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `_SECRET` and turn on
    `[auth.external.google]` in `supabase/config.toml`.
 3. Add `https://<your-domain>/auth/callback` to Auth → URL Configuration → Redirect URLs.
+
+### Who can join
+
+Sign-up is open: there is no invite code. The zero-friction way to keep the group to friends is to
+leave the Google OAuth app's publishing status on **Testing** (Google Cloud Console → Google Auth
+Platform → Audience) and add each friend's Google account as a test user. Google then refuses
+everyone else before they reach the app, and friends just tap "Continue with Google". (Testing mode
+allows up to 100 test users.) Password sign-up has no such gate: anyone who finds the site can
+create a username/password account, limited to 5 per IP address and 50 in total per hour
+(`src/server/rate-limit.ts`). `/admin` lists every player and how they sign in.
+
+Accounts only become players through the app: password accounts get their profile in the sign-up
+request, and `/auth/welcome` only sets one up for Google accounts. An account made directly
+against Supabase Auth's public sign-up endpoint (the publishable key is in every browser) gets no
+profile and is signed out. Keep Auth → Providers → Email → **Confirm email** on in the hosted
+project (it is on in `supabase/config.toml`) so that endpoint can't produce a signed-in account for
+an address its caller doesn't control. Don't turn the Email provider off: username/password
+sign-in goes through it.
 
 ## Deploying
 
@@ -130,3 +157,10 @@ screenshots to `design/overnight-shots/`.
 Username/password accounts are stored as Supabase users with an undeliverable
 `<username>@users.daily.invalid` email, so players only ever see usernames. That means there's no
 "forgot password" email: an admin resets passwords from `/admin`.
+
+Players change their username and display name from "Edit profile" on their own profile page
+(rate limited). For a username/password account the sign-in email moves with the username (auth
+email first, then the profile, and the email is moved back if the profile update fails), so they
+sign in with the new username from then on. Google accounts only change the profile. Profiles,
+boards and results look players up by id, so a rename shows up everywhere at once; old `/u/<name>`
+links stop working.

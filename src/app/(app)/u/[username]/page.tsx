@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { Avatar, buttonClass, Card, SectionTitle } from "@/components/ui";
 import { formatPuzzleDate, parsePuzzleDate, today } from "@/core/day";
 import { getGame, liveGameIds, liveGames } from "@/games/registry";
-import { requireProfile } from "@/server/auth";
+import { getSessionUser, isPasswordAccountEmail, requireProfile } from "@/server/auth";
 import { getPlayerHistory, getStreaks } from "@/server/leaderboards";
 import { db } from "@/server/supabase/admin";
 import { signOut } from "../../../(auth)/actions";
+import type { SavedNotice } from "./actions";
+import { EditProfileForm } from "./edit-profile-form";
 
 export async function generateMetadata({ params }: PageProps<"/u/[username]">): Promise<Metadata> {
   const { username } = await params;
@@ -14,6 +16,11 @@ export async function generateMetadata({ params }: PageProps<"/u/[username]">): 
 }
 
 const HISTORY_LIMIT = 30;
+
+const SAVED_NOTICES: Record<SavedNotice, string> = {
+  profile: "Profile saved.",
+  username: "Username changed. Sign in with your new username next time.",
+};
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
@@ -24,9 +31,9 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export default async function ProfilePage({ params }: PageProps<"/u/[username]">) {
+export default async function ProfilePage({ params, searchParams }: PageProps<"/u/[username]">) {
   const viewer = await requireProfile();
-  const { username } = await params;
+  const [{ username }, { saved }] = await Promise.all([params, searchParams]);
 
   const { data: player, error } = await db().from("profiles").select("*").eq("username", username.toLowerCase()).maybeSingle();
   if (error) throw new Error(`Failed to load profile: ${error.message}`);
@@ -38,6 +45,9 @@ export default async function ProfilePage({ params }: PageProps<"/u/[username]">
   const streak = streaks.get(player.id) ?? { current: 0, best: 0 };
   const total = history.reduce((sum, p) => sum + (p.score ?? 0), 0);
   const isMe = viewer.id === player.id;
+  // The account type never changes, so the session's (possibly stale) email is enough to tell.
+  const passwordAccount = isMe && isPasswordAccountEmail((await getSessionUser())?.email ?? undefined);
+  const savedNotice = isMe && typeof saved === "string" && Object.hasOwn(SAVED_NOTICES, saved) ? SAVED_NOTICES[saved as SavedNotice] : null;
 
   const perGame = liveGames().map((game) => {
     const plays = history.filter((p) => p.game_id === game.id);
@@ -57,6 +67,17 @@ export default async function ProfilePage({ params }: PageProps<"/u/[username]">
           </p>
         </div>
       </section>
+
+      {isMe && (
+        <div className="-mt-4 grid gap-3">
+          {savedNotice && (
+            <p role="status" className="rounded-xl bg-good/10 px-3.5 py-2.5 text-sm text-good">
+              {savedNotice}
+            </p>
+          )}
+          <EditProfileForm username={player.username} displayName={player.display_name} passwordAccount={passwordAccount} />
+        </div>
+      )}
 
       <Card className="grid grid-cols-4 gap-2 px-2 py-5">
         <Stat label="Points" value={total} />

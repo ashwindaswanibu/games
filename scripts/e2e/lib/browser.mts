@@ -1,4 +1,4 @@
-import puppeteer, { type Browser, type ElementHandle, type Page } from "puppeteer-core";
+import puppeteer, { type Browser, type BrowserContext, type ElementHandle, type Page } from "puppeteer-core";
 
 /**
  * Browser helpers for the E2E suites: the installed Chrome (no browser download), a phone-sized
@@ -29,7 +29,8 @@ export function collectPageErrors(page: Page): string[] {
   return errors;
 }
 
-export async function newPhonePage(browser: Browser): Promise<Page> {
+/** A phone-sized page in `browser`, or in an isolated context (its own cookies, so its own account). */
+export async function newPhonePage(browser: Browser | BrowserContext): Promise<Page> {
   const page = await browser.newPage();
   await page.setViewport(PHONE_VIEWPORT);
   page.setDefaultTimeout(WAIT_MS);
@@ -46,7 +47,7 @@ export async function signIn(page: Page, baseUrl: string, username: string, pass
 }
 
 /** The session cookies, as a `Cookie` header for requests made outside the page. */
-export async function cookieHeader(browser: Browser, baseUrl: string): Promise<string> {
+export async function cookieHeader(browser: Browser | BrowserContext, baseUrl: string): Promise<string> {
   const host = new URL(baseUrl).hostname;
   const cookies = await browser.cookies();
   return cookies

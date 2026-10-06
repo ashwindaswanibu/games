@@ -11,8 +11,10 @@ import { requireProfile } from "@/server/auth";
 import { getLeaderboard, getStreaks } from "@/server/leaderboards";
 import { finishedCounts, loadPlaysForDay } from "@/server/plays";
 
-export default async function TodayPage() {
+export default async function TodayPage({ searchParams }: PageProps<"/">) {
   const profile = await requireProfile();
+  // Set by /auth/welcome after a first Google sign-in: the player never picked their @handle.
+  const { welcome } = await searchParams;
   const date = today();
   const games = visibleGames(profile.is_admin);
   const liveIds = liveGameIds();
@@ -41,6 +43,16 @@ export default async function TodayPage() {
           {" · "}next puzzles in <Countdown target={nextRollover().toISOString()} />
         </p>
       </section>
+
+      {welcome === "1" && (
+        <p role="status" className="-mt-4 rounded-xl bg-good/10 px-3.5 py-2.5 text-sm text-good">
+          Welcome! Friends see you as {profile.display_name} (@{profile.username}).{" "}
+          <Link href={`/u/${profile.username}`} className="font-medium underline underline-offset-4">
+            Change either on your profile
+          </Link>
+          .
+        </p>
+      )}
 
       {games.length === 0 ? (
         <Card className="p-6 text-center text-sm text-muted">No games yet — they&apos;re being designed.</Card>

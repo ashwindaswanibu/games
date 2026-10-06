@@ -9,6 +9,8 @@ export const metadata: Metadata = { title: "Sign in" };
 const ERRORS: Record<string, string> = {
   google: "Google sign-in didn't work. Try again.",
   oauth: "Sign-in link expired or was already used. Try again.",
+  welcome: "Couldn't finish setting up your account. Try again in a minute.",
+  account: "That account can't be used here. Continue with Google, or create an account with a username.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
