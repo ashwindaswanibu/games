@@ -59,6 +59,7 @@ Guess the movie from its color grading, revealed in stages:
   - Fill the space creatively, laptop first.
 - **Wrong guesses (Ashwin, 2026-10-06):** NO comparison barcode for the guessed film. The game is simply the reel unreeling, or decompressing, a bit more after each wrong guess.
 - **Keep it clean (Ashwin, 2026-10-06):** no clues of any kind (no year, genre or director chips). The screen shows only the barcode and the attempt number and attempts left. Remove the clue machinery from Color Barcode once the v2 engine lands.
+- **Design principle (Ashwin, 2026-10-06):** "clean" means no game data clutter (release dates, clues, stats). It does NOT mean empty. The screen must be stylistically rich, well thought out and wow-inducing. Uninspired blank space is unacceptable. The game is about color palette, so the only game element is the barcode (plus attempts), and the visual design fills the space around it.
 - **Idea, maybe:** at the very end, e.g. on the final attempt, offer multiple-choice options just for fun. Details to discuss.
 - **Film selection (Ashwin, 2026-10-06):** random daily film that is popular enough. Claude does the first pass on how to measure "popular"; Ashwin reviews.
 
