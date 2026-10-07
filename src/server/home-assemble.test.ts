@@ -252,8 +252,8 @@ describe("assembleHomeView: games", () => {
     const ftc = getGame("fade-to-color")!;
     const result = (share_grid: string, result_label: string) =>
       gameOf(assembleHomeView(rows({ games: [ftc], plays: plays(finishedPlay("fade-to-color", { share_grid, result_label })) })), "fade-to-color").result;
-    expect(result("🟥⬛🟥🟡", "Pick 4/10")).toMatchObject({ marks: ["miss", "skip", "miss", "pick"], line: "Picked on reel 4" });
-    expect(result("⬛⚫", "X/10")).toMatchObject({ marks: ["skip", "mispick"], line: "Wrong pick on reel 2" });
+    expect(result("🟥⬛🟥🟡", "Pick 4/10")).toMatchObject({ marks: ["miss", "skip", "miss", "pick"], line: "Stopped on reel 4 and picked it" });
+    expect(result("⬛⚫", "X/10")).toMatchObject({ marks: ["skip", "mispick"], line: "Stopped on reel 2, wrong pick" });
     expect(result(`${"⬛".repeat(9)}🟥🟨`, "Final pick")).toMatchObject({ marks: [...Array(9).fill("skip"), "miss", "pick"], line: "Picked after the last reel" });
   });
 

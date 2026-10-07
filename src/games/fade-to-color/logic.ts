@@ -3,7 +3,7 @@ import { assetRefSchema } from "@/core/assets";
 import { defineGame } from "@/core/game";
 import { attemptsScore } from "@/core/scoring";
 import { filmDetailsSchema, filmIdSchema, filmRefSchema, type FilmDetails, type FilmRef } from "@/games/_movies/schemas";
-import { homeMarks, parseGrid, resultLine } from "./theater/grid";
+import { describeGrid, homeMarks, parseGrid } from "./theater/grid";
 
 /**
  * Fade to Color: name the film from pictures of the whole film, start to finish, in ten levels.
@@ -300,7 +300,8 @@ export const fadeToColor = defineGame<Puzzle, Solution, State, Move, Reveal, Res
     form: { kind: "frames", count: LEVEL_COUNT, aspect: "3:2", finalPick: true },
     // Grids are read with the end card's own parser, so grids from before the stop (🟨) read too.
     marks: (grid) => homeMarks(parseGrid(grid)),
-    line: ({ grid }) => resultLine(parseGrid(grid)),
+    // The same words as the end credits' result frames.
+    line: ({ grid }) => describeGrid(parseGrid(grid)),
   },
 
   reveal: ({ solution }) => ({ film: solution.answer, levels: solution.levels, credit: solution.credit, options: solution.options }),

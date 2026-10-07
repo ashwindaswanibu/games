@@ -52,19 +52,6 @@ export function homeMarks({ reels, pick }: GridMarks): ShareMarkKind[] {
   return pick ? [...marks, pick === "right" ? "pick" : "mispick"] : marks;
 }
 
-/**
- * A result in a few words, as the home says it under its mark: how the film was named or picked,
- * never what it was ("Named on reel 3", "Picked on reel 4", "Wrong pick after the last reel").
- */
-export function resultLine({ reels, pick }: GridMarks): string {
-  const n = reels.length;
-  if (pick) {
-    const where = n < LEVEL_COUNT ? `on reel ${n + 1}` : "after the last reel";
-    return pick === "right" ? `Picked ${where}` : `Wrong pick ${where}`;
-  }
-  return reels.at(-1) === "solved" ? `Named on reel ${n}` : `Not named in ${n} ${n === 1 ? "reel" : "reels"}`;
-}
-
 /** The end card's headline: how the film was named or picked, or how it got away. */
 export function endKicker(state: State, status: Outcome): string {
   const reel = reelOf(state);

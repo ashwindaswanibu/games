@@ -337,17 +337,17 @@ describe("fade-to-color on the home", () => {
   it("still reads grids from before the stop: 🟨 a right final pick, an eleventh 🟥 a wrong one", () => {
     const nine = "⬛".repeat(MAX_GUESSES - 1);
     expect(read(`${nine}🟥🟨`, "won")).toEqual({ marks: [...Array(MAX_GUESSES - 1).fill("skip"), "miss", "pick"], line: "Picked after the last reel" });
-    expect(read(`${nine}🟥🟥`, "lost")).toEqual({ marks: [...Array(MAX_GUESSES - 1).fill("skip"), "miss", "mispick"], line: "Wrong pick after the last reel" });
+    expect(read(`${nine}🟥🟥`, "lost")).toEqual({ marks: [...Array(MAX_GUESSES - 1).fill("skip"), "miss", "mispick"], line: "Out of reels, wrong pick" });
   });
 
-  it("says how it went in the home's few words, never with the end card's reveal", () => {
+  it("says how it went in the end credits' words, never with the end card's reveal", () => {
     expect(finished([guess(heat), skip, guess(answer)]).line).toBe("Named on reel 3");
     expect(finished([guess(answer)]).line).toBe("Named on reel 1");
-    expect(finished([stop, pick(answer)]).line).toBe("Picked on reel 1");
-    expect(finished([guess(heat), skip, guess(drive), stop, pick(answer)]).line).toBe("Picked on reel 4");
-    expect(finished([skip, stop, pick(thief)]).line).toBe("Wrong pick on reel 2");
+    expect(finished([stop, pick(answer)]).line).toBe("Stopped on reel 1 and picked it");
+    expect(finished([guess(heat), skip, guess(drive), stop, pick(answer)]).line).toBe("Stopped on reel 4 and picked it");
+    expect(finished([skip, stop, pick(thief)]).line).toBe("Stopped on reel 2, wrong pick");
     expect(finished([...NINE_SKIPS_AND_A_MISS, pick(answer)]).line).toBe("Picked after the last reel");
-    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(drive)]).line).toBe("Wrong pick after the last reel");
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(drive)]).line).toBe("Out of reels, wrong pick");
     expect(finished([], gaveUp()).line).toBe("Not named in 10 reels");
   });
 });
