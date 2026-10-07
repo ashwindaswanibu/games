@@ -10,7 +10,7 @@ import { pickOptions, type DecoyCandidate } from "@/games/fade-to-color/decoys";
 type PoolFilm = DecoyCandidate & { wikidata_id: string | null };
 const COLUMNS = "id, title, year, genres, directors, popularity, wikidata_id";
 /** How many times a look-alike of the wrong kind is swapped out before giving up. */
-const KIND_ATTEMPTS = 6;
+const KIND_ATTEMPTS = 30;
 import { contentSeed, selectAllPages, type ContentDb } from "./pipeline.mjs";
 import { filmKinds } from "./wikidata-kind.mjs";
 
