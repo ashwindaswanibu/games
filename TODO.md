@@ -9,6 +9,8 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [x] **Final pick:** after a wrong guess on reel 10, one pick from 4 films (the answer + 3 look-alikes by genre, era and fame) for 5 points.
 - [x] **Wordmark:** "Dip to Black" (Ashwin's pick of 12 treatments): "Fade to" fades down letter by letter as the film rolls, then "Color" rises filled with the film.
 - [ ] **Series data for the final pick:** import Wikidata "part of the series" (P179) into the catalog, so sequels that share no words with their series (e.g. *The Empire Strikes Back*) can't be decoys for one another.
+- [ ] **A win animation** (Ashwin, 2026-10-06): a moment that celebrates naming the film, not just the cut to the end card.
+- [ ] **Options gameplay** (Ashwin, 2026-10-06): find the best way to play with the four options (only after reel 10? a lifeline you can open any time, for at most 10 points?), then build it. Brainstorm and build overnight; Ashwin reviews the next day.
 - [ ] **Open it to everyone:** it's still `testing` (admins only) until Ashwin says so.
 - [ ] **Retire the "Color Grade" game** (a misreading of the movie-LUT idea).
 - [ ] **Render every eligible film once, ahead of time** (Ashwin, 2026-10-06; *parked, planned as tomorrow night's job*: all 470 films first, then the new MovieNet films): instead of rendering each day's film the day before, render the whole pool once in the cloud, then the daily picker only chooses from films that are already done. Sizing from the Dune run: about 20 MB of frames downloaded and 2 minutes per film, about 0.9 MB of finished levels. For the 470 eligible films that's roughly 9 GB to download (politely, resumable, about 16 hours at one film at a time) and 420 MB of levels.
