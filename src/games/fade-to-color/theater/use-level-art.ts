@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { assetUrl, type AssetRef } from "@/core/assets";
-import { accentOf, cssTriplet, litBands } from "../palette";
+import { accentOf, cssTriplet, gradeRgb, litBands, type Rgb } from "../palette";
 
 /** Everything the screen draws from one level, derived once in the browser from the image. */
 export interface LevelArt {
@@ -12,6 +12,8 @@ export interface LevelArt {
   accent: string;
   /** A one-pixel-tall strip of the barcode as light (see `litBands`), as a data URL. */
   bands: string;
+  /** The same strip through the lit titles' grade (`gradeRgb`), baked in so no layer is filtered live. */
+  graded: string;
   /** The level flipped and softened, for the reflection on the floor below the reel. */
   reflection: string;
   /** A small copy for the contact strip. */
@@ -35,6 +37,15 @@ function canvas(w: number, h: number) {
   return { c, ctx };
 }
 
+/** One row of colours as a one-pixel-tall PNG. */
+function stripUrl(colors: readonly Rgb[]): string {
+  const line = canvas(colors.length, 1);
+  const row = line.ctx.createImageData(colors.length, 1);
+  colors.forEach(([r, g, b], x) => row.data.set([r, g, b, 255], x * 4));
+  line.ctx.putImageData(row, 0, 0);
+  return line.c.toDataURL("image/png");
+}
+
 function derive(img: HTMLImageElement, src: string): LevelArt {
   const sample = canvas(SAMPLE.w, SAMPLE.h);
   sample.ctx.drawImage(img, 0, 0, SAMPLE.w, SAMPLE.h);
@@ -43,10 +54,6 @@ function derive(img: HTMLImageElement, src: string): LevelArt {
   const strip = canvas(BANDS.w, BANDS.h);
   strip.ctx.drawImage(img, 0, 0, BANDS.w, BANDS.h);
   const lit = litBands(strip.ctx.getImageData(0, 0, BANDS.w, BANDS.h).data, BANDS.w, BANDS.h);
-  const line = canvas(BANDS.w, 1);
-  const row = line.ctx.createImageData(BANDS.w, 1);
-  lit.forEach(([r, g, b], x) => row.data.set([r, g, b, 255], x * 4));
-  line.ctx.putImageData(row, 0, 0);
 
   const floor = canvas(REFLECTION.w, REFLECTION.h);
   floor.ctx.filter = "blur(1.5px)"; // one static pass; ignored where unsupported
@@ -60,10 +67,23 @@ function derive(img: HTMLImageElement, src: string): LevelArt {
   return {
     src,
     accent,
-    bands: line.c.toDataURL("image/png"),
+    bands: stripUrl(lit),
+    graded: stripUrl(lit.map((rgb) => gradeRgb(rgb))),
     reflection: floor.c.toDataURL("image/jpeg", 0.72),
     thumb: thumb.c.toDataURL("image/jpeg", 0.8),
   };
+}
+
+/**
+ * Runs `work` when the main thread is next idle (or after `timeout`ms regardless): working out a
+ * level's art takes a few canvas passes and image encodes, and several levels can arrive at once
+ * (the whole film, at the end), right as the screen is animating.
+ */
+function whenIdle(timeout: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(() => resolve(), { timeout });
+    else setTimeout(resolve, 16);
+  });
 }
 
 async function load(ref: AssetRef): Promise<LevelArt> {
@@ -72,6 +92,7 @@ async function load(ref: AssetRef): Promise<LevelArt> {
   img.decoding = "async";
   img.src = src;
   await img.decode();
+  await whenIdle(800);
   return derive(img, src);
 }
 
@@ -98,7 +119,7 @@ export function useLevelArt(levels: readonly AssetRef[]): ReadonlyMap<string, Le
       if (started.current.has(ref.id)) continue;
       started.current.add(ref.id);
       load(ref)
-        .catch((): LevelArt => ({ src: assetUrl(ref.id), accent: HOUSE_ACCENT, bands: "", reflection: "", thumb: "" }))
+        .catch((): LevelArt => ({ src: assetUrl(ref.id), accent: HOUSE_ACCENT, bands: "", graded: "", reflection: "", thumb: "" }))
         .then((done) => {
           if (mounted.current) setArt((prev) => new Map(prev).set(ref.id, done));
         });

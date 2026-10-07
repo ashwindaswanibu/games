@@ -9,7 +9,8 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [x] **Final pick:** after a wrong guess on reel 10, one pick from 4 films (the answer + 3 look-alikes by genre, era and fame) for 5 points.
 - [x] **Wordmark:** "Dip to Black" (Ashwin's pick of 12 treatments): "Fade to" fades down letter by letter as the film rolls, then "Color" rises filled with the film.
 - [ ] **Series data for the final pick:** import Wikidata "part of the series" (P179) into the catalog, so sequels that share no words with their series (e.g. *The Empire Strikes Back*) can't be decoys for one another.
-- [ ] **A win animation** (Ashwin, 2026-10-06): a moment that celebrates naming the film, not just the cut to the end card.
+- [x] **A win animation:** "Title Matte" (built 2026-10-07 from the overnight recommendation): you name the film and the picture fades to black everywhere but its title, cut out of the picture; the letters fade to color, then the film rolls on to its last reel and the end card. Plays once, live; a tap skips it.
+- [ ] **Check the win on an iPhone (Safari)** before merging `ftc-next`: the title matte's clipped text, the per-word light layers WebKit gets, and the reel's glide into the end layout.
 - [ ] **Options gameplay** (Ashwin, 2026-10-06): find the best way to play with the four options (only after reel 10? a lifeline you can open any time, for at most 10 points?), then build it. Brainstorm and build overnight; Ashwin reviews the next day.
 - [ ] **Open it to everyone:** it's still `testing` (admins only) until Ashwin says so.
 - [ ] **Retire the "Color Grade" game** (a misreading of the movie-LUT idea).

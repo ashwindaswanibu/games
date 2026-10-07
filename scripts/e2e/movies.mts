@@ -524,6 +524,8 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
   report.equal("the play is won", row.status, "won");
   report.equal("stored score is as expected (100, 90, 80 … by reel)", row.score, attemptsScore(3, BARCODE_GUESSES, true, LAST_REEL_SCORE));
   report.equal("stored share grid is as expected", row.share_grid, "🟥⬛🟩");
+  // Named live: the film says its name back (the title matte) before it rolls on to the end card.
+  report.check("the film says its name back: a title card over the reel", await titleCardSays(page, answer.title));
   await waitForText(page, "h2", answer.title);
   // The end card comes up (and takes clicks) once the reel has unreeled to the film's last level.
   await page.waitForFunction(() => {
@@ -560,6 +562,63 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
   await checkFinishedImages(ctx, "finished");
   await checkNoSidewaysScroll(ctx, "finished");
   await shot(ctx, "fade-to-color-finished");
+}
+
+/** The win's title card (over the reel, for looking at only) shows `title`, within a few seconds. */
+async function titleCardSays(page: Page, title: string): Promise<boolean> {
+  return page
+    .waitForFunction((want) => document.querySelector('[data-win="lit"]')?.textContent === want, { timeout: 4000 }, title)
+    .then(() => true)
+    .catch(() => false);
+}
+
+/**
+ * Naming the film plays the title matte once, live: a tap skips straight to the end card, and that
+ * tap goes no further (it can't press what's under it). A reload shows the end card at once.
+ */
+async function playFadeToColorWinSkipped(ctx: Ctx): Promise<void> {
+  const { page, report } = ctx;
+  const loaded = await loadPuzzle(ctx.db, fadeToColor, ctx.date);
+  const answer = loaded.solution.answer;
+  await resetPlays(ctx.db, ctx.userId, [fadeToColor.id], ctx.date);
+
+  await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
+  await clickButton(page, "Roll film");
+  await waitForPlayVersion(ctx.db, { userId: ctx.userId, gameId: fadeToColor.id, date: ctx.date, version: 0 });
+  await fourControlReady(page);
+  const row = await playMove(ctx, fadeToColor, 1, async () => {
+    await pickFromSearch(page, "Name the film", answer.title, { primary: answer.title, secondaryPrefix: answer.year === null ? null : String(answer.year) });
+    await clickButton(page, "Guess");
+  });
+  report.equal("named on reel 1", row.result_label, `1/${BARCODE_GUESSES}`);
+  report.check("the title card comes up with the film's name", await titleCardSays(page, answer.title));
+  report.check("…while the end card is still to come", await page.evaluate(() => document.querySelector('section[aria-label="Today\'s film"]') === null));
+
+  // Count clicks that get past the skip (a listener below the window, where the skip stops them).
+  await page.evaluate(() => {
+    (window as unknown as { leaked: number }).leaked = 0;
+    document.addEventListener("click", () => (window as unknown as { leaked: number }).leaked++);
+  });
+  const view = page.viewport()!;
+  await page.mouse.click(view.width / 2, view.height * 0.8);
+  await page.waitForFunction(
+    () => {
+      const card = document.querySelector('section[aria-label="Today\'s film"]');
+      return card !== null && card.closest("[inert]") === null;
+    },
+    { timeout: 1000 },
+  );
+  report.check("a tap skips straight to the end card", true);
+  report.equal("…and goes no further", await page.evaluate(() => (window as unknown as { leaked: number }).leaked), 0);
+  report.check("…the title card is gone", await page.evaluate(() => document.querySelector('[data-win="lit"]') === null));
+  report.check("…and nothing opened", await page.evaluate(() => document.querySelector('[role="dialog"]') === null));
+  report.check("the end card names it on reel 1", await hasText(page, "p", "Named on reel 1"));
+
+  await page.reload({ waitUntil: "networkidle0" });
+  await waitForCredits(page);
+  report.check("after a reload the end card is simply there: the win plays only live", await page.evaluate(() => document.querySelector("[data-win]") === null));
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the win");
+  await shot(ctx, "fade-to-color-win-skipped");
 }
 
 /** The status line under the contact strip ("Reel 4 of 10 · 7 left", "Reel 4 of 10 · stopped"). */
@@ -878,6 +937,7 @@ async function main(): Promise<boolean> {
     await report.runSection("Degrees of Separation", () => playDegrees(ctx));
     await report.runSection("Frame by Frame", () => playFrameByFrame(ctx));
     await report.runSection("Fade to Color", () => playFadeToColor(ctx));
+    await report.runSection("Fade to Color: the win, skipped and reloaded", () => playFadeToColorWinSkipped(ctx));
     await report.runSection("Fade to Color: stop the film, pick right", () => playFadeToColorStopRight(ctx));
     await report.runSection("Fade to Color: stop the film, pick wrong", () => playFadeToColorStopWrong(ctx));
     await report.runSection("Fade to Color: the run-out", () => playFadeToColorRunOut(ctx));

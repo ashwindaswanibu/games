@@ -29,8 +29,3 @@ export function Letters({ text, className, style }: { text: string; className?: 
     </span>
   );
 }
-
-/** The time between letters for a wave of `n` letters: `step`, but the whole spread never longer than `cap`. */
-export function letterStep(n: number, step: number, cap: number): number {
-  return n > 1 ? Math.min(step, cap / (n - 1)) : 0;
-}

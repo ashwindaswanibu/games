@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { flushSync } from "react-dom";
 import { Crossfade } from "./crossfade";
 import styles from "./theater.module.css";
+import { LIGHT_AT, UNREEL_EASE, UNREEL_MS } from "./timing";
 
 /** One picture on the reel. `key` identifies it; a new key is a new picture. */
 export interface ReelFrame {
@@ -17,10 +18,6 @@ export interface ReelFrame {
 /** How the reel reaches a new frame: unreeled by a sweep of light, a quick cut, or at once. */
 export type ReelMove = "unreel" | "cut" | "none";
 
-const UNREEL_MS = 1250;
-const UNREEL_EASE = "cubic-bezier(.62,.01,.28,1)";
-/** How far into an unreel the room's light changes to the new frame's. */
-const LIGHT_AT = 0.4;
 
 /**
  * The film strip: sprocket rails with edge print around a 3:1 screen, plus the light it throws
@@ -54,8 +51,16 @@ export function Reel(props: {
   onSettled(key: string): void;
   /** Drawn on the screen before the first frame: the leader. */
   leader?: ReactNode;
+  /** Drawn over the picture, under the unreel's sweep (the win's title card). */
+  overlay?: ReactNode;
+  /** More light behind the reel, beside its own glow (the title's, as the film names itself). */
+  aura?: ReactNode;
+  /** A second label stacked on `edgeEnd`, for the win to print in ("Main title"); hidden until then. */
+  edgeTitle?: string | null;
+  /** The reel's outer box (the light, the strip and its reflection), for gliding it between layouts. */
+  boxRef?: Ref<HTMLDivElement>;
 }) {
-  const { frame, move, waiting, edgeVariant = "count" } = props;
+  const { frame, move, waiting, edgeVariant = "count", boxRef, overlay, aura, edgeTitle, edgeStart, edgeEnd, edgeBottom, spill, reflection, leader } = props;
   // The label the page opened with is simply there; a later one prints in.
   const [firstVariant] = useState(edgeVariant);
   const screen = useRef<HTMLDivElement>(null);
@@ -174,17 +179,19 @@ export function Reel(props: {
   }, [frameKey]);
 
   return (
-    <div className={styles.reelBox}>
+    <div ref={boxRef} className={styles.reelBox}>
       <div className={styles.spillLight} aria-hidden>
-        <Crossfade src={props.spill} className={styles.spill} />
+        <Crossfade src={spill} className={styles.spill} />
       </div>
       <div className={styles.glow} aria-hidden />
+      {aura}
       <div className={styles.reel}>
-        <Rail edgeStart={props.edgeStart} edgeEnd={props.edgeEnd} edgeKey={edgeVariant} fresh={edgeVariant !== firstVariant} />
+        <Rail edgeStart={edgeStart} edgeEnd={edgeEnd} edgeKey={edgeVariant} fresh={edgeVariant !== firstVariant} edgeTitle={edgeTitle} />
         <div ref={screen} className={styles.screen} data-waiting={waiting || undefined}>
           {/* eslint-disable-next-line @next/next/no-img-element -- a same-origin asset drawn and animated by hand */}
           <img ref={cur} className={styles.frame} alt="" hidden={!hasPicture} />
-          {!hasPicture && props.leader}
+          {!hasPicture && leader}
+          {overlay}
           <div ref={wipe} className={styles.wipe} aria-hidden>
             {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
             <img ref={next} className={styles.frame} alt="" />
@@ -192,10 +199,10 @@ export function Reel(props: {
           <div ref={flare} className={styles.flare} aria-hidden />
           <div ref={bar} className={styles.lightbar} aria-hidden />
         </div>
-        <Rail>{props.edgeBottom}</Rail>
+        <Rail>{edgeBottom}</Rail>
       </div>
       <div className={styles.reflection} aria-hidden>
-        <Crossfade src={props.reflection} className={styles.reflectionImage} />
+        <Crossfade src={reflection} className={styles.reflectionImage} />
       </div>
     </div>
   );
@@ -203,20 +210,37 @@ export function Reel(props: {
 
 /**
  * A sprocket rail with its edge print: two labels at the ends, or one (`children`) at the right.
- * A new `edgeKey` replaces the end label with a fresh one, printed in when `fresh`.
+ * A new `edgeKey` replaces the end label with a fresh one, printed in when `fresh`. `edgeTitle`
+ * stacks a second label in the end label's place, unseen until it's printed in. Each label carries
+ * `data-edge` (`start`, `end`, `title`, `bottom`), for the win to dim and print by.
  */
-function Rail(props: { edgeStart?: string; edgeEnd?: string; edgeKey?: string; fresh?: boolean; children?: ReactNode }) {
-  const { edgeStart, edgeEnd, edgeKey, fresh, children } = props;
+function Rail(props: { edgeStart?: string; edgeEnd?: string; edgeKey?: string; fresh?: boolean; edgeTitle?: string | null; children?: ReactNode }) {
+  const { edgeStart, edgeEnd, edgeKey, fresh, edgeTitle, children } = props;
   return (
     <div className={styles.rail}>
       <div className={styles.holes} />
-      {edgeStart !== undefined && <span className={styles.edge}>{edgeStart}</span>}
-      {edgeEnd !== undefined && (
-        <span key={edgeKey} className={styles.edge} data-fresh={fresh || undefined}>
-          {edgeEnd}
+      {edgeStart !== undefined && (
+        <span className={styles.edge} data-edge="start">
+          {edgeStart}
         </span>
       )}
-      {children && <span className={`${styles.edge} ${styles.edgeEnd}`}>{children}</span>}
+      {edgeEnd !== undefined && (
+        <span className={styles.edgeStack}>
+          <span key={edgeKey} className={styles.edge} data-edge="end" data-fresh={fresh || undefined}>
+            {edgeEnd}
+          </span>
+          {edgeTitle && (
+            <span className={styles.edge} data-edge="title">
+              {edgeTitle}
+            </span>
+          )}
+        </span>
+      )}
+      {children && (
+        <span className={`${styles.edge} ${styles.edgeEnd}`} data-edge="bottom">
+          {children}
+        </span>
+      )}
     </div>
   );
 }

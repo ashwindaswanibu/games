@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { assetUrl } from "@/core/assets";
 import { formatPuzzleDate } from "@/core/day";
 import type { Outcome } from "@/core/game";
 import type { ImmersiveGameUiProps } from "@/core/view";
@@ -12,16 +13,21 @@ import { Credits } from "./credits";
 import { Crossfade } from "./crossfade";
 import { FourPick } from "./four-pick";
 import { THEATER_FONT_VARS } from "./fonts";
+import { useGlide } from "./glide";
 import { endKicker } from "./grid";
 import { Reel, type ReelMove } from "./reel";
-import { FadingSlate, Slate } from "./slate";
+import { FadingSlate, HeardSlate, Slate } from "./slate";
 import styles from "./theater.module.css";
+import { TitleAura, TitleCard } from "./title-matte";
 import { HOUSE_ACCENT, useLevelArt } from "./use-level-art";
+import { useWinTimeline, type WinCelebration } from "./win-timeline";
 import { Wordmark } from "./wordmark";
 
 type Props = ImmersiveGameUiProps<typeof fadeToColor>;
 
 const pad = (n: number) => String(n).padStart(2, "0");
+/** Titles longer than this take two lines on the end card (at its laptop size, in the console's width). */
+const ONE_LINE_TITLE = 26;
 /** How long "Not <film>" stays under the guess line after a miss. */
 const WHISPER_MS = 3600;
 /** The stop, seen live, from the server's answer to the last tile up (see the stylesheet's `.four[data-live]`). */
@@ -54,6 +60,11 @@ function lastMoveText(state: State): string | null {
   return last.correct ? null : `Not ${last.film.title}`;
 }
 
+/** "2024 · Denis Villeneuve": as the guess line showed the film chosen. */
+function bylineOf(film: { year: number | null; directors: readonly string[] }): string {
+  return [film.year, film.directors.slice(0, 2).join(" & ")].filter(Boolean).join(" · ");
+}
+
 /** How the play ended, in a sentence, then the film. */
 function endWords(state: State, status: Outcome, title: string): string {
   const how = state.pick && !state.pick.correct ? "Wrong pick" : status === "won" && !state.pick ? `You named it on reel ${state.turns.length}` : endKicker(state, status).replace(" · the film was", "");
@@ -68,6 +79,10 @@ function endWords(state: State, status: Outcome, title: string): string {
  * On any reel the player may stop the film instead: the unseen reels stay in the can and the four
  * come up (`FourPick`) for one pick, worth half of naming it on that reel. A wrong guess on the
  * last reel brings them up too (the run-out).
+ *
+ * Naming the film, seen live, plays the win (`win`, see `win-timeline.ts`): the film says its name
+ * back as a title matte, then rolls on to its last reel and the end card. Until it rolls on, the
+ * screen and the console hold the play as it was (the guess line as `HeardSlate`).
  */
 export function FadeToColorTheater(props: Props) {
   const { view, start, submitMove, pending, notice, date, friends, viewerId } = props;
@@ -77,12 +92,22 @@ export function FadeToColorTheater(props: Props) {
   const state = view?.state ?? null;
   const turns = state?.turns ?? [];
   const reveal = view?.reveal ?? null;
+  const root = useRef<HTMLDivElement>(null);
+  const reelBox = useRef<HTMLDivElement>(null);
+  const consoleBox = useRef<HTMLElement>(null);
+  // Set while a skip runs, so layout changes snap instead of gliding.
+  const snap = useRef(false);
+
+  // The win, while it plays: until the film rolls on, the screen and the console hold the play as
+  // it was (`held`).
+  const [win, setWin] = useState<WinCelebration | null>(null);
+  const held = win !== null && (win.stage === "heard" || win.stage === "rolling");
 
   // A pick plays out on the four before the film rolls on: the screen holds the play as it was
   // until the result has been shown (`over`), and the console until the four have gone (`ending`).
   const [resolve, setResolve] = useState<Resolve | null>(null);
-  const over = finished && (resolve === null || resolve.stage === "leaving" || resolve.stage === "gone");
-  const ending = finished && (resolve === null || resolve.stage === "gone");
+  const over = finished && !held && (resolve === null || resolve.stage === "leaving" || resolve.stage === "gone");
+  const ending = finished && !held && (resolve === null || resolve.stage === "gone");
 
   const inView = view ? levelsInView(view.puzzle, view.state) : [];
   // Every level is fetched once revealed (so the last reel is ready when the film rolls on), but
@@ -104,7 +129,9 @@ export function FadeToColorTheater(props: Props) {
   const targetRef = levels[target];
   if (targetRef && art.has(targetRef.id) && (display === null || display.index !== target || display.latest !== latest)) {
     const earned = display !== null && target === latest && latest > display.latest;
-    const move: ReelMove = display === null ? (rolled ? "unreel" : "cut") : earned ? "unreel" : display.index === target ? display.move : "cut";
+    // The win unreels the last reel over its title card itself; the reel takes the picture underneath.
+    const unreel: ReelMove = win?.exit === "roll" ? "none" : "unreel";
+    const move: ReelMove = display === null ? (rolled ? "unreel" : "cut") : earned ? unreel : display.index === target ? display.move : "cut";
     setDisplay({ index: target, latest, move });
   }
   const shownRef = display ? levels[display.index] : undefined;
@@ -116,6 +143,33 @@ export function FadeToColorTheater(props: Props) {
   const [settledKey, setSettledKey] = useState<string | null>(null);
   const litArt = litKey ? art.get(litKey) : undefined;
   const firstArt = levels[0] ? art.get(levels[0].id) : undefined;
+
+  // The win plays once, and only when the film is named in front of the player (never on a reload).
+  const [seenStatus, setSeenStatus] = useState(status);
+  if (status !== seenStatus) {
+    setSeenStatus(status);
+    const named = turns.at(-1);
+    if (seenStatus === "in_progress" && status === "won" && state && !state.pick && named && isGuess(named) && named.correct && shownArt) {
+      setWin({
+        reel: turns.length,
+        shown: display?.index ?? latest,
+        title: named.film.title,
+        picture: shownArt.src,
+        stage: "heard",
+        exit: null,
+        cardGone: false,
+        reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      });
+    }
+  }
+  const lastLevel = reveal?.levels[LEVEL_COUNT - 1];
+  const lastArt = lastLevel ? art.get(lastLevel.id) : undefined;
+  // The card unreels onto the last reel only once its picture is decoded and its art is in.
+  const [lastDecoded, setLastDecoded] = useState(false);
+  const winReady = lastArt !== undefined && (win?.shown === LEVEL_COUNT - 1 || lastDecoded);
+  useWinTimeline({ win, setWin, root, ready: winReady, fill: firstArt?.graded || null, lastAccent: lastArt?.accent ?? null, instant: snap });
+  // The card stays until the reel beneath it shows what it shows.
+  const cardUp = win !== null && !(win.cardGone && (win.exit !== "roll" || settledKey === lastLevel?.id));
 
   // The stake for stopping ticks over once the newest reel has settled on screen.
   const attempt = turns.length + 1;
@@ -183,8 +237,7 @@ export function FadeToColorTheater(props: Props) {
   }, [resolve, pickMade, answerId]);
   // The film rolls on once its last reel is ready to unreel (or after a while regardless: the reel
   // then waits at the gate), so the four never leave an empty console behind them.
-  const lastLevel = reveal?.levels[LEVEL_COUNT - 1];
-  const lastReady = lastLevel !== undefined && art.has(lastLevel.id);
+  const lastReady = lastArt !== undefined;
   if (resolve?.stage === "held" && lastReady) setResolve({ ...resolve, stage: "leaving" });
   useEffect(() => {
     if (resolve?.stage !== "held") return;
@@ -222,7 +275,15 @@ export function FadeToColorTheater(props: Props) {
   const accent = litArt?.accent ?? HOUSE_ACCENT;
   const left = MAX_GUESSES - turns.length;
   const showing = display?.index ?? null;
-  const creditsReady = ending && shownRef !== undefined && settledKey === shownRef.id && display?.index === latest;
+  const creditsReady = win
+    ? win.stage === "credits" || win.stage === "done"
+    : ending && shownRef !== undefined && settledKey === shownRef.id && display?.index === latest;
+  // The reel the film was named on keeps its ring on the strip.
+  const namedIndex = status === "won" && state && !state.pick ? turns.length - 1 : null;
+  // The win's print run: the reels you didn't need develop as the last reel unreels.
+  const printRun = win && !win.reduced && win.exit === "roll" && win.stage !== "heard" && win.stage !== "done" ? { from: win.reel } : null;
+  const stripLevels = win?.stage === "rolling" && reveal ? reveal.levels : levels;
+  useGlide(ending ? "end" : fourUp ? "four" : "play", reelBox, consoleBox, snap);
   // While a pick resolves the room dips; it relights as the film rolls on to its last reel.
   const dipped = resolve !== null && !(over && litKey !== null && litKey === levels[LEVEL_COUNT - 1]?.id);
   const today = formatPuzzleDate(date, { weekday: "short", month: "short", day: "numeric" });
@@ -240,7 +301,7 @@ export function FadeToColorTheater(props: Props) {
 
   const announcement = !state
     ? ""
-    : finished && reveal && (ending || resolve?.result)
+    : finished && reveal && (ending || resolve?.result || win)
       ? endWords(state, status!, reveal.film.title)
       : fourUp && !resolve
         ? runOut
@@ -252,11 +313,14 @@ export function FadeToColorTheater(props: Props) {
 
   return (
     <div
+      ref={root}
       className={`${THEATER_FONT_VARS} ${styles.theater}`}
-      style={{ "--accent": accent } as CSSProperties}
+      style={{ "--accent": accent, "--title-accent": firstArt?.accent ?? HOUSE_ACCENT } as CSSProperties}
       data-finished={ending || undefined}
+      data-long-title={(reveal && reveal.film.title.length > ONE_LINE_TITLE) || undefined}
       data-four={fourUp || undefined}
       data-dip={dipped || undefined}
+      data-win={(win && win.stage !== "done") || undefined}
     >
       <div className={styles.room} aria-hidden>
         <div className={styles.washLight}>
@@ -311,9 +375,25 @@ export function FadeToColorTheater(props: Props) {
             )
           }
           leader={<Leader />}
+          boxRef={reelBox}
+          edgeTitle={win && !win.reduced && win.stage !== "done" ? "Main title" : null}
+          aura={win && !win.reduced && win.stage !== "done" ? <TitleAura fill={firstArt?.graded || null} /> : null}
+          overlay={
+            win &&
+            cardUp && (
+              <TitleCard
+                title={win.title}
+                picture={win.picture}
+                fill={firstArt?.graded || null}
+                next={win.shown !== LEVEL_COUNT - 1 && lastLevel ? assetUrl(lastLevel.id) : null}
+                reduced={win.reduced}
+                onNextReady={setLastDecoded}
+              />
+            )
+          }
         />
 
-        <section className={styles.console}>
+        <section ref={consoleBox} className={styles.console}>
           {!view && (
             <div className={styles.opening}>
               <ol className={styles.rules}>
@@ -338,11 +418,12 @@ export function FadeToColorTheater(props: Props) {
 
           {view && (
             <ContactStrip
-              thumbs={levels.map((l) => art.get(l.id)?.thumb)}
+              thumbs={stripLevels.map((l) => art.get(l.id)?.thumb)}
               showing={showing}
-              current={over ? null : latest}
+              current={over ? namedIndex : latest}
               closed={fourUp && !over}
               closing={stopLive}
+              run={printRun}
               onPick={lookAt}
             />
           )}
@@ -350,8 +431,13 @@ export function FadeToColorTheater(props: Props) {
           {view && !ending && (
             <>
               <p className={styles.status} data-leaving={resolve?.stage === "leaving" || undefined}>
-                Reel <em>{fourUp ? reel : attempt}</em> of {MAX_GUESSES}{" "}
-                {fourUp ? (
+                {/* Named: the line holds what it said as Guess was pressed. */}
+                Reel <em>{win ? win.reel : fourUp ? reel : attempt}</em> of {MAX_GUESSES}{" "}
+                {win ? (
+                  <>
+                    <span className={styles.dot}>·</span> <em>{MAX_GUESSES + 1 - win.reel}</em> left
+                  </>
+                ) : fourUp ? (
                   <span key="four" className={stopLive ? styles.statusFresh : undefined}>
                     <span className={styles.dot}>·</span> {runOut ? "run-out" : "stopped"}
                   </span>
@@ -366,7 +452,15 @@ export function FadeToColorTheater(props: Props) {
                   </button>
                 )}
               </p>
-              {fourUp && state ? (
+              {win && reveal ? (
+                <HeardSlate
+                  title={win.title}
+                  byline={bylineOf(reveal.film)}
+                  stake={pickWorth(win.reel)}
+                  lastReel={win.reel === LEVEL_COUNT}
+                  fill={firstArt?.graded || null}
+                />
+              ) : fourUp && state ? (
                 <div className={styles.fourSlot}>
                   {stopLive && <FadingSlate reel={reel} worth={worth} lastReel={reel === LEVEL_COUNT} missed={missed} />}
                   <FourPick

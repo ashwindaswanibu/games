@@ -2,8 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { FilmRef } from "@/games/_movies/schemas";
-import { Letters, letterStep } from "./letters";
+import { Letters } from "./letters";
 import styles from "./theater.module.css";
+import { letterStep } from "./timing";
 
 /** A pick on its way: the film chosen, and (once it has landed) whether it was the one. */
 export interface PickResolve {

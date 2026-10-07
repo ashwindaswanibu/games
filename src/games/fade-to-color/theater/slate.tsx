@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { filmSearchResponseSchema, type FilmSearchHit } from "@/games/_movies/schemas";
 import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
 import { Letters } from "./letters";
@@ -244,7 +244,9 @@ export function FadingSlate(props: { reel: number; worth: number; lastReel: bool
         {missed !== null ? (
           <>
             <span className={styles.fourControl}>
-              <span className={styles.fourThe}>The </span>Four<span className={styles.fourDot}>·</span>
+              <span>
+                <span className={styles.fourThe}>The </span>Four<span className={styles.fourDot}>·</span>
+              </span>
               <span className={styles.stake}>{worth}</span>
             </span>
             <span className={styles.go}>Guess</span>
@@ -256,6 +258,46 @@ export function FadingSlate(props: { reel: number; worth: number; lastReel: bool
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The guess line at the moment the film is named, kept on screen for the win (laid out exactly as
+ * the slate was when Guess was pressed, its actions mid-move): the name you typed, the film's
+ * byline, the actions. For looking at only; the win's timeline plays it (`data-win` names the
+ * parts): the actions and byline step back, the name takes the film's light, a line of that light
+ * runs along under it, then the whole line goes.
+ */
+export function HeardSlate(props: { title: string; byline: string; stake: number; lastReel: boolean; fill: string | null }) {
+  const { title, byline, stake, lastReel, fill } = props;
+  const lit = fill ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined;
+  return (
+    <div className={`${styles.slate} ${styles.heardSlate}`} aria-hidden data-win="heard">
+      <div className={styles.field}>
+        <span className={`${styles.input} ${styles.heardTitle}`}>
+          <span data-win="heard-ink">{title}</span>
+          <span className={styles.heardLit} style={lit} data-fill={fill ? "" : undefined} data-win="heard-lit">
+            {title}
+          </span>
+        </span>
+        {byline && (
+          <span className={styles.chosen} data-win="heard-byline">
+            {byline}
+          </span>
+        )}
+      </div>
+      <div className={styles.slateActions} data-win="heard-actions">
+        <span className={styles.fourControl}>
+          <span>
+            <span className={styles.fourThe}>The </span>Four<span className={styles.fourDot}>·</span>
+          </span>
+          <span className={styles.stake}>{stake}</span>
+        </span>
+        {!lastReel && <span className={styles.quiet}>Skip</span>}
+        <span className={`${styles.go} ${styles.heardGo}`}>Guess</span>
+      </div>
+      <span className={styles.slateLight} style={lit} data-win="heard-line" />
     </div>
   );
 }
