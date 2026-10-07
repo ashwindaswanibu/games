@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { finished } from "node:stream/promises";
 import { z } from "zod";
+import { MAX_SERIES } from "./catalog-model.mjs";
 
 /**
  * The catalog snapshot: what the build step produced from IMDb and Wikidata, independent of any
@@ -12,8 +13,8 @@ import { z } from "zod";
  * identical content. Stored as NDJSON plus a `meta.json` summary; validated with zod on read.
  */
 
-/** 2: people carry `isActor`. 3: people carry `isHuman`. */
-export const SNAPSHOT_VERSION = 3;
+/** 2: people carry `isActor`. 3: people carry `isHuman`. 4: films carry `series` and `isAdult`. */
+export const SNAPSHOT_VERSION = 4;
 
 const qid = z.string().regex(/^Q[1-9][0-9]*$/);
 const tt = z.string().regex(/^tt[0-9]{7,10}$/);
@@ -35,6 +36,10 @@ export const snapshotFilmSchema = z.object({
   popularity: z.number().int().min(0),
   imdbVotes: z.number().int().min(0).nullable(),
   tmdbId: z.number().int().positive().max(2_147_483_647).nullable(),
+  /** Wikidata ids of the film series it is part of (see `seriesOfFilm`), sorted. */
+  series: z.array(qid).max(MAX_SERIES),
+  /** IMDb lists the title as adult: hidden from search and from every content pipeline. */
+  isAdult: z.boolean(),
   /** IMDb's top-billed actors and actresses, in IMDb's order. */
   imdbCast: z.array(personKey),
   /** Wikidata's cast, best known first (no billing order). */

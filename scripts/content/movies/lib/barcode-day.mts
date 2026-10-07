@@ -29,7 +29,7 @@ import { encodeImage, type EncodedImage } from "../../lib/images.mjs";
 import { DEFAULT_STORY_TRIM, PACES, type PaceName, type StoryTrim } from "./barcode-levels.mjs";
 import { DEFAULT_LEVEL_HEIGHT, DEFAULT_LEVEL_WIDTH, renderLevels, type RenderedFilm } from "./barcode-render.mjs";
 import { finalPickOptions } from "./decoys.mjs";
-import { loadDayAnswers } from "./film-picker.mjs";
+import { loadDayAnswers, seriesOf } from "./film-picker.mjs";
 import {
   deleteFixturePuzzle,
   deleteUnplayedPuzzle,
@@ -208,7 +208,8 @@ export async function renderBarcodeDay(db: ContentDb, options: BarcodeDayOptions
 
   // Selection rules that need no frames, checked before anything is downloaded.
   const allowed: Record<Clash["rule"], boolean> = { repeat: !!allow.repeat, director: !!allow.sameDirector, series: !!allow.sameSeries };
-  for (const clash of clashes(film, date ?? today(), await loadDayAnswers(db))) {
+  const series = (await seriesOf(db, [film.id])).get(film.id) ?? [];
+  for (const clash of clashes({ ...film, series }, date ?? today(), await loadDayAnswers(db))) {
     const message = describeClash(clash, film.title);
     if (!dryRun && !allowed[clash.rule]) throw new FilmRefusedError(clash.rule, `${message} (pass ${CLASH_FLAG[clash.rule]} to use the film anyway)`);
     warn(`  ⚠ ${message}`);

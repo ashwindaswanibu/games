@@ -184,6 +184,10 @@ export type Database = {
           popularity: number;
           imdb_votes: number | null;
           fame: number;
+          /** Wikidata ids of the film series it is part of (see scripts/content/movies/lib/catalog-model.mts, `seriesOfFilm`). */
+          series_qids: string[];
+          /** IMDb lists the title as adult: hidden from search and never chosen by a content pipeline. */
+          is_adult: boolean;
           tmdb_id: number | null;
           imdb_id: string | null;
           wikidata_id: string | null;
@@ -198,6 +202,8 @@ export type Database = {
           popularity?: number;
           imdb_votes?: number | null;
           fame?: never;
+          series_qids?: string[];
+          is_adult?: boolean;
           tmdb_id?: number | null;
           imdb_id?: string | null;
           wikidata_id?: string | null;
@@ -212,6 +218,8 @@ export type Database = {
           popularity?: number;
           imdb_votes?: number | null;
           fame?: never;
+          series_qids?: string[];
+          is_adult?: boolean;
           tmdb_id?: number | null;
           imdb_id?: string | null;
           wikidata_id?: string | null;

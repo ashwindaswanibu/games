@@ -61,6 +61,7 @@ async function chooseFilms(db: ContentDb): Promise<FilmRow[]> {
   const { data, error } = await db
     .from("movie_films")
     .select(FILM_COLUMNS)
+    .eq("is_adult", false)
     .or("tmdb_id.not.is.null,imdb_id.not.is.null")
     .order("popularity", { ascending: false })
     .order("id")

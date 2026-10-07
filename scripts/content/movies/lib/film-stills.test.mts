@@ -24,6 +24,7 @@ const film = (over: Partial<FilmRecord>): FilmRecord => ({
   tmdbId: 949,
   imdbId: "tt0113277",
   wikidataId: "Q11101",
+  isAdult: false,
   ...over,
 });
 

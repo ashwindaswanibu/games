@@ -17,7 +17,7 @@ import {
   type PlannedDay,
   type TierName,
 } from "@/games/fade-to-color/picker";
-import { sameSeries } from "@/games/fade-to-color/decoys";
+import { sameSeries, shareSeries } from "@/games/fade-to-color/decoys";
 import { FilmRefusedError, renderBarcodeDay, type BarcodeDayOptions, type BarcodeDayResult } from "./barcode-day.mjs";
 import { pickSeed, type LoadedPickerInputs, type PickerInputs } from "./film-picker.mjs";
 import type { ContentDb } from "./pipeline.mjs";
@@ -129,7 +129,7 @@ function closestPairs(answers: readonly DayAnswer[]) {
       }
       const shared = a.directors.filter((d) => b.directors.some((e) => e.trim().toLowerCase() === d.trim().toLowerCase()));
       if (shared.length > 0 && (!director || gap < director.gap)) director = { gap, text: `${shared.join(" & ")}: ${pair}` };
-      if (sameSeries(a.title, b.title) && (!series || gap < series.gap)) series = { gap, text: pair };
+      if ((shareSeries(a.series, b.series) || sameSeries(a.title, b.title)) && (!series || gap < series.gap)) series = { gap, text: pair };
     }
   }
   return { director, series, repeat };
@@ -161,7 +161,7 @@ export function summarizePlan(plan: readonly PlannedDay[], inputs: PickerInputs 
   if (none > 0) lines.push(`no film: ${none} day${none === 1 ? "" : "s"} (every tier exhausted under the rules)`);
 
   const answers: DayAnswer[] = [...inputs.answers];
-  for (const day of picked) answers.push({ date: day.date, filmId: day.pick.film.id, title: day.pick.film.title, directors: day.pick.film.directors });
+  for (const day of picked) answers.push({ date: day.date, filmId: day.pick.film.id, title: day.pick.film.title, directors: day.pick.film.directors, series: day.pick.film.series });
   const { director, series, repeat } = closestPairs(answers);
   lines.push(`closest same director: ${director ? `${director.gap} days (${director.text})` : "none"}`);
   lines.push(`closest same series: ${series ? `${series.gap} days (${series.text})` : "none"}`);

@@ -68,6 +68,7 @@ export function film(partial: Pick<FilmRecord, "id" | "title"> & Partial<FilmRec
     tmdbId: null,
     imdbId: null,
     wikidataId: null,
+    isAdult: false,
     ...partial,
   };
 }

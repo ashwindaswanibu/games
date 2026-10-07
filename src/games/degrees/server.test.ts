@@ -89,6 +89,21 @@ describe("degreesServer.resolveMove", () => {
     expect(await resolve({ type: "link", filmId: 10, personId: 99 })).toEqual({ ok: false, error: PERSON_NOT_FOUND });
   });
 
+  it("refuses an adult film like an unknown one: search hides it and par never uses it", async () => {
+    const fake = createFakeGameServices({
+      films: [film({ id: 10, title: "Heat", year: 1995, isAdult: true })],
+      people: [
+        { id: 1, name: "Al Pacino" },
+        { id: 2, name: "Robert De Niro" },
+      ],
+      credits: [
+        { filmId: 10, personId: 1, billing: 1 },
+        { filmId: 10, personId: 2, billing: 0 },
+      ],
+    });
+    expect(await resolve({ type: "link", filmId: 10, personId: 2 }, start, fake)).toEqual({ ok: false, error: FILM_NOT_FOUND });
+  });
+
   it("passes undo and give-up through untouched", async () => {
     const fake = services();
     expect(await resolve({ type: "undo" }, start, fake)).toEqual({ ok: true, move: { type: "undo" } });

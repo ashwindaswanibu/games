@@ -4,7 +4,7 @@ import { catalogSearchKey, matchClass, parseScopedSearchParams, rankByQuery } fr
 describe("catalogSearchKey", () => {
   it("lowercases, strips accents and collapses punctuation like the SQL key", () => {
     expect(catalogSearchKey("  Léon: The Professional ")).toBe("leon the professional");
-    expect(catalogSearchKey("Ocean's Eleven")).toBe("ocean s eleven");
+    expect(catalogSearchKey("Ocean's Eleven")).toBe("oceans eleven");
     expect(catalogSearchKey("Emmanuelle Béart")).toBe("emmanuelle beart");
     expect(catalogSearchKey("Mission: Impossible – Fallout")).toBe("mission impossible fallout");
   });
@@ -21,6 +21,23 @@ describe("catalogSearchKey", () => {
     expect(catalogSearchKey("The Lion King 1½")).toBe("the lion king 1 1 2");
     expect(catalogSearchKey("Men in Black³")).toBe("men in black");
   });
+
+  it("keeps an apostrophe's word whole, whichever apostrophe it is", () => {
+    // "don" must find Don as an exact title, and Don't Look Up only as a longer word's start.
+    expect(catalogSearchKey("Don't Look Up")).toBe("dont look up");
+    expect(catalogSearchKey("Don’t Look Up")).toBe("dont look up");
+    expect(catalogSearchKey("dont look up")).toBe("dont look up");
+    expect(catalogSearchKey("Schindler's List")).toBe("schindlers list");
+    expect(catalogSearchKey("Peter O'Toole")).toBe("peter otoole");
+    expect(catalogSearchKey("Lupita Nyong‘o")).toBe("lupita nyongo");
+    // Leading, trailing and quoting apostrophes vanish without joining words.
+    expect(catalogSearchKey("'Round Midnight")).toBe("round midnight");
+    expect(catalogSearchKey("Singin' in the Rain")).toBe("singin in the rain");
+    expect(catalogSearchKey("Rock 'n' Roll High School")).toBe("rock n roll high school");
+    // Everything SQL's unaccent turns into an apostrophe: ‛ ′ ＇ and the modifier letters ʹ ʻ ʼ ʽ ˈ, and ŉ ("'n").
+    expect(catalogSearchKey("Hawaiʻi Five‛O ′ʹʼʽˈ＇x")).toBe("hawaii fiveo x");
+    expect(catalogSearchKey("Rock ŉ Roll")).toBe("rock n roll");
+  });
 });
 
 describe("matchClass", () => {
@@ -30,7 +47,7 @@ describe("matchClass", () => {
     expect(matchClass("stree", "street kings")).toBe(2);
     expect(matchClass("godf", "godfather")).toBe(2);
     expect(matchClass("the", "the godfather")).toBe(1);
-    expect(matchClass("guide", "the hitchhiker s guide to the galaxy")).toBe(3);
+    expect(matchClass("guide", "the hitchhikers guide to the galaxy")).toBe(3);
     expect(matchClass("stree", "the wolf of wall street")).toBe(4);
     expect(matchClass("father", "the godfather")).toBe(5);
     expect(matchClass("alien", "the godfather")).toBeNull();
@@ -57,7 +74,7 @@ describe("matchClass", () => {
     expect(matchClass("it", "i t")).toBe(0);
     // Two characters only match the spaced key, so "it" doesn't find "I, Tonya".
     expect(matchClass("it", "i tonya")).toBeNull();
-    expect(matchClass("it", "it s a wonderful life")).toBe(1);
+    expect(matchClass("it", "its a wonderful life")).toBe(2);
     expect(matchClass("ito", "i tonya")).toBe(2);
   });
 

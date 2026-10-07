@@ -115,6 +115,7 @@ async function candidateFilms(db: ContentDb, minYear: number | undefined): Promi
   let query = db
     .from("movie_films")
     .select("id")
+    .eq("is_adult", false)
     .filter("directors", "neq", "{}")
     .or("tmdb_id.not.is.null,imdb_id.not.is.null")
     .order("popularity", { ascending: false })

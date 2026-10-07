@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "@/core/random";
-import { pickDecoys, pickOptions, sameSeries, seriesKey, type DecoyCandidate } from "./decoys";
+import { pickDecoys, pickOptions, sameSeries, seriesKey, shareSeries, type DecoyCandidate } from "./decoys";
 import { OPTION_COUNT } from "./logic";
 
 let nextId = 100;
-const film = (title: string, year: number | null, genres: string[], popularity: number | null, directors: string[] = [`Director of ${title}`]): DecoyCandidate => ({
+const film = (
+  title: string,
+  year: number | null,
+  genres: string[],
+  popularity: number | null,
+  directors: string[] = [`Director of ${title}`],
+  series: string[] = [],
+): DecoyCandidate => ({
   id: nextId++,
   title,
   year,
   genres,
   directors,
   popularity,
+  series,
 });
 
 const dune2 = film("Dune: Part Two", 2024, ["Science fiction", "Action", "Adventure", "Epic"], 58, ["Denis Villeneuve"]);
@@ -57,6 +65,15 @@ describe("sameSeries", () => {
     ["Barbie", "Oppenheimer"],
   ])("%s and %s are not", (a, b) => {
     expect(sameSeries(a, b)).toBe(false);
+  });
+});
+
+describe("shareSeries", () => {
+  it("is true when two films share a Wikidata series", () => {
+    expect(shareSeries(["Q1576873"], ["Q1576873"])).toBe(true);
+    expect(shareSeries(["Q22092344", "Q25540859"], ["Q22092344", "Q6586871"])).toBe(true);
+    expect(shareSeries(["Q22092344"], ["Q51964873"])).toBe(false);
+    expect(shareSeries([], [])).toBe(false);
   });
 });
 
@@ -119,6 +136,38 @@ describe("pickDecoys", () => {
     // The answer is sometimes the earliest, sometimes the latest, sometimes between: its year gives nothing away.
     expect(ranks.get(0)).toBeGreaterThan(30);
     expect(ranks.get(3)).toBeGreaterThan(30);
+  });
+
+  it("never offers a film of the answer's Wikidata series, even with no word in common", () => {
+    const FAST = "Q1576873"; // Fast & Furious
+    const furious7 = film("Furious 7", 2015, ["Action", "Heist", "Thriller"], 60, ["James Wan"], [FAST]);
+    const pool = [
+      film("Fast Five", 2011, ["Action", "Heist", "Thriller"], 60, ["Justin Lin"], [FAST]),
+      film("The Fate of the Furious", 2017, ["Action", "Heist", "Thriller"], 55, ["F. Gary Gray"], [FAST]),
+      film("Baby Driver", 2017, ["Action", "Heist", "Crime"], 50),
+      film("The Italian Job", 2014, ["Action", "Heist"], 55),
+      film("Mad Max: Fury Road", 2015, ["Action", "Thriller"], 70),
+      film("John Wick", 2014, ["Action", "Thriller"], 60),
+    ];
+    // Without the series, Fast Five shares no words with Furious 7 and would be the best look-alike.
+    expect(sameSeries("Furious 7", "Fast Five")).toBe(false);
+    for (let seed = 0; seed < 40; seed++) {
+      const titles = pickDecoys(furious7, pool, createRng([seed, 5, 5, 5])).map((d) => d.title);
+      expect(titles).not.toContain("Fast Five");
+      expect(titles).not.toContain("The Fate of the Furious");
+    }
+  });
+
+  it("doesn't pick two decoys from one Wikidata series", () => {
+    const BOND = "Q2484680";
+    const pool = [
+      film("Skyfall", 2012, ["Science fiction"], 55, ["Sam Mendes"], [BOND]),
+      film("Casino Royale", 2023, ["Science fiction"], 55, ["Martin Campbell"], [BOND]),
+      film("Northern Lights", 2022, ["Action"], 55),
+      film("Quiet Planet", 2024, ["Epic"], 60),
+    ];
+    const titles = pickDecoys(dune2, pool, rng()).map((d) => d.title);
+    expect(titles.filter((t) => t === "Skyfall" || t === "Casino Royale")).toHaveLength(1);
   });
 
   it("is deterministic for a given seed", () => {

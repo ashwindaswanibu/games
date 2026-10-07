@@ -29,6 +29,8 @@ interface StoredFilm {
   directors: string[];
   popularity: number;
   imdb_votes: number | null;
+  series_qids: string[];
+  is_adult: boolean;
   tmdb_id: number | null;
   imdb_id: string | null;
   wikidata_id: string | null;
@@ -85,8 +87,13 @@ export async function applySnapshot(db: ContentDb, snapshot: Snapshot, options: 
   log("Reading the target catalog…");
   const [storedFilms, storedPeople] = await Promise.all([
     selectAllById<StoredFilm>((after, limit) =>
-      db.from("movie_films").select("id, title, year, genres, directors, popularity, imdb_votes, tmdb_id, imdb_id, wikidata_id").gt("id", after).order("id").limit(limit),
-    ),
+      db
+        .from("movie_films")
+        .select("id, title, year, genres, directors, popularity, imdb_votes, series_qids, is_adult, tmdb_id, imdb_id, wikidata_id")
+        .gt("id", after)
+        .order("id")
+        .limit(limit),
+    ).catch(explainMissingColumns),
     selectAllById<StoredPerson>((after, limit) => db.from("movie_people").select("id, name, popularity, is_actor, is_human, wikidata_id, imdb_id").gt("id", after).order("id").limit(limit)),
   ]);
   log(`  ${storedFilms.length} films, ${storedPeople.length} people stored`);
@@ -119,6 +126,8 @@ export async function applySnapshot(db: ContentDb, snapshot: Snapshot, options: 
     directors: keepStoredOrder(stored?.directors ?? [], film.directors, MAX_DIRECTORS),
     popularity: film.popularity,
     imdb_votes: film.imdbVotes,
+    series_qids: film.series,
+    is_adult: film.isAdult,
     tmdb_id: ids.tmdbId,
     imdb_id: ids.imdbId,
     wikidata_id: ids.wikidataId,
@@ -303,6 +312,15 @@ export async function applySnapshot(db: ContentDb, snapshot: Snapshot, options: 
   report.check = await runCatalogChecks(db, { baseline });
   report.seconds = Math.round((Date.now() - started) / 1000);
   return report;
+}
+
+/** A target without this branch's columns hasn't had its migrations (`npx supabase db push` comes first). */
+function explainMissingColumns(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/series_qids|is_adult/.test(message) && /does not exist|schema cache/i.test(message)) {
+    throw new Error(`${message}. The target database is missing movie_films.series_qids / is_adult: apply the migrations first (npx supabase db push for the hosted one).`);
+  }
+  throw error;
 }
 
 async function writeBatches<Row>(rows: readonly Row[], label: string, log: (message: string) => void, write: (batch: Row[]) => Promise<{ message: string } | null>): Promise<void> {

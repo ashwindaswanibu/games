@@ -627,6 +627,51 @@ async function catalogChecks(player: SupabaseClient) {
     formerHits,
   );
 
+  // An apostrophe is part of its word: "don" finds Don before Don't Look Up, which has 15 times the votes.
+  const { data: keys } = await admin.rpc("catalog_search_key", { value: "Don’t Look Up: Ocean's" });
+  check("search keys drop apostrophes, curly ones too", keys === "dont look up oceans", keys);
+  const fourth = [
+    { title: `Dn${tag}`, imdb_votes: 40_000 },
+    { title: `Dn${tag}'t Look Up`, imdb_votes: 600_000 },
+  ];
+  const { data: fourthRows } = await admin.from("movie_films").insert(fourth).select("id, title, search_key");
+  filmIds.push(...(fourthRows ?? []).map((f) => f.id));
+  check("a title with an apostrophe is keyed as one word", fourthRows?.find((f) => f.title.endsWith("Look Up"))?.search_key === `dn${tag}t look up`, fourthRows);
+  const dn = (await searchHits(`dn${tag}`)).map((r) => r.title);
+  check("an exact title outranks a longer word that starts with the query", dn[0] === `Dn${tag}` && dn[1] === `Dn${tag}'t Look Up`, dn);
+  for (const q of [`dn${tag}'t look up`, `dn${tag}’t look up`, `dn${tag}t look up`]) {
+    check(`…and "${q}" finds the title with the apostrophe first`, (await searchHits(q))[0]?.title === `Dn${tag}'t Look Up`);
+  }
+
+  // Adult films stay in the catalog (ids are referenced) but search never lists them.
+  const { data: adultRows } = await admin
+    .from("movie_films")
+    .insert([
+      { title: `Adlt${tag} Story`, imdb_votes: 900_000, is_adult: true },
+      { title: `Adlt${tag} Stories`, imdb_votes: 1_000, is_adult: false },
+    ])
+    .select("id, title, is_adult");
+  filmIds.push(...(adultRows ?? []).map((f) => f.id));
+  const adultId = adultRows?.find((f) => f.is_adult)?.id;
+  const { data: adultActor } = await admin.from("movie_people").insert({ name: `Adlt${tag} Actor`, popularity: 5 }).select("id").single();
+  if (adultActor) personIds.push(adultActor.id);
+  await admin.from("movie_credits").insert(adultRows!.map((f) => ({ film_id: f.id, person_id: adultActor!.id, billing: 0 })));
+  const adultHits = await searchHits(`adlt${tag} stor`);
+  check("film search leaves adult films out", adultHits.length > 0 && adultHits.every((h) => h.id !== adultId), adultHits);
+  check("…an exact query too", (await searchHits(`adlt${tag} story`)).every((h) => h.id !== adultId));
+  check("…and a filmography", (await searchHits(`adlt${tag}`, { p_person: adultActor!.id })).map((h) => h.title).join() === `Adlt${tag} Stories`);
+  const { data: adultPeople } = await admin.rpc("search_people", { p_query: `adlt${tag} actor`, p_limit: 5 });
+  const adultPerson = (adultPeople as { name: string; known_for: string | null }[] | null)?.[0];
+  check("a person is never known for an adult film", adultPerson?.known_for === `Adlt${tag} Stories`, adultPeople);
+  const { data: plain } = await admin.from("movie_films").select("is_adult, series_qids").eq("id", idOf(`${W} Returns`)!).single();
+  check("films are not adult and in no series unless the import says so", plain?.is_adult === false && JSON.stringify(plain.series_qids) === "[]", plain);
+
+  // Series: Wikidata ids only.
+  const { error: goodSeries } = await admin.from("movie_films").update({ series_qids: ["Q1576873", "Q2484680"] }).eq("id", idOf(`${W} Returns`)!);
+  check("a film can be in Wikidata series", !goodSeries, goodSeries);
+  const { error: badSeries } = await admin.from("movie_films").update({ series_qids: ["Q1576873", "Fast"] }).eq("id", idOf(`${W} Returns`)!);
+  check("series ids must be Wikidata ids (23514)", badSeries?.code === "23514", badSeries);
+
   const { error: dupCredit } = await admin.from("movie_credits").insert({ film_id: idOf(W)!, person_id: person!.id });
   check("a person is credited once per film (23505)", dupCredit?.code === "23505", dupCredit);
   const { error: badWikidata } = await admin.from("movie_films").insert({ title: `Bad ${W}`, wikidata_id: "X12" });
