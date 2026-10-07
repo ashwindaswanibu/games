@@ -11,6 +11,10 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [ ] **Series data for the final pick:** import Wikidata "part of the series" (P179) into the catalog, so sequels that share no words with their series (e.g. *The Empire Strikes Back*) can't be decoys for one another.
 - [ ] **Open it to everyone:** it's still `testing` (admins only) until Ashwin says so.
 - [ ] **Retire the "Color Grade" game** (a misreading of the movie-LUT idea).
+- [ ] **Render every eligible film once, ahead of time** (Ashwin, 2026-10-06): instead of rendering each day's film the day before, render the whole pool once in the cloud, then the daily picker only chooses from films that are already done. Sizing from the Dune run: about 20 MB of frames downloaded and 2 minutes per film, about 0.9 MB of finished levels. For the 470 eligible films that's roughly 9 GB to download (politely, resumable, about 16 hours at one film at a time) and 420 MB of levels.
+  - Split the pipeline in two: *render* a film's ten levels (once per film) and *schedule* a day (choose the film, draw the final pick's options with that day's secret seed, link the levels).
+  - Store the levels in Cloudflare R2 rather than Postgres (420 MB would fill the free database), served through the same "only what you've earned" check.
+  - New films get rendered as they're added to the catalog (weekly).
 - [ ] **Daily film picker:** implement the approved selection logic (tiers 25/55/20, no repeats within a year, no franchise or director repeats within 30 days, skip black-and-white films).
 - [ ] **Add MovieNet as a second frame source** (about 1,100 complete films, pre-2019). Needs a free OpenDataLab account (Ashwin). First download only the 10 KB Movie List and measure how many *new* popular films it adds before committing to the ~250 GB download (process in the cloud).
 
