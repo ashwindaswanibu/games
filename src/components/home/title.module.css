@@ -460,6 +460,20 @@
     margin-top: 6px;
   }
 
+  .chip {
+    width: 10px;
+    height: 14px;
+  }
+
+  .chips {
+    gap: 4px;
+  }
+
+  /* Many chips on a phone: the chips are the tail. */
+  .band:has(.chips > :nth-child(9)) .tail {
+    display: none;
+  }
+
   .wide {
     display: none;
   }

@@ -124,7 +124,8 @@ export function SetIn({
       pieces.forEach((p, i) => {
         const at = 300 + i * b.s;
         const earned = p.dataset.kind === "earned";
-        t.visible(p, [[at, Infinity]]);
+        // (Each piece's own window ends with the card's: a child's visibility outlives its parent's.)
+        t.visible(p, [[at, b.land]]);
         t.key(
           p,
           earned
@@ -140,8 +141,8 @@ export function SetIn({
       });
       // Slots never needed: their keylines hard-swap to hairlines.
       const swap = b.last + 150;
-      t.visible(card.querySelector("[data-keyline]"), [[250, swap]]);
-      card.querySelectorAll("[data-unused], [data-join]").forEach((el) => t.visible(el, [[swap, Infinity]]));
+      t.visible(card.querySelector("[data-keyline]"), [[250, Math.min(swap, b.land)]]);
+      card.querySelectorAll("[data-unused], [data-join]").forEach((el) => t.visible(el, [[swap, b.land]]));
       // The label, cut big; the result in words.
       t.visible(label, [[b.label, b.land]]);
       t.key(label, [

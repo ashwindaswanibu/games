@@ -384,6 +384,15 @@
     align-items: last baseline;
   }
 
+  /* A filled pill keeps its full height on the name line here, rather than reaching into line two. */
+  .line1:has(> .pill) {
+    min-height: 44px;
+  }
+
+  .line1 > .pill {
+    margin: 0;
+  }
+
   .leader {
     align-self: last baseline;
   }
@@ -496,45 +505,48 @@
   white-space: normal;
 }
 
-.creditsCol[data-density="dense"] .credit {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  min-height: clamp(52px, 7vh, 64px);
-  padding: 6px 0;
-  --mark-u: 20px;
-}
-
-.creditsCol[data-density="dense"] .line1,
-.creditsCol[data-density="dense"] .line2 {
-  display: contents;
-}
-
-.creditsCol[data-density="dense"] .markSlot {
-  order: -1;
-  align-self: center;
-  min-width: calc(var(--mark-u) * var(--mark-col, 9));
-}
-
-.creditsCol[data-density="dense"] .voice,
-.creditsCol[data-density="dense"] .meta,
-.creditsCol[data-density="dense"] .how {
-  display: none;
-}
-
-.creditsCol[data-density="dense"] .credit {
-  --name: clamp(24px, 3.4vh, 32px);
-}
-
-@container (min-width: 860px) {
-  .creditsCol[data-density="dense"] .credits {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 36px;
+/* Dense (nine or more games) on a laptop: single-line rows; a phone keeps its own layout. */
+@media (min-width: 761px) {
+  .creditsCol[data-density="dense"] .credit {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    min-height: clamp(52px, 7vh, 64px);
+    padding: 6px 0;
+    --mark-u: 20px;
   }
 
-  .creditsCol[data-density="dense"] .credit:nth-last-child(2):nth-child(odd) {
-    border-bottom: 0;
+  .creditsCol[data-density="dense"] .line1,
+  .creditsCol[data-density="dense"] .line2 {
+    display: contents;
+  }
+
+  .creditsCol[data-density="dense"] .markSlot {
+    order: -1;
+    align-self: center;
+    min-width: calc(var(--mark-u) * var(--mark-col, 9));
+  }
+
+  .creditsCol[data-density="dense"] .voice,
+  .creditsCol[data-density="dense"] .meta,
+  .creditsCol[data-density="dense"] .how {
+    display: none;
+  }
+
+  .creditsCol[data-density="dense"] .credit {
+    --name: clamp(24px, 3.4vh, 32px);
+  }
+
+  @container (min-width: 860px) {
+    .creditsCol[data-density="dense"] .credits {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 36px;
+    }
+
+    .creditsCol[data-density="dense"] .credit:nth-last-child(2):nth-child(odd) {
+      border-bottom: 0;
+    }
   }
 }
 
@@ -838,6 +850,8 @@
   }
 
   .wingVoice {
+    margin-left: auto;
+    margin-right: 24cqi;
     font-size: 14px;
   }
 

@@ -9,6 +9,7 @@ import type { HomeComposition } from "./composition";
 import { resultSentence, type CreditPhase } from "./credit";
 import { clearCutLayers, cutToPicture } from "./cut-to-picture";
 import { Fin } from "./fin";
+import { watchFrames } from "./frames";
 import { readClock, useGameClock } from "./game-clock";
 import { clearPrePaint, decideMoments, markHomeSeen, markOpeningSeen, markSetInsPlayed, prePaintScript, type GateConfig } from "./gates";
 import { InProduction } from "./in-production";
@@ -123,15 +124,21 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
     if (!qa?.cueChange) return;
     const order: readonly HomeCue[] = ["morning", "afternoon", "night", "morning"];
     let swap: ReturnType<typeof setTimeout> | undefined;
+    let end: ReturnType<typeof setTimeout> | undefined;
+    let stop: ((keep?: boolean) => unknown) | null = null;
     const go = setTimeout(() => {
       const next = order[order.indexOf(lit) + 1];
+      if (qa.frames) stop = watchFrames("cue crossfade");
       setFadeMs(CUE_FADE_MS);
       setLit(next);
       swap = setTimeout(() => setCue(next), CUE_FADE_MS / 2);
+      end = setTimeout(() => stop?.(), CUE_FADE_MS + 100);
     }, 1500);
     return () => {
       clearTimeout(go);
       clearTimeout(swap);
+      clearTimeout(end);
+      stop?.(false);
     };
     // Once per load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
