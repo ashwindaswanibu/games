@@ -1,0 +1,91 @@
+/*
+ * Result marks (spec §6). Cut cream = earned, print = spent, print at 40% = skip, dashed keyline =
+ * not yet, faint hairline = not needed. A sheet sets `--fink` (its print) and `--keyline`; on a
+ * deep sheet (`data-tier="deep"`) a spent piece is drawn hollow, because a solid cream miss would
+ * read as earned.
+ */
+
+.mark {
+  display: block;
+  width: calc(var(--mark-u) * var(--mw));
+  height: calc(var(--mark-u) * var(--mh));
+  overflow: visible;
+  flex: none;
+}
+
+.keyline,
+.joinKey {
+  fill: none;
+  stroke: var(--keyline, currentColor);
+  stroke-width: 1.25px;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* A finished credit shows its pieces; the empty form waits underneath for the set-in. */
+.mark[data-finished] .keylines {
+  visibility: hidden;
+}
+
+.join {
+  fill: none;
+  stroke: var(--fink);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.unused {
+  fill: none;
+  stroke: var(--fink);
+  stroke-width: 1px;
+  opacity: 0.3;
+  vector-effect: non-scaling-stroke;
+}
+
+.dot {
+  fill: var(--fink);
+  opacity: 0.4;
+}
+
+.earned,
+.spent,
+.skip {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+/* Earned: cut from cream, with an ink plate a hair down and right. */
+.earned .face {
+  fill: var(--sheet-cream);
+}
+
+.earned .plate {
+  fill: var(--sheet-ink);
+  transform: translate(1px, 1.5px);
+}
+
+/* Spent: printed. */
+.spent .face {
+  fill: var(--fink);
+}
+
+.spent .holes {
+  fill: var(--sheet-cream);
+}
+
+[data-tier="deep"] .spent .face {
+  fill: none;
+  stroke: var(--fink);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+[data-tier="deep"] .spent .holes {
+  fill: var(--fink);
+}
+
+/* Skip: print at 40%. */
+.skip .face {
+  fill: var(--fink);
+  opacity: 0.4;
+}

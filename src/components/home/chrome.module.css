@@ -1,0 +1,537 @@
+/*
+ * The home's own chrome (§5.1, §5.6, §5.7, §5.9, §5.10): the laptop strip, the phone's torn tab
+ * bar, the welcome and up-next slips, the billing block below the fold.
+ */
+
+/* ---------------------------------------------------------------------------------------------
+ * Strip
+ * ------------------------------------------------------------------------------------------- */
+
+.strip {
+  position: relative;
+  z-index: 2;
+  height: var(--strip-h);
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 var(--pad-x);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.name {
+  font: 600 15px/1 var(--f-ui);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.ticks {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+}
+
+.ticks i {
+  display: block;
+  width: 4px;
+  background: var(--verm);
+}
+
+.ticks i[data-open] {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--verm);
+}
+
+.streak {
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.streak b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.risk {
+  color: var(--verm-text);
+}
+
+.short {
+  display: none;
+}
+
+.nav {
+  margin-left: auto;
+  display: flex;
+  gap: 26px;
+}
+
+.nav a {
+  padding: 8px 0;
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  transition: color 300ms var(--ease);
+}
+
+.nav a:hover {
+  color: var(--ink);
+}
+
+.nav a[aria-current] {
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--ink);
+}
+
+.replay {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  flex: none;
+  transition: transform 150ms var(--ease);
+}
+
+.replay:active {
+  transform: scale(0.97);
+}
+
+.replay svg {
+  width: 30px;
+  height: 30px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Tab bar (phone)
+ * ------------------------------------------------------------------------------------------- */
+
+.tabBar {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Slips: welcome (cream) and up next (ink)
+ * ------------------------------------------------------------------------------------------- */
+
+.welcome,
+.upNext {
+  position: relative;
+  flex: none;
+  isolation: isolate;
+}
+
+.slipPlate,
+.slipPaper {
+  position: absolute;
+  inset: 0;
+  clip-path: var(--cut);
+}
+
+.slipPlate {
+  background: var(--plate);
+  transform: translate(5px, 7px);
+}
+
+.welcome {
+  rotate: -0.8deg;
+  color: var(--sheet-ink);
+}
+
+.welcome .slipPaper {
+  background: var(--sheet-cream) url("/home/fibre-dark-240.png");
+}
+
+.welcomeBody {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 16px 56px 16px 22px;
+  min-height: 72px;
+}
+
+.hey {
+  margin: 0;
+  font: italic 400 24px/1.1 var(--f-voice);
+}
+
+.welcomeText {
+  margin: 0;
+  font: 400 14px/1.4 var(--f-ui);
+}
+
+.welcomeLink {
+  margin-left: 4px;
+  font: 500 10px/1 var(--f-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: inset 0 -1px 0 currentColor;
+  padding-bottom: 3px;
+}
+
+.close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+}
+
+.close svg {
+  width: 12px;
+  height: 12px;
+}
+
+.welcome :focus-visible {
+  outline-color: var(--sheet-ink);
+}
+
+.upNext {
+  display: none;
+  rotate: -0.6deg;
+  color: var(--sheet-cream);
+}
+
+.upNext .slipPaper {
+  background: var(--sheet-ink);
+}
+
+.upNextBody {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 8px 9px 16px;
+  min-height: 56px;
+}
+
+.upNextText {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.upNextLbl {
+  font: 500 10px/1 var(--f-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.upNextName {
+  min-width: 0;
+  font: 400 26px/0.9 var(--f-display);
+  text-transform: uppercase;
+  letter-spacing: 0.012em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upNextPill {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: var(--sheet-cream);
+  color: var(--sheet-ink);
+  font: 600 13px/1 var(--f-ui);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: transform 150ms var(--ease);
+}
+
+.upNextPill:active {
+  transform: scale(0.97);
+}
+
+.upNextPill:focus-visible {
+  outline-color: var(--sheet-cream);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Billing
+ * ------------------------------------------------------------------------------------------- */
+
+.billing {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: clamp(48px, 9vh, 96px) var(--pad-x) clamp(56px, 10vh, 110px);
+  text-align: center;
+}
+
+.billKicker {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: min(880px, 100%);
+}
+
+.billKicker::before,
+.billKicker::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hair);
+}
+
+.billLabel {
+  margin: 0;
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.starring {
+  margin: 14px 0 0;
+  font: 500 11px/1 var(--f-mono);
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.stars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: clamp(28px, 5vw, 72px);
+}
+
+.star {
+  display: grid;
+  gap: 8px;
+}
+
+.star b {
+  font: 400 clamp(56px, 9vh, 104px) / 0.82 var(--f-display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.star span {
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.star[data-you] b,
+.withName[data-you] b {
+  color: var(--verm);
+}
+
+:global([data-cue="night"]) .star[data-you] b,
+:global([data-cue="night"]) .withName[data-you] b {
+  color: var(--verm-text);
+}
+
+.with {
+  margin: 0;
+  max-width: 880px;
+  font: italic 400 clamp(20px, 2.8vh, 26px) / 1.5 var(--f-voice);
+  color: var(--ink-2);
+}
+
+.with b {
+  margin: 0 0.12em;
+  font: 400 clamp(28px, 4.2vh, 40px) / 1 var(--f-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.with sup {
+  margin-left: 0.1em;
+  font: 500 9.5px/1 var(--f-mono);
+  font-style: normal;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+  vertical-align: top;
+}
+
+.withName {
+  white-space: nowrap;
+}
+
+.walled,
+.billEmpty {
+  margin: 0;
+  font: italic 400 clamp(16px, 2.2vh, 19px) / 1.3 var(--f-voice);
+  color: var(--ink-2);
+}
+
+.leaders {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 36px;
+  margin-top: 16px;
+}
+
+.leader,
+.full {
+  padding: 10px 0;
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.leader b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.full {
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 var(--ink);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phone
+ * ------------------------------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .strip {
+    gap: 12px;
+    height: calc(var(--strip-h) + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .who {
+    gap: 10px;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .long {
+    display: none;
+  }
+
+  .short {
+    display: inline;
+  }
+
+  .streak {
+    letter-spacing: 0.18em;
+  }
+
+  .replay {
+    margin-left: auto;
+  }
+
+  .upNext {
+    display: block;
+  }
+
+  .welcomeBody {
+    padding: 14px 52px 14px 18px;
+  }
+
+  .billing {
+    padding: 44px 16px calc(112px + env(safe-area-inset-bottom));
+  }
+
+  .star b {
+    font-size: 58px;
+  }
+
+  .with b {
+    font-size: 30px;
+  }
+
+  .tabBar {
+    position: fixed;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    padding: 12px 8px calc(10px + env(safe-area-inset-bottom));
+    color: var(--sheet-cream);
+  }
+
+  .tabBg,
+  .tabEdge {
+    position: absolute;
+    inset: 0;
+    clip-path: var(--tear);
+  }
+
+  .tabBg {
+    background: var(--sheet-ink);
+  }
+
+  .tabEdge {
+    display: none;
+    background: oklch(0.935 0.015 81 / 0.12);
+    transform: translateY(-1px);
+  }
+
+  :global([data-cue="night"]) .tabEdge {
+    display: block;
+  }
+
+  .tabBar a {
+    position: relative;
+    flex: 1;
+    display: grid;
+    place-items: center;
+    gap: 6px;
+    min-height: 48px;
+    padding-top: 10px;
+    font: 500 10px/1 var(--f-mono);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  .tabBar a::before {
+    content: "";
+    width: 18px;
+    height: 3px;
+  }
+
+  .tabBar a[aria-current] {
+    opacity: 1;
+  }
+
+  .tabBar a[aria-current]::before {
+    background: var(--verm);
+  }
+
+  .tabBar a:focus-visible {
+    outline-color: var(--sheet-cream);
+  }
+}

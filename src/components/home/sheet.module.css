@@ -1,0 +1,876 @@
+/*
+ * The credits (§5.3–§5.8): one sheet of coloured paper per bucket, its head, its credits; the In
+ * production cards. Sheets never read as web cards: no radius, no border, no box-shadow. The paper,
+ * its plate shadow and its fibre are static layers under one seeded clip.
+ */
+
+.creditsCol {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sheet-gap);
+  padding-top: clamp(6px, 1.4vh, 14px);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The sheet
+ * ------------------------------------------------------------------------------------------- */
+
+.sheet {
+  --sheet-pad: clamp(12px, 2.1vh, 22px) clamp(18px, 2vw, 30px) clamp(10px, 1.6vh, 18px);
+  position: relative;
+  flex: none;
+  isolation: isolate;
+  color: var(--fink);
+}
+
+.sheet[data-bucket="words"] {
+  --sheet: var(--verm);
+  --fink: var(--sheet-ink);
+  --fink-2: var(--sheet-ink);
+  --keyline: oklch(0.21 0.01 67 / 0.85);
+}
+
+.sheet[data-bucket="movies"] {
+  --sheet: var(--ochre);
+  --fink: var(--sheet-ink);
+  --fink-2: oklch(0.21 0.01 67 / 0.8);
+  --keyline: oklch(0.21 0.01 67 / 0.66);
+}
+
+.sheet[data-bucket="geography"] {
+  --sheet: var(--teal);
+  --fink: var(--sheet-cream);
+  --fink-2: var(--sheet-cream);
+  --keyline: oklch(0.95 0.025 86 / 0.66);
+}
+
+.sheet[data-bucket="chess"] {
+  --sheet: var(--ultra);
+  --fink: var(--sheet-cream);
+  --fink-2: oklch(0.95 0.025 86 / 0.82);
+  --keyline: oklch(0.95 0.025 86 / 0.66);
+}
+
+.plate,
+.paper,
+.field {
+  position: absolute;
+  inset: 0;
+  clip-path: var(--cut);
+  pointer-events: none;
+}
+
+.plate {
+  background: var(--plate);
+  transform: translate(7px, 9px);
+}
+
+.paper {
+  background: var(--sheet);
+}
+
+.paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("/home/fibre-light-240.png");
+  opacity: 0.55;
+}
+
+.field {
+  overflow: hidden;
+}
+
+.body {
+  position: relative;
+  padding: var(--sheet-pad);
+  container-type: inline-size;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Head: the bucket's title and its one gesture; the kicker
+ * ------------------------------------------------------------------------------------------- */
+
+.head {
+  position: relative;
+  height: var(--head-h);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.head h2,
+.wingBody h2 {
+  margin: 0;
+  font-weight: 400;
+}
+
+.kicker {
+  flex: none;
+  padding-bottom: 6px;
+  font: 500 10px/1 var(--f-mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--fink);
+  white-space: nowrap;
+}
+
+.tWords {
+  height: clamp(48px, 8vh, 84px);
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.wordsArt {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  overflow: visible;
+  margin-left: -6px;
+}
+
+.tMoviesWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.32em;
+  min-width: 0;
+  font-size: clamp(40px, 7.4vh, 70px);
+  padding-bottom: 0.04em;
+}
+
+.barrel {
+  display: block;
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+.tMovies {
+  font: italic 500 1em / 0.9 var(--f-voice);
+  font-variation-settings: "opsz" 28;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+
+.tGeo {
+  font: 400 clamp(26px, 4.6vh, 44px) / 1 var(--f-display);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  rotate: -8deg;
+  transform-origin: 0 100%;
+  padding-bottom: 0.25em;
+}
+
+.tChess {
+  font: 400 clamp(30px, 5.8vh, 56px) / 0.9 var(--f-display);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding-bottom: 0.06em;
+}
+
+/* Geography's lines and Chess's spiral cross the head (or the whole card), clipped by the sheet. */
+.nxnw {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: calc(var(--head-h) + clamp(12px, 2.1vh, 22px) + 4px);
+}
+
+.spiralBox {
+  position: absolute;
+  left: 78%;
+  top: calc((var(--head-h) + clamp(12px, 2.1vh, 22px)) / 2);
+  width: calc((var(--head-h) + clamp(12px, 2.1vh, 22px)) * 1.2);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+}
+
+.spiral {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Credits
+ * ------------------------------------------------------------------------------------------- */
+
+.credits {
+  margin-top: clamp(6px, 1.2vh, 12px);
+  border-top: 1.5px solid var(--fink);
+}
+
+.credit {
+  position: relative;
+  display: block;
+  padding: var(--row-pad) 0;
+  border-bottom: 1px solid color-mix(in oklch, var(--fink) 22%, transparent);
+  color: var(--fink);
+}
+
+.credit:last-child {
+  border-bottom: 0;
+}
+
+.credit:focus-visible {
+  outline: 1px solid var(--fink);
+  outline-offset: 4px;
+}
+
+.line1 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  height: calc(min(var(--name), 6.4cqi) * 0.9);
+}
+
+.line1 > .pill,
+.line1 > .tag {
+  align-self: center;
+}
+
+.name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font: 400 min(var(--name), 6.4cqi) / 0.9 var(--f-display);
+  letter-spacing: 0.012em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The dotted leader: an empty box, so its baseline is its foot; raised 5px off the name's baseline. */
+.leader {
+  flex: 1 1 auto;
+  min-width: 16px;
+  align-self: baseline;
+  border-bottom: 2px dotted var(--keyline);
+  transform: translateY(-5px);
+}
+
+.tag {
+  flex: none;
+  align-self: center;
+  padding: 4px 6px 3px;
+  font: 500 9px/1 var(--f-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px var(--keyline);
+  color: var(--fink-2);
+}
+
+.value {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.label {
+  font: 400 min(var(--name), 6.4cqi) / 0.9 var(--f-display);
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pts {
+  font: 500 10px/1 var(--f-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fink-2);
+}
+
+/* The page's one filled primary. */
+.pill {
+  flex: none;
+  /* On the name line without making it taller: the pill reaches into the row's padding. */
+  margin: -8px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: var(--sheet-ink);
+  color: var(--sheet-cream);
+  font: 600 13px/1 var(--f-ui);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: transform 150ms var(--ease), background-color 300ms var(--ease);
+}
+
+.credit:active .pill {
+  transform: scale(0.97);
+}
+
+.quiet {
+  flex: none;
+  padding: 6px 0;
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--fink);
+  transition: opacity 300ms var(--ease);
+}
+
+.credit:hover .quiet,
+.credit:hover .how {
+  opacity: 0.7;
+}
+
+.line2 {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.4vw, 20px);
+  margin-top: 6px;
+  min-width: 0;
+}
+
+.markSlot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: var(--mark-u);
+}
+
+.voice {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: italic 400 var(--voice) / 1.2 var(--f-voice);
+  color: var(--fink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.credit[data-state="finished"] .voice,
+.credit[data-state="unavailable"] .voice {
+  color: var(--fink);
+}
+
+.meta,
+.how {
+  flex: none;
+  margin-left: auto;
+  font: 500 10px/1 var(--f-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--fink-2);
+}
+
+.how {
+  color: var(--fink);
+  transition: opacity 300ms var(--ease);
+}
+
+.credit[data-state="unavailable"] .markSlot {
+  opacity: 0.45;
+}
+
+/* Held for the set-in: the empty form, no result yet. */
+.credit[data-phase="pre"] [data-result] {
+  visibility: hidden;
+}
+
+.credit[data-phase="pre"] [data-keyline] {
+  visibility: visible;
+}
+
+/* A narrow sheet (a phone, a 1024 laptop): the mark takes its own line; the voice and the meta
+   share the next. */
+@container (max-width: 560px) {
+  .line1 {
+    height: auto;
+    min-height: calc(min(var(--name), 6.4cqi) * 0.9);
+  }
+
+  /* Never an ellipsis on a game's name: a long one takes two lines, and the leader and the action
+     sit on its last. */
+  .name {
+    white-space: normal;
+    text-overflow: clip;
+  }
+
+  .line1 {
+    align-items: last baseline;
+  }
+
+  .leader {
+    align-self: last baseline;
+  }
+
+  .line2 {
+    flex-wrap: wrap;
+    align-items: baseline;
+    row-gap: 8px;
+    column-gap: 14px;
+  }
+
+  /* Finished: the mark alone, then the result line and "How everyone did". */
+  .markSlot {
+    flex-basis: 100%;
+  }
+
+  .voice {
+    flex: 1 1 0;
+    white-space: normal;
+  }
+
+  /* Not yet: the empty form and its meta, then the tagline across the row. */
+  .credit:not([data-state="finished"]) .markSlot {
+    flex-basis: auto;
+    align-self: center;
+  }
+
+  .credit:not([data-state="finished"]) .meta {
+    order: 2;
+  }
+
+  .credit:not([data-state="finished"]) .voice {
+    order: 3;
+    flex: 1 1 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Density: solo (one game), dense (nine or more)
+ * ------------------------------------------------------------------------------------------- */
+
+.creditsCol[data-density="solo"] {
+  --mark-u: clamp(34px, 5.6vh, 52px);
+  /* One game: the column is exactly the title's height, and the sheet's WORDS gives way to whatever
+     else is pasted on it (the welcome slip). */
+  height: calc(100dvh - var(--strip-h) - var(--pad-b));
+}
+
+.creditsCol[data-density="solo"] > .sheet {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.creditsCol[data-density="solo"] > .sheet > .body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.creditsCol[data-density="solo"] .head {
+  flex: 1 1 0;
+  height: auto;
+  min-height: var(--head-h);
+  align-items: stretch;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.creditsCol[data-density="solo"] .kicker {
+  align-self: flex-end;
+  padding: 0;
+}
+
+.creditsCol[data-density="solo"] .tWords {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.creditsCol[data-density="solo"] .wordsArt {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+
+.creditsCol[data-density="solo"] .credit {
+  --name: clamp(44px, 8.4vh, 80px);
+}
+
+.creditsCol[data-density="solo"] .name,
+.creditsCol[data-density="solo"] .label {
+  font-size: min(var(--name), 8.4cqi);
+}
+
+.creditsCol[data-density="solo"] .line2 {
+  flex-wrap: wrap;
+  margin-top: clamp(10px, 1.8vh, 18px);
+  row-gap: clamp(8px, 1.4vh, 14px);
+}
+
+.creditsCol[data-density="solo"] .voice {
+  order: 3;
+  flex-basis: 100%;
+  font-size: clamp(16px, 2.2vh, 20px);
+  white-space: normal;
+}
+
+.creditsCol[data-density="dense"] .credit {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-height: clamp(52px, 7vh, 64px);
+  padding: 6px 0;
+  --mark-u: 20px;
+}
+
+.creditsCol[data-density="dense"] .line1,
+.creditsCol[data-density="dense"] .line2 {
+  display: contents;
+}
+
+.creditsCol[data-density="dense"] .markSlot {
+  order: -1;
+  align-self: center;
+  min-width: calc(var(--mark-u) * var(--mark-col, 9));
+}
+
+.creditsCol[data-density="dense"] .voice,
+.creditsCol[data-density="dense"] .meta,
+.creditsCol[data-density="dense"] .how {
+  display: none;
+}
+
+.creditsCol[data-density="dense"] .credit {
+  --name: clamp(24px, 3.4vh, 32px);
+}
+
+@container (min-width: 860px) {
+  .creditsCol[data-density="dense"] .credits {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 36px;
+  }
+
+  .creditsCol[data-density="dense"] .credit:nth-last-child(2):nth-child(odd) {
+    border-bottom: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * In production (§5.8): cards when the row has room, bands when it is tight
+ * ------------------------------------------------------------------------------------------- */
+
+.wings {
+  flex: 1 1 0;
+  min-height: 72px;
+  container-type: size;
+}
+
+.creditsCol[data-density="solo"] > .wings {
+  flex: 0 0 clamp(150px, 31vh, 280px);
+}
+
+.creditsCol[data-density="dense"] > .wings {
+  flex: none;
+  height: 96px;
+}
+
+.wingsRow {
+  display: flex;
+  gap: clamp(12px, 1.4vw, 20px);
+  height: 100%;
+}
+
+.wing {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  container-type: inline-size;
+}
+
+.wingBody {
+  position: relative;
+  height: 100%;
+  padding: clamp(12px, 2vh, 20px) clamp(14px, 1.4vw, 20px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  overflow: hidden;
+}
+
+.wingVoice {
+  margin: 0;
+  font: italic 400 clamp(14px, 1.9vh, 16px) / 1.2 var(--f-voice);
+  color: var(--fink-2);
+  white-space: nowrap;
+}
+
+.wing .tMoviesWrap {
+  font-size: min(21cqi, 64px);
+}
+
+.wing .tGeo {
+  font-size: 9.6cqi;
+  letter-spacing: 0.3em;
+  margin-top: 0.6em;
+}
+
+.wing .tChess {
+  font-size: min(15.5cqi, 72px);
+}
+
+.wing .tWords {
+  height: min(26cqi, 90px);
+}
+
+.wing .nxnw {
+  height: 100%;
+}
+
+/* Beside the letters, never through them: as tall as the card allows, as wide as its right half. */
+.wing .spiralBox {
+  top: 58%;
+  width: min(120cqh, 84cqi);
+  left: 78%;
+}
+
+/* Band form: the row is short. Each card becomes a band: title left at half its height,
+   "In production." right, the gesture cropped to the right third. */
+@container (max-height: 119px) {
+  .wingBody {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 clamp(12px, 1.2vw, 18px);
+  }
+
+  .wing .tMoviesWrap,
+  .wing .tChess,
+  .wing .tGeo {
+    font-size: min(45cqh, 15cqi);
+    margin: 0;
+  }
+
+  .wing .tGeo {
+    letter-spacing: 0.22em;
+    rotate: 0deg;
+    padding: 0;
+  }
+
+  .wing .tWords {
+    height: 50cqh;
+  }
+
+  .wingVoice {
+    align-self: flex-end;
+    margin-left: auto;
+    margin-right: 30cqi;
+    padding-bottom: 14px;
+    font-size: 14px;
+  }
+
+  .wing .spiralBox {
+    left: 86%;
+    top: 50%;
+    width: 170cqh;
+  }
+
+  .wing .barrel {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phone
+ * ------------------------------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .sheet {
+    --sheet-pad: 14px 16px 8px;
+  }
+
+  /* The Up next slip holds the filled primary: the credit keeps its quiet action. */
+  :global([data-upnext]) .credit[data-primary] .pill {
+    margin: 0;
+    height: auto;
+    padding: 6px 0;
+    border-radius: 0;
+    background: none;
+    color: var(--fink);
+    font: 500 10.5px/1 var(--f-mono);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  :global([data-upnext]) .credit[data-primary] .pill svg {
+    display: none;
+  }
+
+  :global([data-upnext]) .credit[data-primary] .pill::after {
+    content: "\00a0›";
+  }
+
+  .head {
+    height: auto;
+    min-height: var(--head-h);
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .head > :first-child {
+    flex: none;
+  }
+
+  .kicker {
+    margin-left: auto;
+    letter-spacing: 0.14em;
+  }
+
+  .tWords {
+    height: 50px;
+  }
+
+  .tMoviesWrap {
+    font-size: 42px;
+  }
+
+  .tChess {
+    font-size: 34px;
+  }
+
+  .tGeo {
+    font-size: 28px;
+  }
+
+  .kicker {
+    letter-spacing: 0.18em;
+    white-space: normal;
+    text-align: right;
+    max-width: 58%;
+    line-height: 1.4;
+  }
+
+  .name,
+  .label {
+    font-size: var(--name);
+  }
+
+  .creditsCol[data-density="solo"] {
+    height: auto;
+  }
+
+  .creditsCol[data-density="solo"] > .sheet {
+    flex: none;
+  }
+
+  .creditsCol[data-density="solo"] .credit {
+    --name: 38px;
+  }
+
+  .creditsCol[data-density="solo"] .name,
+  .creditsCol[data-density="solo"] .label {
+    font-size: var(--name);
+  }
+
+  .creditsCol[data-density="solo"] {
+    --mark-u: 30px;
+  }
+
+  .creditsCol[data-density="solo"] .head {
+    flex: none;
+    height: var(--head-h);
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .creditsCol[data-density="solo"] .tWords {
+    flex: 0 1 auto;
+    height: 50px;
+  }
+
+  .creditsCol[data-density="solo"] .wordsArt {
+    width: auto;
+    height: 100%;
+  }
+
+  .creditsCol[data-density="solo"] .kicker {
+    align-self: flex-end;
+    padding-bottom: 6px;
+  }
+
+  .wings,
+  .creditsCol[data-density="solo"] > .wings,
+  .creditsCol[data-density="dense"] > .wings {
+    flex: none;
+    height: auto;
+    min-height: 0;
+    container-type: normal;
+  }
+
+  .wingsRow {
+    flex-direction: column;
+    height: auto;
+    gap: 14px;
+  }
+
+  .wing {
+    flex: none;
+    height: 64px;
+  }
+
+  .wingBody {
+    flex-direction: row;
+    align-items: center;
+    padding: 0 16px;
+  }
+
+  .wing .tMoviesWrap,
+  .wing .tChess {
+    font-size: 30px;
+  }
+
+  .wing .tGeo {
+    font-size: 26px;
+    rotate: 0deg;
+    padding: 0;
+    margin: 0;
+    letter-spacing: 0.22em;
+  }
+
+  .wing .tWords {
+    height: 34px;
+  }
+
+  .wing .barrel {
+    display: none;
+  }
+
+  .wingVoice {
+    font-size: 14px;
+  }
+
+  .wing .spiralBox {
+    left: 88%;
+    top: 50%;
+    width: 140px;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

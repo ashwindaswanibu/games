@@ -1,0 +1,471 @@
+/*
+ * The title column (§4.1, §5.2): Wednesday · OCTOBER · the giant numeral, the clock beside it, the
+ * torn TODAY band and the presence line. Sized by CSS alone from League Gothic's measured metrics
+ * (passed by the server as --month-adv, --day-ink, --day-lsb, --day-rsb): nothing is measured in
+ * the browser, so nothing moves after the first paint.
+ */
+
+.title {
+  --side-w: max(calc(var(--count-f) * 2.48), 172px);
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: calc(100dvh - var(--strip-h) - var(--pad-b));
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  container-type: inline-size;
+}
+
+/* One h1 holds the day ("Wednesday October 7"); its rows line up with the column's (subgrid), so
+   the clock, which is not part of the title, can sit in the numeral's row beside it. */
+.h1 {
+  grid-row: 1 / 4;
+  grid-column: 1;
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  font: inherit;
+  position: relative;
+  z-index: 2;
+}
+
+.wk {
+  grid-row: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-top: clamp(4px, 1.2vh, 14px);
+  font: italic 400 clamp(26px, 4.4vh, 46px) / 1 var(--f-voice);
+  font-variation-settings: "opsz" 36;
+  white-space: nowrap;
+}
+
+.wk::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: var(--ink);
+  transform: translateY(-0.22em);
+}
+
+.mo {
+  grid-row: 2;
+  display: block;
+  margin-top: clamp(2px, 0.6vh, 8px);
+  font: 400 min(19.5vh, calc(100cqi / var(--month-adv))) / 0.8 var(--f-display);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mo > span {
+  display: inline-block;
+}
+
+.dayRow {
+  grid-row: 3;
+  position: relative;
+  min-height: 0;
+  margin-top: clamp(8px, 1.6vh, 18px);
+  container-type: size;
+}
+
+/* The numeral: its box is the digit height (line-height .743 = the figures' height), fitted to
+   the row's height for one digit and to its width for two, ink flush right, tucked under the band. */
+.num {
+  position: absolute;
+  right: 0;
+  bottom: calc(clamp(10px, 2.4vh, 26px) * -1);
+  isolation: isolate;
+  font: 400 min(calc(100cqh / 0.743), calc((100cqw - var(--side-w) - 20px) / var(--day-ink))) / 0.743 var(--f-display);
+  margin-right: calc(var(--day-rsb) * -1em);
+  color: var(--verm);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.numPlate {
+  position: absolute;
+  inset: 0;
+  transform: translate(0.014em, 0.012em);
+  color: var(--verm-plate);
+  z-index: -1;
+}
+
+/* The clock group: the dial at the top, the countdown at the foot, in the numeral's row. */
+.clock {
+  grid-row: 3;
+  grid-column: 1;
+  align-self: stretch;
+  justify-self: start;
+  position: relative;
+  z-index: 3;
+  width: var(--side-w);
+  margin-top: clamp(8px, 1.6vh, 18px);
+  margin-bottom: clamp(14px, 3vh, 36px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+  container-type: size;
+}
+
+.dial {
+  display: block;
+  width: min(var(--side-w), 34cqh);
+  aspect-ratio: 1;
+  overflow: visible;
+}
+
+.countGroup {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.lbl {
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.city {
+  color: var(--verm-text);
+}
+
+.count {
+  display: flex;
+  font: 400 var(--count-f) / 0.86 var(--f-display);
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.d {
+  display: inline-block;
+  width: 0.47em;
+  text-align: center;
+}
+
+.c {
+  display: inline-block;
+  width: 0.2em;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+/* The last hour: the digits and the city line turn vermilion. Nothing else changes. */
+.countGroup[data-last-hour] .d,
+.countGroup[data-last-hour] .city {
+  color: var(--verm-text);
+}
+
+/* The teal strip behind the title (z below the month and the numeral). */
+.heroStrip {
+  position: absolute;
+  z-index: 1;
+  top: calc(clamp(4px, 1.2vh, 14px) + clamp(26px, 4.4vh, 46px) + clamp(6px, 2vh, 20px));
+  width: clamp(64px, 7vw, 104px);
+  height: 86%;
+  transform-origin: 50% 0;
+  pointer-events: none;
+}
+
+.heroStrip > i {
+  position: absolute;
+  inset: 0;
+  clip-path: var(--cut);
+}
+
+.heroStrip > i:first-child {
+  background: var(--plate);
+  transform: translate(6px, 8px);
+}
+
+.heroStrip > i:last-child {
+  background: var(--teal) url("/home/fibre-light-240.png");
+  background-blend-mode: normal;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The band
+ * ------------------------------------------------------------------------------------------- */
+
+.band {
+  grid-row: 4;
+  position: relative;
+  z-index: 3;
+  margin: clamp(6px, 1.4vh, 14px) 0 0 calc(var(--pad-x) * -1);
+  padding: 16px 22px 16px calc(var(--pad-x) + 2px);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  color: var(--ground);
+  transform: rotate(var(--band-deg));
+  transform-origin: 0 50%;
+}
+
+.bandBg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ink);
+  clip-path: var(--band-clip);
+}
+
+.bandLbl {
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.bandN {
+  font: 400 clamp(30px, 4.6vh, 42px) / 0.8 var(--f-display);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  display: inline-flex;
+}
+
+.bandN em {
+  font-style: normal;
+  opacity: 0.55;
+}
+
+/* Two values in one cell: now, and as it stood before a pending set-in. */
+.stack {
+  display: inline-grid;
+}
+
+.stack > * {
+  grid-area: 1 / 1;
+}
+
+.band [data-n-before] {
+  visibility: hidden;
+}
+
+.band[data-pending] [data-n-before] {
+  visibility: visible;
+}
+
+.band[data-pending] [data-n-now] {
+  visibility: hidden;
+}
+
+.chips {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.chip {
+  position: relative;
+  display: block;
+  width: 13px;
+  height: 18px;
+  box-shadow: inset 0 0 0 1.5px var(--c);
+}
+
+.chip > b {
+  position: absolute;
+  inset: 0;
+  background: var(--c);
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+}
+
+.chip[data-state="finished"] > b {
+  transform: none;
+}
+
+.chip[data-state="in_progress"] > b {
+  transform: scaleY(0.5);
+}
+
+.chip[data-state="unavailable"] {
+  opacity: 0.45;
+}
+
+.chipSep {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: currentColor;
+  opacity: 0.3;
+}
+
+.tail {
+  margin-left: auto;
+  justify-items: end;
+}
+
+.tailText {
+  font: 500 10px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.62;
+}
+
+.narrow {
+  display: none;
+}
+
+/* All played: the page's one filled primary. Cream on the ink band by day, ink on cream at night. */
+.standings {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: var(--ground);
+  color: var(--ink);
+  font: 600 13px/1 var(--f-ui);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: transform 150ms var(--ease);
+}
+
+.standings:active {
+  transform: scale(0.97);
+}
+
+.standings:focus-visible {
+  outline-color: var(--ground);
+}
+
+.arrow {
+  width: 9px;
+  height: 10px;
+  flex: none;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Presence
+ * ------------------------------------------------------------------------------------------- */
+
+.presence {
+  grid-row: 5;
+  position: relative;
+  z-index: 2;
+  margin: clamp(12px, 2.4vh, 22px) 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font: italic 400 clamp(15px, 2.1vh, 18px) / 1.25 var(--f-voice);
+  color: var(--ink-2);
+}
+
+.presenceText {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.presence b {
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.presenceGame {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-color 300ms var(--ease);
+}
+
+.presenceGame:hover {
+  text-decoration-color: currentColor;
+}
+
+.presenceDot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  background: var(--presence-dot);
+  transform: translateY(-2px);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phone
+ * ------------------------------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .title {
+    --side-w: 150px;
+    position: relative;
+    height: auto;
+    grid-template-rows: auto auto auto auto auto;
+  }
+
+  .wk {
+    margin-top: 2px;
+    font-size: 26px;
+  }
+
+  .mo {
+    font-size: min(30svh, calc((100vw - 32px) / var(--month-adv)));
+  }
+
+  .dayRow,
+  .clock {
+    height: clamp(150px, 24svh, 200px);
+  }
+
+  .clock {
+    margin-bottom: 0;
+    padding-bottom: 12px;
+    height: clamp(150px, 24svh, 200px);
+  }
+
+  .dial {
+    width: 60px;
+  }
+
+  .countGroup {
+    gap: 6px;
+  }
+
+  .lbl {
+    letter-spacing: 0.18em;
+  }
+
+  .band {
+    padding: 13px 16px 13px 18px;
+    gap: 12px;
+    margin-top: 6px;
+  }
+
+  .wide {
+    display: none;
+  }
+
+  .narrow {
+    display: inline;
+  }
+
+  .presence {
+    font-size: 15px;
+    margin-top: 12px;
+  }
+}

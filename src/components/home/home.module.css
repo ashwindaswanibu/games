@@ -1,0 +1,282 @@
+/*
+ * DAY FOR NIGHT
+ * The home is today's title sequence, cut from coloured paper and lit by New York's own daylight.
+ * By day the room is cream paper; after dusk it is Fade to Color's dark room, and the same cut
+ * sheets become the light. The bucket sheets never change with the light, so a result looks the
+ * same at 8 am and at 11 pm. The page is a clock you read without reading: the ground is the
+ * hour, the dial is the part of today that is left, the countdown is the minute.
+ *
+ * Performance: only transform and opacity animate. No live blur, filters, blend modes or animated
+ * clip paths; textures are static tiles; light is two tiny canvases painted once per cue.
+ */
+
+/* ---------------------------------------------------------------------------------------------
+ * Tokens (spec §3). Every pair is checked in spec-work/contrast.mjs.
+ * ------------------------------------------------------------------------------------------- */
+
+.home {
+  /* Bucket sheets: constant in every light. */
+  --verm: oklch(0.62 0.165 36);
+  --verm-plate: oklch(0.47 0.14 34);
+  --ochre: oklch(0.76 0.135 78);
+  --ochre-plate: oklch(0.6 0.13 70);
+  --teal: oklch(0.5 0.075 184);
+  --ultra: oklch(0.42 0.13 268);
+  --glint: oklch(0.8 0.064 191);
+  --sheet-ink: oklch(0.21 0.01 67);
+  --sheet-cream: oklch(0.95 0.025 86);
+
+  /* The room: morning by default; the cue sets the rest. */
+  --ground: oklch(0.935 0.03 86);
+  --ink-rgb: 0.21 0.01 67;
+  --ink: oklch(var(--ink-rgb));
+  --ink-2: oklch(var(--ink-rgb) / 0.66);
+  --ink-3: oklch(var(--ink-rgb) / 0.4);
+  --hair: oklch(var(--ink-rgb) / 0.13);
+  --plate: oklch(var(--ink-rgb) / 0.16);
+  --verm-text: oklch(0.5 0.15 34);
+  --presence-dot: var(--teal);
+
+  --f-display: var(--font-display), "League Gothic", "Oswald", Impact, sans-serif;
+  --f-voice: var(--font-voice), "Bodoni 72", Didot, Georgia, serif;
+  --f-ui: var(--font-geist-sans), system-ui, sans-serif;
+  --f-mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-cut: cubic-bezier(0.16, 0.9, 0.2, 1);
+  --ease-io: cubic-bezier(0.7, 0, 0.2, 1);
+
+  /* Spacing and the height budget (§3.3): horizontals clamp against vw, verticals against vh. */
+  --strip-h: clamp(52px, 7.4vh, 68px);
+  --pad-x: clamp(20px, 3.4vw, 52px);
+  --col-gap: clamp(28px, 3.4vw, 56px);
+  --pad-b: clamp(16px, 3vh, 32px);
+  --title-w: clamp(380px, 36vw, 580px);
+  --sheet-gap: clamp(12px, 2vh, 20px);
+  --head-h: clamp(56px, 9vh, 88px);
+  --name: clamp(28px, 4.4vh, 42px);
+  --mark-u: clamp(20px, 3.2vh, 30px);
+  --row-pad: clamp(8px, 1.4vh, 14px);
+  --count-f: clamp(46px, 8.6vh, 84px);
+  --voice: clamp(14px, 1.9vh, 17px);
+
+  position: relative;
+  min-height: 100dvh;
+  isolation: isolate;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+}
+
+.home[data-cue="afternoon"] {
+  --ground: oklch(0.915 0.034 82);
+}
+
+.home[data-cue="night"] {
+  --ground: oklch(0.165 0.007 60);
+  --ink-rgb: 0.935 0.015 81;
+  --plate: oklch(0 0 0 / 0.55);
+  --verm-text: oklch(0.7 0.14 40);
+  --presence-dot: var(--glint);
+  color-scheme: dark;
+}
+
+/* The page behind the home takes the room's ground, so overscroll and the bars match it. */
+:global(html):has(.home) {
+  background: oklch(0.935 0.03 86);
+  overflow-x: clip;
+}
+:global(html):has(.home[data-cue="afternoon"]) {
+  background: oklch(0.915 0.034 82);
+}
+:global(html):has(.home[data-cue="night"]) {
+  background: oklch(0.165 0.007 60);
+  color-scheme: dark;
+}
+:global(html):has(.home) :global(body) {
+  background: transparent;
+  overflow-x: clip;
+}
+
+/* Zero specificity, so every component's own link colour wins. */
+:where(.home) a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.home :focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 4px;
+}
+
+:where(.home) button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Mono caps: labels and machinery. */
+.label {
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The room (§5.12): one static layer per cue, crossfaded by opacity only.
+ * ------------------------------------------------------------------------------------------- */
+
+.room {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  contain: strict;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background-repeat: repeat;
+}
+
+.layer[data-on] {
+  opacity: 1;
+}
+
+.layer[data-c="morning"] {
+  background-color: oklch(0.935 0.03 86);
+  background-image: url("/home/fibre-dark-240.png");
+}
+
+.layer[data-c="afternoon"] {
+  background-color: oklch(0.915 0.034 82);
+  background-image: url("/home/fibre-dark-240.png");
+}
+
+.layer[data-c="night"] {
+  background-color: oklch(0.165 0.007 60);
+  background-image: url("/home/fibre-light-240.png");
+}
+
+/* The day's window light and the night's vignette: tiny canvases, scaled, painted once per cue. */
+.light {
+  position: absolute;
+  inset: 0;
+  background-size: 100% 100%;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Stage: the widescreen frame (§4.1)
+ * ------------------------------------------------------------------------------------------- */
+
+.stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--title-w) minmax(0, 1fr);
+  column-gap: var(--col-gap);
+  padding: 0 var(--pad-x) var(--pad-b);
+  min-height: calc(100dvh - var(--strip-h));
+}
+
+/* The night's spill: each sheet's colour past its edges, the lamp's wash. Scrolls with the sheets. */
+.spill {
+  position: absolute;
+  inset: -40px 0 0;
+  z-index: -1;
+  pointer-events: none;
+  background-size: 100% 100%;
+  opacity: 0;
+}
+
+.home[data-cue="night"] .spill {
+  opacity: 1;
+}
+
+/* Under the opening (decided before the first paint, then by the client), the home waits unseen. */
+.home[data-pre~="opening"] .stage,
+.home[data-pre~="opening"] .chrome,
+.home[data-moment="opening"] .stage,
+.home[data-moment="opening"] .chrome {
+  visibility: hidden;
+}
+
+/* The opening's first frame, painted before any script runs: the night room, the disc to come. */
+.cover {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  background: oklch(0.165 0.007 60) url("/home/fibre-light-240.png");
+}
+
+.home[data-pre~="opening"] .cover {
+  display: block;
+}
+
+/* Comes up (§8.6): a return visit's full page load. */
+.home[data-pre~="comes-up"] [data-comes-up] {
+  animation: comesUp 700ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+@keyframes comesUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phone (≤ 760px): its own composition (§4.2)
+ * ------------------------------------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .home {
+    --pad-x: 16px;
+    --strip-h: 52px;
+    --title-w: 100%;
+    --count-f: 46px;
+    --name: 30px;
+    --mark-u: 22px;
+    --head-h: 54px;
+    --sheet-gap: 14px;
+  }
+
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 14px;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home *,
+  .home *::before,
+  .home *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}
