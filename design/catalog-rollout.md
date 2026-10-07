@@ -150,7 +150,7 @@ Locally this took the catalog's indexes from 163 MB to 134 MB. Check the total a
 - Later refreshes are the same steps 3–7 (step 6 against that run's baseline; step 8 only after a
   large import).
 
-## Series, adult films and apostrophes (branch `catalog-quality`, built 2026-10-07, not live)
+## Series, adult films and apostrophes (branch `catalog-quality`, built and rolled out 2026-10-07)
 
 Three catalog fixes on top of the rollout above (`scripts/content/movies/README.md`, section 1):
 Wikidata's series (`movie_films.series_qids`) for Fade to Color's four and the film picker, adult
