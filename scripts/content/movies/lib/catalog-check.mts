@@ -1,4 +1,4 @@
-import { today as todayInGameTimezone } from "@/core/day";
+import { addDays, today as todayInGameTimezone, type PuzzleDate } from "@/core/day";
 import type { Json } from "@/server/database.types";
 import { isFixturePayload } from "../../lib/fixtures.mjs";
 import { buildGraph, linkDistances, reparDecision, type CastGraph, type Credit, type ReparDecision } from "./degrees-graph.mjs";
@@ -18,11 +18,11 @@ const ID_CHUNK = 200;
  *     with the same non-empty Wikidata, IMDb and TMDB ids.
  *  2. Every catalog id any stored puzzle, solution or play references still exists.
  *  3. Every link of a stored Degrees solution is still a credit pair, so the chain replays: the
- *     solutions of days played, of today and before, and of DEV FIXTURE days.
+ *     solutions of days played, of tomorrow and before, and of DEV FIXTURE days.
  *
  * And three warnings (not failures: the import is right, the puzzles need catching up): unplayed
  * Degrees days from today on whose start and end now have a chain shorter than their par (more
- * credits make shorter chains), unplayed days after today whose solution uses a credit the import
+ * credits make shorter chains), unplayed days after tomorrow whose solution uses a credit the import
  * dropped (archive footage: imports don't keep those, see `StoredReferences`), both fixed by
  * `degrees --repar-unplayed`; and stored puzzles or
  * plays that reference a film now hidden as adult (search can't find it, so a Degrees chain through
@@ -137,11 +137,12 @@ export interface StoredReferences {
   degreesDays: StoredDegreesDay[];
   /**
    * Credit pairs of stored Degrees solutions that must stay credits: of days someone played, of
-   * today and before, and of DEV FIXTURE days.
+   * tomorrow and before (tomorrow can go live before `degrees --repar-unplayed` runs), and of DEV
+   * FIXTURE days.
    */
   solutionPairs: [number, number][];
   /**
-   * Credit pairs of the other stored solutions (unplayed days after today), by date. An import may
+   * Credit pairs of the other stored solutions (unplayed days after tomorrow), by date. An import may
    * drop one of these credits (someone in a film's archive footage was never in it); the day is
    * then still to come and nobody has seen it, so `degrees --repar-unplayed` gives it the chain the
    * catalog has now instead.
@@ -199,7 +200,7 @@ export async function loadStoredReferences(db: ContentDb, today: string = todayI
       }
       if (puzzle.success && solution.success) {
         const pairs = chainCreditPairs(puzzle.data.start.id, solution.data.path);
-        const open = row.puzzle_date > today && !playedDegrees.has(row.puzzle_date) && !isFixturePayload(row.payload);
+        const open = row.puzzle_date > addDays(today as PuzzleDate, 1) && !playedDegrees.has(row.puzzle_date) && !isFixturePayload(row.payload);
         if (open) openSolutionPairs.set(row.puzzle_date, pairs);
         else solutionPairs.push(...pairs);
       }
@@ -370,7 +371,7 @@ export async function runCatalogChecks(db: ContentDb, options: { baseline?: IdBa
       `${new Set(openPairs.map(([f, p]) => pairKey(f, p))).size} more in ${stored.openSolutionPairs.size} days still to come`,
   );
   if (lostChains.length) {
-    warnings.push(`${lostChains.length} unplayed Degrees day(s) after today lost a credit of their solution. Fix: npm run content:movies:degrees -- --repar-unplayed (--dry-run first)`);
+    warnings.push(`${lostChains.length} unplayed Degrees day(s) after tomorrow lost a credit of their solution. Fix: npm run content:movies:degrees -- --repar-unplayed (--dry-run first)`);
     for (const date of lostChains.sort()) {
       const day = stored.degreesDays.find((d) => d.date === date);
       warnings.push(`  Degrees ${date}${day ? ` ${day.start.name} → ${day.end.name} (par ${day.par})` : ""}: ${stored.openSolutionPairs.get(date)!.filter(([f, p]) => gone.has(pairKey(f, p))).map(([f, p]) => pairKey(f, p)).join(", ")} (film:person) gone`);

@@ -138,15 +138,18 @@ article. Plus Wikidata's cast list (P161), which has no categories, so three rul
 same idea of cast, someone who plays a role in the film (`castToKeep`): anyone IMDb lists in the
 film's archive footage or archive sound is out from both sources (IMDb often lists them as an actor
 too: Alan Arkin in Terror in the Aisles); a documentary's or concert film's Wikidata cast is out
-unless IMDb bills them (`isNonFictionFilm`: they appear as themselves); and so is Wikidata's cast
-that IMDb doesn't bill in a film released more than 2 years after they died, by IMDb's death year
-(every IMDb id the person carries must have died: John Lennon in Forrest Gump, Lionel Barrymore on
-a television in Home Alone). On the 2026-10-07 data: 461, 5,423 and 556 credits; 703 more films
-have no cast (documentaries, mostly). Each was a Degrees link between people who never shared a
-film: 4 of 60 days the generator planned before had par 2 only through one (Fred Astaire in Billy
-Elliot, Judy Garland in P.S. I Love You, Cary Grant in Terror in the Aisles, the real Chaplin in
-Chaplin). Wikidata errors these rules can't see stay (Grace Kelly in The Courtship of Eddie's
-Father, 1963). `billing` (0 = top billed) is IMDb's order first, then
+unless IMDb lists them as an actor (`castAreSubjects`, by IMDb's Documentary genre when IMDb has
+genres: Wikidata's lists carry stray "documentary film" statements, Once Upon a Time in America);
+and so is Wikidata's cast that IMDb doesn't list as an actor, in a film released more than 2 years
+after they died (Wikidata's date of death: John Lennon in Forrest Gump, Lionel Barrymore on a
+television in Home Alone). The year is the earlier of IMDb's and Wikidata's (a shelved film's
+release doesn't count), and a film whose IMDb cast has someone who died that long before is a
+delayed release the rule leaves alone (The Other Side of the Wind). On the 2026-10-07 data: 455,
+5,315 and 897 credits; 726 more films have no cast (documentaries, mostly). Each was a Degrees
+link between people who never shared a film: 4 of 60 days the generator planned before had par 2
+only through one (Fred Astaire in Billy Elliot, Judy Garland in P.S. I Love You, Cary Grant in
+Terror in the Aisles, the real Chaplin in Chaplin). Wikidata errors these rules can't see stay
+(Grace Kelly in The Courtship of Eddie's Father, 1963). `billing` (0 = top billed) is IMDb's order first, then
 the film's stored order (for films imported before IMDb, Wikidata's credited order), then Wikidata
 cast with no known order (no billing). At most 30 credits; over that, the least known unordered
 ones go. People are Wikidata's (English label, else the language-neutral one, else IMDb's name;
@@ -180,9 +183,9 @@ snapshot writes nothing.
   holds it. Nothing is merged or moved: when the two ids point at two stored rows, the Wikidata
   match wins and the other row is left alone (`planCatalogWrites`, property-tested).
 - Films and people are never deleted. A credit no source lists any more is removed, except one a
-  stored Degrees chain uses: players' chains, and the solutions of days someone played, of today
-  and before, and of DEV FIXTURE days (they replay). A solution of a day still to come that nobody
-  has played doesn't keep its credits: `degrees --repar-unplayed` gives that day the chain the
+  stored Degrees chain uses: players' chains, and the solutions of days someone played, of
+  tomorrow and before (tomorrow can go live before the re-par runs), and of DEV FIXTURE days (they
+  replay). A solution of a later day that nobody has played doesn't keep its credits: `degrees --repar-unplayed` gives that day the chain the
   catalog has now (and catalog-check warns until it has).
 - Triggers refuse any update that changes a film's or person's id.
 - Before writing, apply saves every film's and person's ids to
@@ -688,12 +691,12 @@ and planned days.
 | `http.mts` | `fetchWithRetry` (timeouts, backoff with jitter, `Retry-After`, a descriptive User-Agent), `mapPool`, `chunk` |
 | `imdb.mts` | IMDb's datasets: download when newer, streaming gzip line reader, line parsers, compact `IntTable` |
 | `qlever.mts` | QLever (bulk Wikidata) queries, a streaming RFC 4180 CSV parser, cached results with a fallback |
-| `catalog-model.mts` | Pure catalog rules: which films are in, display title and searchable names, genre and director names, which "part of the series" values are series (`isSeries`, `seriesOfFilm`, `NOT_A_SERIES`), IMDb cast depth, who is cast (`castToKeep`: no archive footage, documentaries' own people or footage of the dead; `isNonFictionFilm`), `mergeCast` billing |
+| `catalog-model.mts` | Pure catalog rules: which films are in, display title and searchable names, genre and director names, which "part of the series" values are series (`isSeries`, `seriesOfFilm`, `NOT_A_SERIES`), IMDb cast depth, who is cast (`castToKeep`: no archive footage, documentaries' own people (`castAreSubjects`) or footage of the dead), `mergeCast` billing |
 | `catalog-build.mts` | The build step: sources → snapshot (`buildSnapshot`, `matchWikidataItems`) |
 | `catalog-snapshot.mts` | The snapshot format (zod-validated NDJSON) |
 | `catalog-plan.mts` | Pure apply planning: `planCatalogWrites` (ids never change), `planTitles`, `planCredits` |
 | `catalog-apply.mts` | The apply step: plan against the target, write in batches, check |
-| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits (`loadStoredReferences`: kept for days played, today and before; days still to come can be redone); and three warnings: solutions of days still to come that lost a credit, stale par (`staleDegreesDays` over `chainNeighbourhood`, the credits a shorter chain could use, read without loading the whole graph; hidden films left out) and stored references to films hidden as adult (`hiddenFilms`) |
+| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits (`loadStoredReferences`: kept for days played, tomorrow and before; later days can be redone); and three warnings: solutions of days still to come that lost a credit, stale par (`staleDegreesDays` over `chainNeighbourhood`, the credits a shorter chain could use, read without loading the whole graph; hidden films left out) and stored references to films hidden as adult (`hiddenFilms`) |
 | `degrees-graph.mts` | Pure graph code: `buildGraph`, `linkDistances` (BFS), `bestShortestPath`, `actorPool`, `pickPuzzle`, `reparDecision` |
 | `tmdb.mts` | The TMDB client (`tmdbClient`, `fetchFilmStills`, `encodeStill`, `rankBackdrops`) |
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |

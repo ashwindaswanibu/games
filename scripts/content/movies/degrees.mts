@@ -20,8 +20,8 @@
  *
  * `--repar-unplayed` (instead of generating new days): a catalog import that adds credits can give
  * a stored day's pair a chain shorter than its par, and one that drops credits (archive footage)
- * can take away its stored chain (imports keep the credits of played days' and today's solutions,
- * not of days still to come). For every stored day from --from (default today) on that nobody has
+ * can take away its stored chain (imports keep the credits of played days' solutions and of
+ * tomorrow's and before, not of later days). For every stored day from --from (default today) on that nobody has
  * played, it recomputes the shortest chain over the current credits; when that differs from par,
  * it rewrites par and the solution (same start and end) if the new par is still 2 or 3 links, and
  * otherwise (the pair are now co-stars, or further apart) regenerates the day by the rules above.

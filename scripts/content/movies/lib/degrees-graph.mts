@@ -257,8 +257,8 @@ export type ReparDecision =
  *  - shortest = par and the solution intact: kept.
  *  - otherwise, `minPar` to `maxPar` links: same start and end, that par and a new solution.
  *    Shorter when an import added credits; the same or longer when it dropped one the solution
- *    used (archive footage, say: catalog imports keep the credits of played days' and today's
- *    solutions, not of days still to come).
+ *    used (archive footage, say: catalog imports keep the credits of played days' solutions and of
+ *    tomorrow's and before, not of later days).
  *  - otherwise (the pair are now co-stars, or too far apart): the day gets a new puzzle, generated
  *    by the same rules as any other day.
  *

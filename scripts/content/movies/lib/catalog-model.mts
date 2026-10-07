@@ -382,31 +382,45 @@ export function imdbCastToKeep(cast: ReadonlyArray<string | null>, popularity: (
 
 /**
  * How many years after someone died a film can still credit them for work they did alive. Later
- * than that, a credit only Wikidata gives is archive footage (or Wikidata naming the wrong person).
- * Posthumous releases IMDb bills are kept whatever the gap: Game of Death (Bruce Lee, five years),
- * The Other Side of the Wind (shot in the 1970s, released in 2018).
+ * than that, a credit only Wikidata gives is footage from elsewhere (or Wikidata naming the wrong
+ * person). A film whose IMDb cast already has someone who died that long before is a delayed
+ * release (Game of Death, Bruce Lee, five years; The Other Side of the Wind, shot in the 1970s,
+ * released in 2018), so the rule doesn't apply to it at all.
  */
 export const POSTHUMOUS_YEARS = 2;
+
+/**
+ * Whether a film's cast are its own subjects (a documentary or a concert film), by IMDb's genres
+ * when IMDb has any: Wikidata's genre lists carry stray "documentary film" statements (Once Upon a
+ * Time in America, 22 July) and miss others; IMDb tags concert films Documentary too. Else by the
+ * catalog's genres (`isNonFictionFilm`). Pure.
+ */
+export function castAreSubjects(imdbGenres: readonly string[], genres: readonly string[]): boolean {
+  return imdbGenres.length > 0 ? imdbGenres.includes("Documentary") : isNonFictionFilm(genres);
+}
 
 export interface CastToKeepInput {
   /** IMDb's billed cast (after `imdbCastToKeep`), in IMDb's order. */
   imdb: readonly string[];
+  /** Every actor and actress IMDb lists for the film (before `imdbCastToKeep`), with IMDb's death year. */
+  imdbActors: readonly { key: string; died: number | null }[];
   /** Wikidata's cast, in its own order. */
   wikidata: readonly string[];
   /** Everyone IMDb lists in this film's archive footage or archive sound. */
   archived: ReadonlySet<string>;
-  /** A documentary or a concert film (`isNonFictionFilm`). */
-  nonFiction: boolean;
+  /** The film's people appear as themselves (`castAreSubjects`). */
+  subjects: boolean;
+  /** The earliest year the film is known by (IMDb's or Wikidata's): a shelved film's later release doesn't count. */
   year: number | null;
-  /** The year someone died, or null when they may be alive (or nobody knows). */
+  /** The year a Wikidata cast member died, by Wikidata; null if they may be alive. */
   diedIn(key: string): number | null;
 }
 
 export interface CastKept {
   imdb: string[];
   wikidata: string[];
-  /** Credits left out, by rule (one reason per credit, in the order the rules are listed below). */
-  dropped: { archive: number; nonFiction: number; posthumous: number };
+  /** Credits left out, by rule (one reason per person, in the order the rules are listed below). */
+  dropped: { archive: number; subjects: number; posthumous: number };
 }
 
 /**
@@ -415,26 +429,26 @@ export interface CastKept {
  * categories, so they bring in whoever appears at all. Left out:
  *  1. anyone IMDb lists in the film's archive footage or sound, from both sources (IMDb often lists
  *     them as an actor too): Alan Arkin and Grace Kelly in the horror compilation Terror in the Aisles;
- *  2. Wikidata's cast of a documentary or a concert film, unless IMDb bills them as an actor: the
+ *  2. Wikidata's cast of a documentary or a concert film, unless IMDb lists them as an actor: the
  *     people in it appear as themselves (or in footage), which IMDb's cast leaves out too;
- *  3. Wikidata's cast that IMDb doesn't bill, in a film released more than `POSTHUMOUS_YEARS`
- *     after they died: footage from elsewhere (John Lennon in Forrest Gump, Lionel Barrymore on a
- *     television in Home Alone), or the wrong person.
+ *  3. Wikidata's cast that IMDb doesn't list as an actor, in a film released more than
+ *     `POSTHUMOUS_YEARS` after they died (and not a delayed release): footage from elsewhere (John
+ *     Lennon in Forrest Gump, Lionel Barrymore on a television in Home Alone), or the wrong person.
  * Each of these is a Degrees link between people who never shared a film. Pure.
  */
 export function castToKeep(input: CastToKeepInput): CastKept {
-  const dropped = { archive: 0, nonFiction: 0, posthumous: 0 };
-  const imdb = input.imdb.filter((key) => {
-    if (!input.archived.has(key)) return true;
-    dropped.archive++;
-    return false;
-  });
-  const billed = new Set(imdb);
+  const dropped = { archive: 0, subjects: 0, posthumous: 0 };
+  const imdb = input.imdb.filter((key) => !input.archived.has(key));
+  dropped.archive += input.imdb.length - imdb.length;
+  const actors = input.imdbActors.filter((actor) => !input.archived.has(actor.key));
+  const listed = new Set([...imdb, ...actors.map((actor) => actor.key)]);
+  const delayedRelease = actors.some((actor) => diedLongBefore(actor.died, input.year));
   const wikidata = input.wikidata.filter((key) => {
-    if (billed.has(key)) return true;
-    if (input.archived.has(key)) dropped.archive++;
-    else if (input.nonFiction) dropped.nonFiction++;
-    else if (diedLongBefore(input.diedIn(key), input.year)) dropped.posthumous++;
+    if (listed.has(key)) return true;
+    if (input.archived.has(key)) {
+      if (!input.imdb.includes(key)) dropped.archive++; // else counted with IMDb's
+    } else if (input.subjects) dropped.subjects++;
+    else if (!delayedRelease && diedLongBefore(input.diedIn(key), input.year)) dropped.posthumous++;
     else return true;
     return false;
   });

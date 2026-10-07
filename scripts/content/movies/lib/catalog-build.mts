@@ -1,12 +1,12 @@
 import { join } from "node:path";
 import {
+  castAreSubjects,
   castToKeep,
   cleanText,
   directorNames,
   displayTitle,
   imdbGenreNames,
   isActor,
-  isNonFictionFilm,
   lowestVoteBar,
   MAX_NAME,
   orderGenresBySpecificity,
@@ -452,16 +452,15 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     people.set(key, { key, wikidataId: null, imdbId: key, name, popularity: 0, isActor: imdbActors.has(nconst), isHuman: null });
     return key;
   };
-  /**
-   * The year a snapshot person died, by IMDb; null if they may be alive. A Wikidata person with
-   * several IMDb ids has died only if every one of them has (Wikidata sometimes carries a
-   * namesake's id: the actor Vijay Varma's item also has one of a Vijay Varma who died in 1976).
-   */
-  const diedIn = (key: string): number | null => {
-    const nconsts = key.startsWith("nm") ? [parseNconst(key)!] : [...(wdPeople.get(key)?.nconsts ?? [])];
-    const years = nconsts.map((n) => imdbDeathYears.get(n) ?? null);
-    return years.length > 0 && years.every((y) => y !== null) ? Math.max(...(years as number[])) : null;
-  };
+  // When Wikidata's cast died, by Wikidata's own date of death: an IMDb id a Wikidata item carries
+  // can be a namesake's (the actor Vijay Varma's item also has a Vijay Varma who died in 1976).
+  const wdDeaths = new Map<string, number>();
+  await csv(CATALOG_QUERIES.castDeaths, (row) => {
+    const qid = qidOf(row.person!);
+    const died = intCell(row.died);
+    if (qid && died !== null && castQids.has(qid)) wdDeaths.set(qid, died);
+  });
+  const diedIn = (key: string): number | null => wdDeaths.get(key) ?? null;
   /** Snapshot keys of everyone IMDb lists in a film's archive footage, under every key they can have. */
   const archivedKeys = (tconst: number): Set<string> => {
     const keys = new Set<string>();
@@ -472,7 +471,7 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     }
     return keys;
   };
-  const castDropped = { archive: 0, nonFiction: 0, posthumous: 0 };
+  const castDropped = { archive: 0, subjects: 0, posthumous: 0 };
   const directorName = (nconst: number): string | null => {
     const qid = qidOfPerson.get(nconst);
     const person = qid ? wdPeople.get(qid) : undefined;
@@ -505,22 +504,26 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     const genres = bySpecificity(qid ? (wdGenreNames.get(qid) ?? []) : []);
     const directors = directorNames(wdDirectors);
     const filmGenres = genres.length ? genres : imdbGenreNames(title.genres);
-    const year = clampYear((qid ? wdYears.get(qid) : undefined) ?? title.startYear);
+    const wdYear = qid ? (wdYears.get(qid) ?? null) : null;
+    const year = clampYear(wdYear ?? title.startYear);
+    const principals = (principalsOf.get(tconst) ?? []).map(([, nconst]) => ({ nconst, key: imdbPersonKey(nconst) }));
     const cast = castToKeep({
       imdb: imdbCastToKeep(
-        (principalsOf.get(tconst) ?? []).map(([, nconst]) => imdbPersonKey(nconst)),
+        principals.map((p) => p.key),
         (key) => people.get(key)?.popularity ?? 0,
         options.imdbCast,
       ),
+      imdbActors: principals.flatMap((p) => (p.key === null ? [] : [{ key: p.key, died: imdbDeathYears.get(p.nconst) ?? null }])),
       wikidata: dedupe([...(qid ? (wdCastOf.get(qid) ?? []) : [])].map(wdPersonKey)).sort(
         (a, b) => (people.get(b)!.popularity - people.get(a)!.popularity) || a.localeCompare(b),
       ),
       archived: archivedKeys(tconst),
-      nonFiction: isNonFictionFilm(filmGenres),
-      year,
+      subjects: castAreSubjects(title.genres, filmGenres),
+      // A shelved film is released years after it was shot: the earlier of IMDb's and Wikidata's years.
+      year: clampYear(wdYear !== null && title.startYear !== null ? Math.min(wdYear, title.startYear) : (wdYear ?? title.startYear)),
       diedIn,
     });
-    for (const reason of ["archive", "nonFiction", "posthumous"] as const) castDropped[reason] += cast.dropped[reason];
+    for (const reason of ["archive", "subjects", "posthumous"] as const) castDropped[reason] += cast.dropped[reason];
     const imdbVotes = votes.get(tconst) ?? null;
     films.push({
       imdbId: formatTconst(tconst),
@@ -574,7 +577,8 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     withWikidataCast: count((f) => f.wikidataCast.length > 0),
     withoutCast: count((f) => f.imdbCast.length === 0 && f.wikidataCast.length === 0),
     // Credits left out as not playing a role (`castToKeep`): archive footage per IMDb, Wikidata's
-    // cast of documentaries and concert films, Wikidata's cast in films released years after they died.
+    // cast of documentaries and concert films (their subjects), Wikidata's cast in films released
+    // years after they died.
     castDropped,
     adult: count((f) => f.isAdult),
     withSeries: count((f) => f.series.length > 0),
