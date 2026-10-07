@@ -7,7 +7,8 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [x] **Per-film color scheme:** every color on the screen is taken from the film's levels and relit, so dark films glow instead of going muddy.
 - [x] **Remove the clue machinery.** The screen shows only the barcode and the reels.
 - [x] **Final pick:** after a wrong guess on reel 10, one pick from 4 films (the answer + 3 look-alikes by genre, era and fame) for 5 points.
-- [ ] **Wordmark:** more presence around "Fade to Color" (font stays Bodoni Moda). Treatments being explored; Ashwin picks.
+- [x] **Wordmark:** "Dip to Black" (Ashwin's pick of 12 treatments): "Fade to" fades down letter by letter as the film rolls, then "Color" rises filled with the film.
+- [ ] **Series data for the final pick:** import Wikidata "part of the series" (P179) into the catalog, so sequels that share no words with their series (e.g. *The Empire Strikes Back*) can't be decoys for one another.
 - [ ] **Open it to everyone:** it's still `testing` (admins only) until Ashwin says so.
 - [ ] **Retire the "Color Grade" game** (a misreading of the movie-LUT idea).
 - [ ] **Daily film picker:** implement the approved selection logic (tiers 25/55/20, no repeats within a year, no franchise or director repeats within 30 days, skip black-and-white films).
