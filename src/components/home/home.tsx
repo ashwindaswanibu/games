@@ -317,9 +317,11 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
   const density = games.length === 1 ? "solo" : games.length >= 9 ? "dense" : "standard";
   const primaryId = view.primary?.gameId ?? null;
   const firstOpen = openBuckets[0];
-  // Phone only (CSS): the primary's game is below the first sheet. "Today's standings" needs no
-  // slip: the band holds it, above the fold, and a second filled pill would break the one-primary rule.
-  const upNext = view.primary !== null && view.primary.kind !== "standings" && (!firstOpen || !firstOpen.games.some((g) => g.id === primaryId));
+  // Phone only (CSS): the primary's game is not the first credit on the page. Only that credit's
+  // name line reaches above the tab bar at 390x660 (a second row of the first sheet, as on a dense
+  // day, would not). "Today's standings" needs no slip: the band holds it, above the fold, and a
+  // second filled pill would break the one-primary rule.
+  const upNext = view.primary !== null && view.primary.kind !== "standings" && firstOpen?.games[0]?.id !== primaryId;
   const primaryGame = primaryId ? games.find((g) => g.id === primaryId) ?? null : null;
   const initialGone = readClock(view.clock, initialNow).gone;
   const phaseOf = useCallback((id: string): CreditPhase => (id === pending ? "pre" : "rest"), [pending]);

@@ -7,9 +7,10 @@ import { Arrow } from "./band";
 import styles from "./chrome.module.css";
 
 /**
- * Phone only (§5.6): when the primary's credit is not in the first open sheet, an ink slip under
- * the band holds the filled primary above the fold; the credit itself then shows its quiet action
- * (one filled thing per screen). Not inside any bucket's section.
+ * Phone only (§5.6): when the primary's credit is not the first on the page (another sheet, or a
+ * later row of the first), an ink slip under the band holds the filled primary above the fold; the
+ * credit itself then shows its quiet action (one filled thing per screen). Not inside any bucket's
+ * section.
  */
 export const UpNext = memo(function UpNext({
   primary,

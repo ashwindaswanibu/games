@@ -199,9 +199,23 @@ export function SetIn({
       // to the sheet and shifted up if it would pass the column's foot.
       const phone = window.matchMedia(PHONE).matches;
       const vh = window.innerHeight;
-      const height = Math.max(sheet.offsetHeight + (phone ? 0 : 12), (phone ? 0.52 : 0.46) * vh);
+      let height = Math.max(sheet.offsetHeight + (phone ? 0 : 12), (phone ? 0.52 : 0.46) * vh);
       let top = sheet.offsetTop - 6;
       if (top + height > col.offsetHeight) top = Math.max(-6, col.offsetHeight - height);
+      if (phone) {
+        // A phone plays the card where it is seen: between the top of the screen and the tab bar,
+        // shifted up over the band if it must (it is pulled away before the band's beat), and still
+        // holding the credit, where the mark and the label land.
+        const colTop = col.getBoundingClientRect().top;
+        const bar = home.querySelector<HTMLElement>('[data-app-chrome="bottom-nav"]');
+        const ceil = 6;
+        const floor = (bar?.getBoundingClientRect().top ?? vh) - 6;
+        height = Math.min(height, floor - ceil);
+        let view = Math.min(Math.max(colTop + top, ceil), floor - height);
+        const creditFoot = credit.getBoundingClientRect().bottom;
+        if (view + height < creditFoot) view = Math.min(floor - height, creditFoot - height);
+        top = view - colTop;
+      }
       card.style.top = `${top}px`;
       card.style.height = `${height}px`;
       card.style.setProperty("--label-size", `min(clamp(84px, 20vh, 200px), ${(0.42 * height).toFixed(0)}px)`);
