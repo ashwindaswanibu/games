@@ -485,6 +485,14 @@
   visibility: hidden;
 }
 
+/* The bar's track spans the screen and moves in percent of it, as the wipe does. */
+.lightbarTrack {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
 .lightbar {
   position: absolute;
   top: -2%;
@@ -492,12 +500,10 @@
   left: 0;
   width: 3px;
   opacity: 0;
-  pointer-events: none;
   background: #fffaf0;
   box-shadow:
     0 0 18px 6px rgb(var(--incoming, var(--accent)) / 0.85),
     0 0 64px 20px rgb(var(--incoming, var(--accent)) / 0.45);
-  will-change: transform;
 }
 
 .screen[data-unreeling] .lightbar {
@@ -743,6 +749,8 @@
 .console {
   width: min(780px, calc(100vw - 32px));
   display: grid;
+  /* One column that can't grow past the console: a long byline ellipsizes rather than widening it. */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 14px;
 }

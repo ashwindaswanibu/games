@@ -1,15 +1,16 @@
 /**
- * Re-checks the four stored with each Fade to Color day nobody has played yet, and re-picks only
- * the ones that mix kinds (an animated film among live-action ones, or the other way round). The
- * four are visible from reel 1, so a mixed four would give the answer away.
+ * Re-checks the four stored with each Fade to Color day from tomorrow on, and re-picks only the
+ * ones that mix kinds (an animated film among live-action ones, or the other way round). The four
+ * are visible from reel 1, so a mixed four would give the answer away.
  *
  *   npm run content:movies:recheck-fours -- [--dry-run] [--allow-remote]
  *
- * A day someone has played is never touched.
+ * A day someone has played is never touched. Today is left out, so no one can play a day while it
+ * is being re-checked (everyone who stops on a day must see the same four): review today's by hand.
  */
 import { parseArgs } from "node:util";
 import { z } from "zod";
-import { today, type PuzzleDate } from "@/core/day";
+import { addDays, today, type PuzzleDate } from "@/core/day";
 import { fadeToColor } from "@/games/fade-to-color/logic";
 import { finalPickOptions } from "./lib/decoys.mjs";
 import { pipelineDb, selectAllPages } from "./lib/pipeline.mjs";
@@ -24,11 +25,12 @@ const storedSchema = z.object({ answer: z.object({ id: z.number(), title: z.stri
 
 async function main() {
   const db = pipelineDb({ allowRemote: args["allow-remote"] });
-  const from = today();
+  const from = addDays(today(), 1);
   const rows = await selectAllPages((a, b) => db.from("puzzles").select("puzzle_date, solution").eq("game_id", fadeToColor.id).gte("puzzle_date", from).order("puzzle_date").range(a, b));
   for (const row of rows) {
     const date = row.puzzle_date as PuzzleDate;
-    const { count } = await db.from("plays").select("user_id", { count: "exact", head: true }).eq("game_id", fadeToColor.id).eq("puzzle_date", date);
+    const { count, error: countError } = await db.from("plays").select("user_id", { count: "exact", head: true }).eq("game_id", fadeToColor.id).eq("puzzle_date", date);
+    if (countError) throw new Error(`Couldn't count plays for ${date}: ${countError.message}`);
     const solution = storedSchema.safeParse(row.solution).data;
     if (!solution) {
       console.log(`${date}  skipped: no four stored`);

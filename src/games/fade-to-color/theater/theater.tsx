@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { assetUrl } from "@/core/assets";
 import { formatPuzzleDate } from "@/core/day";
 import type { Outcome } from "@/core/game";
@@ -93,8 +93,15 @@ export function FadeToColorTheater(props: Props) {
   const turns = state?.turns ?? [];
   const reveal = view?.reveal ?? null;
   const root = useRef<HTMLDivElement>(null);
+  // The theater itself, once mounted: the friends panel opens in it (see `Credits`).
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const rootRef = useCallback((el: HTMLDivElement | null) => {
+    root.current = el;
+    setRootEl(el);
+  }, []);
   const reelBox = useRef<HTMLDivElement>(null);
   const consoleBox = useRef<HTMLElement>(null);
+  const creditsBox = useRef<HTMLDivElement>(null);
   // Set while a skip runs, so layout changes snap instead of gliding.
   const snap = useRef(false);
 
@@ -168,8 +175,15 @@ export function FadeToColorTheater(props: Props) {
   const [lastDecoded, setLastDecoded] = useState(false);
   const winReady = lastArt !== undefined && (win?.shown === LEVEL_COUNT - 1 || lastDecoded);
   useWinTimeline({ win, setWin, root, ready: winReady, fill: firstArt?.graded || null, lastAccent: lastArt?.accent ?? null, instant: snap });
-  // The card stays until the reel beneath it shows what it shows.
-  const cardUp = win !== null && !(win.cardGone && (win.exit !== "roll" || settledKey === lastLevel?.id));
+  // The card stays until the reel beneath it shows what it shows, then comes down for good: once it
+  // has done its work and the reel has taken the last reel at least once (or the picture it lifted
+  // off), or as soon as the player looks away from the last reel once the end card is theirs.
+  const [lastSettled, setLastSettled] = useState(false);
+  if (!lastSettled && win?.exit === "roll" && settledKey !== null && settledKey === lastLevel?.id) setLastSettled(true);
+  const [cardDown, setCardDown] = useState(false);
+  const lookedAway = (win?.stage === "credits" || win?.stage === "done") && target !== latest;
+  if (win && !cardDown && ((win.cardGone && (win.exit !== "roll" || lastSettled)) || lookedAway)) setCardDown(true);
+  const cardUp = win !== null && !cardDown;
 
   // The stake for stopping ticks over once the newest reel has settled on screen.
   const attempt = turns.length + 1;
@@ -256,6 +270,8 @@ export function FadeToColorTheater(props: Props) {
     const onKey = (event: KeyboardEvent) => {
       const el = document.activeElement;
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || event.metaKey || event.ctrlKey || event.altKey) return;
+      // While the four rise after a stop, the keys wait for them (focus lands on them once they're up).
+      if (stopLive && (el === null || el === document.body)) return;
       // Not while a dialog (everyone's results) is open over the reel, nor in the four.
       if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="radiogroup"]')) return;
       const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
@@ -270,22 +286,34 @@ export function FadeToColorTheater(props: Props) {
     return () => window.removeEventListener("keydown", onKey);
     // `lookAt` closes over `latest` and `over`, both listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, levels.length, target, latest, over]);
+  }, [view, levels.length, target, latest, over, stopLive]);
 
   const accent = litArt?.accent ?? HOUSE_ACCENT;
   const left = MAX_GUESSES - turns.length;
   const showing = display?.index ?? null;
-  const creditsReady = win
-    ? win.stage === "credits" || win.stage === "done"
-    : ending && shownRef !== undefined && settledKey === shownRef.id && display?.index === latest;
+  // The end card comes up once the last reel has settled on screen, and stays up while the player
+  // looks back at earlier reels.
+  const [creditsShown, setCreditsShown] = useState(false);
+  if (!creditsShown && ending && shownRef !== undefined && settledKey === shownRef.id && display?.index === latest) setCreditsShown(true);
+  const creditsReady = win ? win.stage === "credits" || win.stage === "done" : creditsShown;
+  // After a pick seen live, focus (left on the page as the four went) moves to the end card.
+  const pickedLive = resolve !== null;
+  useEffect(() => {
+    if (!creditsReady || !pickedLive) return;
+    const el = document.activeElement;
+    if (el && el !== document.body && el.isConnected) return;
+    creditsBox.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+  }, [creditsReady, pickedLive]);
   // The reel the film was named on keeps its ring on the strip.
   const namedIndex = status === "won" && state && !state.pick ? turns.length - 1 : null;
   // The win's print run: the reels you didn't need develop as the last reel unreels.
   const printRun = win && !win.reduced && win.exit === "roll" && win.stage !== "heard" && win.stage !== "done" ? { from: win.reel } : null;
   const stripLevels = win?.stage === "rolling" && reveal ? reveal.levels : levels;
   useGlide(ending ? "end" : fourUp ? "four" : "play", reelBox, consoleBox, snap);
-  // While a pick resolves the room dips; it relights as the film rolls on to its last reel.
-  const dipped = resolve !== null && !(over && litKey !== null && litKey === levels[LEVEL_COUNT - 1]?.id);
+  // While a pick resolves the room dips; it relights as the film rolls on to its last reel, for good.
+  const [relit, setRelit] = useState(false);
+  if (resolve !== null && !relit && over && litKey !== null && litKey === levels[LEVEL_COUNT - 1]?.id) setRelit(true);
+  const dipped = resolve !== null && !relit;
   const today = formatPuzzleDate(date, { weekday: "short", month: "short", day: "numeric" });
 
   const guessed = new Map<number, number>();
@@ -313,7 +341,7 @@ export function FadeToColorTheater(props: Props) {
 
   return (
     <div
-      ref={root}
+      ref={rootRef}
       className={`${THEATER_FONT_VARS} ${styles.theater}`}
       style={{ "--accent": accent, "--title-accent": firstArt?.accent ?? HOUSE_ACCENT } as CSSProperties}
       data-finished={ending || undefined}
@@ -501,8 +529,19 @@ export function FadeToColorTheater(props: Props) {
 
           {ending && reveal && view?.result && state && status && (
             // Inert until the last reel has unreeled and the card has come up.
-            <div className={styles.creditsWrap} data-show={creditsReady || undefined} inert={!creditsReady}>
-              <Credits film={reveal.film} options={reveal.options} state={state} status={status} result={view.result} fill={firstArt?.bands || null} date={date} friends={friends} viewerId={viewerId} />
+            <div ref={creditsBox} className={styles.creditsWrap} data-show={creditsReady || undefined} inert={!creditsReady}>
+              <Credits
+                film={reveal.film}
+                options={reveal.options}
+                state={state}
+                status={status}
+                result={view.result}
+                fill={firstArt?.bands || null}
+                date={date}
+                friends={friends}
+                viewerId={viewerId}
+                panelHost={rootEl}
+              />
             </div>
           )}
 

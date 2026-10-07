@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useShare } from "@/components/share-button";
 import { APP_NAME } from "@/config";
 import type { PuzzleDate } from "@/core/day";
@@ -37,6 +38,10 @@ export function ResultFrames({ grid, label }: { grid: string; label?: string }) 
  * The end card under the reel: the film's title cut out of its own barcode, who made it, the
  * result, sharing (spoiler-free) and everyone else's results. (The frames' source is credited on
  * the reel's edge.)
+ *
+ * Everyone's results open in `panelHost` (the theater), outside the console: the console and the
+ * end card are moved by transforms as they rise and glide into place, and a transformed ancestor
+ * would hold the fixed panel inside its own box instead of over the room.
  */
 export function Credits(props: {
   film: FilmDetails;
@@ -49,8 +54,9 @@ export function Credits(props: {
   date: PuzzleDate;
   friends: readonly FriendResult[] | null;
   viewerId: string;
+  panelHost: HTMLElement | null;
 }) {
-  const { film, options, state, status, result, fill, date, friends, viewerId } = props;
+  const { film, options, state, status, result, fill, date, friends, viewerId, panelHost } = props;
   const { share, copied } = useShare(
     shareText({
       appName: APP_NAME,
@@ -63,6 +69,7 @@ export function Credits(props: {
     }),
   );
   const [showFriends, setShowFriends] = useState(false);
+  const panel = showFriends && <FriendsPanel friends={friends} viewerId={viewerId} options={options} answerId={film.id} fill={fill} onClose={() => setShowFriends(false)} />;
   const byline = [film.directors.slice(0, 2).join(" & "), film.year].filter(Boolean).join(" · ");
 
   return (
@@ -85,9 +92,7 @@ export function Credits(props: {
           How everyone did
         </button>
       </div>
-      {showFriends && (
-        <FriendsPanel friends={friends} viewerId={viewerId} options={options} answerId={film.id} fill={fill} onClose={() => setShowFriends(false)} />
-      )}
+      {panel && (panelHost ? createPortal(panel, panelHost) : panel)}
     </section>
   );
 }

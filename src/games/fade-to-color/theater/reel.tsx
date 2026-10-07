@@ -67,7 +67,7 @@ export function Reel(props: {
   const cur = useRef<HTMLImageElement>(null);
   const wipe = useRef<HTMLDivElement>(null);
   const next = useRef<HTMLImageElement>(null);
-  const bar = useRef<HTMLDivElement>(null);
+  const barTrack = useRef<HTMLDivElement>(null);
   const flare = useRef<HTMLDivElement>(null);
   const shown = useRef<string | null>(null);
   // The leader stays up until the first frame has fully unreeled over it.
@@ -144,14 +144,15 @@ export function Reel(props: {
       nxt.src = target.src;
       await nxt.decode().catch(() => {});
       if (cancelled) return;
-      const width = screen.current!.getBoundingClientRect().width;
       screen.current!.style.setProperty("--incoming", target.accent);
       screen.current!.dataset.unreeling = "";
       const timing = { duration: UNREEL_MS, easing: UNREEL_EASE, fill: "forwards" as const };
       const animations = [
         wipe.current!.animate([{ transform: "translate3d(-100%,0,0)" }, { transform: "translate3d(0,0,0)" }], timing),
         nxt.animate([{ transform: "translate3d(100%,0,0)" }, { transform: "translate3d(0,0,0)" }], timing),
-        bar.current!.animate([{ transform: "translate3d(0,0,0)" }, { transform: `translate3d(${width}px,0,0)` }], timing),
+        // The bar's track spans the screen, so the bar crosses it in step with the wipe even if the
+        // screen changes size mid-unreel (the four giving way to the end card).
+        barTrack.current!.animate([{ transform: "translate3d(0,0,0)" }, { transform: "translate3d(100%,0,0)" }], timing),
         flare.current!.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 560, easing: "ease-out" }),
       ];
       running.current.push(...animations);
@@ -197,7 +198,9 @@ export function Reel(props: {
             <img ref={next} className={styles.frame} alt="" />
           </div>
           <div ref={flare} className={styles.flare} aria-hidden />
-          <div ref={bar} className={styles.lightbar} aria-hidden />
+          <div ref={barTrack} className={styles.lightbarTrack} aria-hidden>
+            <div className={styles.lightbar} />
+          </div>
         </div>
         <Rail>{edgeBottom}</Rail>
       </div>

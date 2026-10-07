@@ -24,6 +24,8 @@ const LIT_STEP_MS = 45;
 const LIT_SPREAD_MS = 600;
 /** The wrong pick dims (600ms) while the answer comes back up in ink (600ms, from 200ms). */
 const WRONG_MS = 800;
+/** The stop, seen live: the last tile and Pick are up by now (see the stylesheet's `.four[data-live]`). */
+const RISEN_MS = 1700;
 
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -33,7 +35,10 @@ const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("
  * guessed arrives dark with the reel it was guessed on, and can't be chosen. The tiles are lit only
  * by the room's light (`--accent`), never by their own film's colours: that would be a clue.
  *
- * `live` plays the stop's rise (the tiles come up left to right); a reload shows them at rest.
+ * `live` plays the stop's rise (the tiles come up left to right); a reload shows them at rest. The
+ * four take the place of the guess line, and of the focus that was in it: once they're up, focus
+ * lands on the tile that takes Tab (unless the player has put it somewhere since), so the arrow
+ * keys choose among them. Pressing Pick moves focus to the chosen tile, where the result plays.
  * `resolve` plays the pick: the other three titles fade letter by letter while the room dips; when
  * the result lands, a right pick's title fills with the film's barcode letter by letter, and a wrong
  * one dims to black while the answer comes back up in ink. `onDone` fires when the result has been
@@ -60,6 +65,20 @@ export function FourPick(props: {
   const film = options.find((f) => f.id === chosenId) ?? null;
   const open = options.filter((f) => !guessed.has(f.id));
   const result = resolve?.result ?? null;
+
+  const [liveAtMount] = useState(live);
+  useEffect(() => {
+    if (!liveAtMount) return;
+    const timer = setTimeout(
+      () => {
+        const el = document.activeElement;
+        if (el && el !== document.body && el.isConnected) return;
+        [...tiles.current.values()].find((tile) => tile.tabIndex === 0)?.focus({ preventScroll: true });
+      },
+      reducedMotion() ? 0 : RISEN_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [liveAtMount]);
 
   // Once the result is in, hold it, then let the film roll on.
   const doneRef = useRef(onDone);
@@ -167,7 +186,17 @@ export function FourPick(props: {
             );
           })}
         </div>
-        <button type="button" className={`${styles.go} ${styles.pickButton}`} disabled={disabled || locked || !film} onClick={() => film && onPick(film)}>
+        <button
+          type="button"
+          className={`${styles.go} ${styles.pickButton}`}
+          disabled={disabled || locked || !film}
+          onClick={(event) => {
+            if (!film) return;
+            // Pick goes once pressed: focus moves to the chosen tile rather than falling to the page.
+            if (document.activeElement === event.currentTarget) tiles.current.get(film.id)?.focus({ preventScroll: true });
+            onPick(film);
+          }}
+        >
           Pick
         </button>
       </div>

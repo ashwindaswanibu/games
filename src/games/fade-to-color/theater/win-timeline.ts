@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { flushSync } from "react-dom";
 import { LEVEL_COUNT } from "../logic";
+import { swallowClickOf } from "./click-guard";
 import styles from "./theater.module.css";
 import { DOWN, exitBeats, HOLD_MS, LETTER_MS, openingBeats, PRINT_RUN_STEP_MS, RISE, SETTLE, UNREEL_EASE, UNREEL_MS } from "./timing";
 
@@ -346,7 +347,8 @@ export function useWinTimeline(props: {
       if (event instanceof KeyboardEvent && (event.metaKey || event.ctrlKey || event.altKey || ["Shift", "Meta", "Control", "Alt"].includes(event.key))) return;
       event.preventDefault();
       event.stopPropagation();
-      swallowNextClick();
+      // A key press makes no click (its default is prevented); a tap or a press of the main button does.
+      if (event instanceof PointerEvent && event.button === 0) swallowClickOf(event);
       instant.current = true;
       try {
         if (!exited) startExit(lastReel || !live.current.ready ? "lift" : "roll");
@@ -380,17 +382,6 @@ export function useWinTimeline(props: {
   useEffect(() => {
     if (ready) live.current.onReady();
   }, [ready]);
-}
-
-/** The click that follows a skipping tap goes nowhere (it would land on the end card). */
-function swallowNextClick() {
-  const stop = (event: Event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    window.removeEventListener("click", stop, { capture: true });
-  };
-  window.addEventListener("click", stop, { capture: true });
-  setTimeout(() => window.removeEventListener("click", stop, { capture: true }), 1500);
 }
 
 /**
