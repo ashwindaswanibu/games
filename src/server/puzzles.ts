@@ -68,3 +68,28 @@ export async function getOrCreatePuzzle(game: AnyGame, date: PuzzleDate): Promis
   if (!saved) throw new Error(`Puzzle for ${game.id} on ${date} vanished after insert`);
   return saved;
 }
+
+/** A curated game's puzzle for the day exists; `par` is set for puzzles that carry one (Degrees: "Par is public"). */
+export interface PuzzleReadiness {
+  par: number | null;
+}
+
+/**
+ * Which of `gameIds` have a puzzle stored for `date` (the home's "Not ready yet." for curated
+ * games; generated games are always ready, so callers pass curated ids only). Reads the game id and
+ * the payload's public `par` only: never the solution, never the rest of the payload.
+ */
+export async function puzzlesReady(date: PuzzleDate, gameIds: readonly string[]): Promise<Map<string, PuzzleReadiness>> {
+  if (gameIds.length === 0) return new Map();
+  const { data, error } = await db()
+    .from("puzzles")
+    .select("game_id, par:payload->par")
+    .eq("puzzle_date", date)
+    .in("game_id", [...gameIds]);
+  if (error) throw new Error(`Failed to check puzzles: ${error.message}`);
+  return new Map(data.map((row) => [row.game_id, { par: parPart(row.par) }]));
+}
+
+function parPart(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
