@@ -145,6 +145,7 @@ export function summarizePlan(plan: readonly PlannedDay[], inputs: PickerInputs 
   );
   lines.push(`scores: percentiles over the ${inputs.reference === "pool" ? "pool" : "whole catalog"} (${inputs.referenceSize} films); eligible ${inputs.candidates.length}: ${tiersInPool}`);
   if (inputs.tooShort > 0) lines.push(`left out: ${inputs.tooShort} galleries too short to be a whole film (verdicts)`);
+  if (inputs.knownGrey > 0) lines.push(`left out: ${inputs.knownGrey} films Wikidata lists as black and white (skipped before any download)`);
   const knownMono = inputs.candidates.filter((c) => c.monochrome === true).length;
   const unchecked = picked.filter((d) => d.pick.film.monochrome === null).length;
   lines.push(`colour: ${knownMono} candidates known black and white (skipped); ${unchecked} of ${picked.length} planned films not checked yet (a grey one is refused at render and the day picked again)`);

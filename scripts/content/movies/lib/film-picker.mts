@@ -14,8 +14,9 @@
  * - **Candidates:** pool films scoring at least `MIN_SCORE`, minus galleries too short to be a whole
  *   film; a gallery found to be black and white is marked so the picker skips it.
  * - **Answers:** every stored Fade to Color puzzle's answer, DEV FIXTURES included (the renderer
- *   counts them too). "Used" is always read from the stored puzzles, so resetting the testing
- *   period later is a matter of which puzzles are stored, not of any state kept here.
+ *   counts them too). "Used" is always read from the stored puzzles; the launch reset of the
+ *   testing period will need a launch-date cutoff in `loadDayAnswers` (played puzzles are never
+ *   deleted), not any state kept here.
  *
  * For a pre-rendered library, the candidates would be the rendered films (with their measured
  * colour) instead of the directory's; `pickFilm`/`planDays` take candidates from either.
@@ -27,7 +28,9 @@ import { MIN_SCORE, scoreFilms, type DayAnswer, type FilmScore, type PickCandida
 import { z } from "zod";
 import { contentSeed, selectAllPages, type ContentDb } from "./pipeline.mjs";
 import { GalleryVerdicts, loadDirectory, type GalleryVerdict } from "./screencaps-cache.mjs";
+import { DEFAULT_CACHE_DIR } from "./screencaps-cache.mjs";
 import { matchGalleries, type DirectoryEntry } from "./screencaps.mjs";
+import { knownBlackAndWhite } from "./wikidata-colour.mjs";
 
 const GAME_ID = fadeToColor.id;
 
@@ -41,6 +44,8 @@ export interface CatalogFilm {
   year: number | null;
   directors: string[];
   popularity: number;
+  /** Its Wikidata id, used to ask whether it's black and white before any frames are fetched. */
+  wikidata_id?: string | null;
 }
 
 /** The day's pick seed: the server's secret, the game and the date (its own domain, apart from the final pick's). */
@@ -51,7 +56,7 @@ export function pickSeed(date: PuzzleDate): RngSeed {
 /** Every catalog film with a year (a film without one can't be scored by era). */
 export async function loadCatalogFilms(db: ContentDb): Promise<CatalogFilm[]> {
   return selectAllPages((from, to) =>
-    db.from("movie_films").select("id, title, year, directors, popularity").not("year", "is", null).order("id").range(from, to),
+    db.from("movie_films").select("id, title, year, directors, popularity, wikidata_id").not("year", "is", null).order("id").range(from, to),
   );
 }
 
@@ -82,17 +87,21 @@ export interface PickerInputs {
   referenceSize: number;
   /** Pool films left out of the candidates because their gallery is too short. */
   tooShort: number;
+  /** Pool films Wikidata says are black and white (skipped, unless rendering measured them as colour). */
+  knownGrey: number;
 }
 
 /**
  * Assembles the picker's inputs from loaded data (pure, so it is unit-tested). `verdictFor` gives
- * what rendering found about a gallery, if anything.
+ * what rendering found about a gallery, if anything; `greyIds` are catalog films Wikidata says are
+ * black and white. A rendering verdict wins over Wikidata (it measured the frames).
  */
 export function buildPickerInputs(
   films: readonly CatalogFilm[],
   entries: readonly DirectoryEntry[],
   verdictFor: (galleryUrl: string) => GalleryVerdict | undefined,
   reference: PercentileReference = DEFAULT_PERCENTILE_REFERENCE,
+  greyIds: ReadonlySet<number> = new Set(),
 ): PickerInputs {
   const matched = matchGalleries(entries, films);
   const referenceFilms = reference === "pool" ? [...matched.values()].map((m) => m.film) : films.filter((f) => f.year !== null);
@@ -104,16 +113,18 @@ export function buildPickerInputs(
   }
   const candidates: PickCandidate[] = [];
   let tooShort = 0;
+  let knownGrey = 0;
   for (const { film, score, verdict } of pool.values()) {
     if (score.score < MIN_SCORE) continue;
     if (verdict?.verdict === "too-short") {
       tooShort++;
       continue;
     }
-    const monochrome = verdict === undefined ? null : verdict.verdict === "black-and-white";
+    const monochrome = verdict !== undefined ? verdict.verdict === "black-and-white" : greyIds.has(film.id) ? true : null;
+    if (verdict === undefined && greyIds.has(film.id)) knownGrey++;
     candidates.push({ id: film.id, title: film.title, year: film.year, directors: film.directors, score: score.score, monochrome });
   }
-  return { candidates, pool, reference, referenceSize: scores.size, tooShort };
+  return { candidates, pool, reference, referenceSize: scores.size, tooShort, knownGrey };
 }
 
 export interface LoadedPickerInputs extends PickerInputs {
@@ -130,7 +141,11 @@ export async function loadPickerInputs(
 ): Promise<LoadedPickerInputs> {
   const [films, answers, directory] = await Promise.all([loadCatalogFilms(db), loadDayAnswers(db), loadDirectory({ cacheDir, refresh: refreshDirectory })]);
   const verdicts = new GalleryVerdicts(cacheDir);
-  const inputs = buildPickerInputs(films, directory.entries, (url) => verdicts.get(url), reference);
+  // Ask Wikidata which films with a gallery are black and white, so they're skipped before any download.
+  const withGallery = [...matchGalleries(directory.entries, films).values()].map((m) => m.film);
+  const greyQids = await knownBlackAndWhite(withGallery.flatMap((f) => (f.wikidata_id ? [f.wikidata_id] : [])), { cacheDir: cacheDir ?? DEFAULT_CACHE_DIR });
+  const greyIds = new Set(withGallery.filter((f) => f.wikidata_id && greyQids.has(f.wikidata_id)).map((f) => f.id));
+  const inputs = buildPickerInputs(films, directory.entries, (url) => verdicts.get(url), reference, greyIds);
   return {
     ...inputs,
     answers,

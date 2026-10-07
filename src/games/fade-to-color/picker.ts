@@ -33,8 +33,13 @@ import { sameSeriesProfile, seriesProfile, type SeriesProfile } from "./decoys";
  *
  * **Deterministic.** The tier comes from the day's seeded `Rng`; within the tier, each eligible film
  * gets a key from the day's seed and its id, and the lowest key wins. The pick therefore doesn't
- * depend on the order of the inputs, and adding a film to the pool (a bigger catalog, a newly
- * rendered film) only ever changes a day's pick to that film.
+ * depend on the order of the inputs: the same catalog, gallery list and stored days always give
+ * the same plan. Days not stored yet can change when the catalog or the gallery list changes
+ * (scores and tiers are relative, and one changed day moves later ones through the rules); a
+ * stored day never changes.
+ *
+ * **Boundaries.** A film may come back exactly 365 days later; a director or series needs more
+ * than 30 days (exactly 30 days apart is refused).
  */
 
 // ---------------------------------------------------------------------------------------------

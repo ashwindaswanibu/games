@@ -356,8 +356,10 @@ a director of it directed another answer within 30 days either side, it looks li
 as another answer within 30 days either side (section 4), or it is known to be black and white.
 "Another day's answer" means every stored Fade to Color puzzle (DEV FIXTURES included, as the
 renderer counts them) plus the days planned earlier in the same run. Because "used" is always read
-from the stored puzzles, resetting the testing period at launch is a matter of which puzzles are
-stored; nothing else needs changing.
+from the stored puzzles. The launch reset (testing-phase films return to the pool) isn't built
+yet: played puzzles are never deleted, so it will need a launch-date cutoff where the stored
+answers are loaded (`loadDayAnswers`). A film may come back exactly 365 days later; a director or
+series needs more than 30 days.
 
 **Fallback.** If no film in the drawn tier is eligible, the nearest tier with one is used, the more
 popular one first when two are equally near (Iconic → Well-known → Known; Well-known → Iconic →
@@ -368,9 +370,10 @@ whole year of days needs no fallback.
 **Deterministic.** The tier comes from the day's seeded rng (`PUZZLE_SEED_SECRET`, the game and the
 date, its own seed domain apart from the final pick's); within the tier every eligible film gets a
 key from the day's seed and its id, and the lowest key wins. Rerunning gives the same plan for the
-same database, directory and verdicts, whatever order they come in. Adding a film to the pool only
-ever changes a day's pick to that film, and planning a later stretch after storing an earlier one
-gives the same days as planning both at once.
+same database, directory and verdicts, whatever order they come in, and planning a later stretch
+after storing an earlier one gives the same days as planning both at once. Days not stored yet can
+change when the catalog or the gallery list changes (scores are relative, and one changed day moves
+later ones through the rules); a stored day never changes.
 
 **Black-and-white films and short galleries** can only be told from the frames. The renderer
 measures colour on the thumbnails and refuses a grey film; it also refuses a gallery under 1,000

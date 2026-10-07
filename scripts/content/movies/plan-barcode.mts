@@ -70,7 +70,7 @@ async function main() {
   for (const line of summarizePlan(plan, inputs)) console.log(line);
   if (dryRun) {
     console.log("");
-    console.log("✓ dry run: nothing downloaded, nothing written");
+    console.log("✓ dry run: no frames downloaded, no puzzles written (the directory and colour caches may have been refreshed)");
     return;
   }
 

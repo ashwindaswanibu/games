@@ -39,7 +39,7 @@ import {
   type ContentDb,
 } from "./pipeline.mjs";
 import type { GalleryVerdicts } from "./screencaps-cache.mjs";
-import { GallerySizeError, MAX_CONCURRENCY, openGallery, resolveGallery, ScreencapsSource, type DirectoryEntry, type Gallery } from "./screencaps.mjs";
+import { canonicalGalleryUrl, GallerySizeError, MAX_CONCURRENCY, openGallery, resolveGallery, ScreencapsSource, type DirectoryEntry, type Gallery } from "./screencaps.mjs";
 
 export const GAME_ID = fadeToColor.id;
 const CREDIT_SOURCE = "movie-screencaps.com";
@@ -222,7 +222,7 @@ export async function renderBarcodeDay(db: ContentDb, options: BarcodeDayOptions
     // A short gallery is a fact about the gallery; "only one page" may be the site's markup
     // changing, so that one is left for a human to look at.
     if (error instanceof GallerySizeError && error.kind !== "one-page") {
-      verdicts?.set(galleryUrl, { verdict: "too-short", detail: error.message, film: { title: film.title, year: film.year } });
+      verdicts?.set(canonicalGalleryUrl(galleryUrl), { verdict: "too-short", detail: error.message, film: { title: film.title, year: film.year } });
       throw new FilmRefusedError("too-short", error.message);
     }
     throw error;

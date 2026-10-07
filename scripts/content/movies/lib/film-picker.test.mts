@@ -64,4 +64,14 @@ describe("the picker's inputs", () => {
     const inputs = buildPickerInputs(catalog, directory, none);
     expect(inputs.candidates.find((c) => c.id === 7)).toEqual({ id: 7, title: "Picture7x", year: 2000, directors: ["Director 7"], score: 70, monochrome: null });
   });
+
+  it("skips films Wikidata lists as black and white, unless the frames were measured as colour", () => {
+    const grey = new Set([10, 9]);
+    const colourVerdict: GalleryVerdict = { verdict: "colour", detail: "measured", film: { title: "Picture9x", year: 2000 }, checkedAt: "2026-10-07T00:00:00.000Z" };
+    const inputs = buildPickerInputs(catalog, directory, (url) => (url.includes("picture9x") ? colourVerdict : undefined), "pool", grey);
+    const byId = new Map(inputs.candidates.map((c) => [c.id, c]));
+    expect(byId.get(10)?.monochrome).toBe(true);
+    expect(byId.get(9)?.monochrome).toBe(false);
+    expect(inputs.knownGrey).toBe(1);
+  });
 });
