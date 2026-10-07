@@ -22,18 +22,16 @@ Per-game real pipelines (each documents its flags in its header):
 
 ```bash
 npm run content:movies:frame-by-frame    # needs cached stills or TMDB_API_KEY
-npm run content:movies:color-grade       # needs cached stills or TMDB_API_KEY, and content/neutral/*.jpg
 npm run content:movies:barcode-levels -- --film <id> --date <YYYY-MM-DD|next-free>   # frames from movie-screencaps.com (section 4)
 ```
 
-Run them in this order. Degrees and stills read the catalog; Frame by Frame and Color Grade read
+Run them in this order. Degrees and stills read the catalog; Frame by Frame reads
 the stills cache first and only go to TMDB for films that aren't cached. Each script can be rerun
 at any time. A day someone has played is never replaced by anything. Otherwise, per script:
 
 | Script | A day that already has a puzzle |
 |---|---|
 | `degrees`, `frame-by-frame` | Skipped. With `--replace-fixtures`, a DEV FIXTURE puzzle nobody has played is replaced; a curated one never is |
-| `color-grade` | Skipped. With `--replace`, any puzzle nobody has played is regenerated (DEV FIXTURE or curated: use it to redo a bad pick) |
 | `barcode-levels` | Refused. With `--replace-fixtures`, a DEV FIXTURE nobody has played is replaced; a curated one never is |
 | `content:fixtures` (DEV FIXTURES) | Skipped. With `--replace`, only a DEV FIXTURE nobody has played is regenerated; a curated puzzle is never touched |
 | `stills`, `catalog` | Write no puzzles |
@@ -170,7 +168,7 @@ npm run content:movies:stills -- --top 100 --per-film 10 --refresh
 - **Output.** Files go to `content/movies/stills/tmdb-<id>/` as `01.webp, 02.webp, …` (best first),
   with a `manifest.json` (film identity, sizes, TMDB paths). The folder is git-ignored. Films that
   are already cached are skipped unless you pass `--refresh`.
-- **Using the cache.** `frame-by-frame.mts` and `color-grade.mts` get stills through
+- **Using the cache.** `frame-by-frame.mts` gets stills through
   `stillsSource()` in `lib/film-stills.mts`: the cache first (no network, the same stills every
   run), then TMDB for films that aren't cached. Without `TMDB_API_KEY` they use cached films only.
   Each image can go straight to `newAsset(kind, image)` and `insertPuzzleIfAbsent(...)`, both in
@@ -314,7 +312,7 @@ Image encoding is shared with the fixture tooling in `scripts/content/lib/images
 (`encodeImage`: sharp, sRGB, metadata stripped, 4 MB cap).
 
 The other scripts in this folder belong to the image games and build on these utilities:
-`frame-by-frame.mts`, `color-grade.mts` and `barcode-levels.mts`. Each one documents its usage in its
+`frame-by-frame.mts` and `barcode-levels.mts`. Each one documents its usage in its
 header.
 
 ## Tests

@@ -28,7 +28,6 @@ import { describeClue, spokenClues } from "@/games/_movies/clue-text";
 import { computeClues } from "@/games/_movies/hints";
 import type { ClueKind, FilmDetails, PersonRef } from "@/games/_movies/schemas";
 import { fadeToColor, LAST_REEL_SCORE, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES, OPTION_COUNT, PICK_SCORE } from "@/games/fade-to-color/logic";
-import { colorGrade, CLUE_KINDS as GRADE_CLUES, MAX_TRIES } from "@/games/color-grade/logic";
 import { chainScore, degrees, maxLinks } from "@/games/degrees/logic";
 import { FRAME_COUNT, frameByFrame, CLUE_KINDS as FRAME_CLUES } from "@/games/frame-by-frame/logic";
 import type { PlayRow } from "@/server/database.types";
@@ -55,7 +54,7 @@ import { e2eEnv } from "./lib/env.mjs";
 import { Report } from "./lib/report.mjs";
 import { SpoilerWatch } from "./lib/spoilers.mjs";
 
-const MOVIES_GAMES: readonly AnyGame[] = [degrees, frameByFrame, colorGrade, fadeToColor];
+const MOVIES_GAMES: readonly AnyGame[] = [degrees, frameByFrame, fadeToColor];
 
 interface Ctx {
   page: Page;
@@ -446,71 +445,6 @@ async function playFrameByFrame(ctx: Ctx): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Color Grade
-// ---------------------------------------------------------------------------------------------
-
-async function playColorGrade(ctx: Ctx): Promise<void> {
-  const { page, report } = ctx;
-  const loaded = await loadPuzzle(ctx.db, colorGrade, ctx.date);
-  const { puzzle, solution } = loaded;
-  const answer = solution.answer;
-  const { neutral, graded, blurred, still } = { neutral: solution.neutral.id, graded: solution.graded.id, blurred: solution.blurred.id, still: solution.still.id };
-  const secrets = [answer.title];
-  report.note(`today's film: ${answer.title} (${answer.year})${puzzle.fixture ? " (DEV FIXTURE)" : ""}`);
-
-  await openAndStart(ctx, colorGrade, loaded, secrets);
-  const swatches = await page.$$eval('ul[aria-label="The film\'s palette, largest share first"] button', (buttons) =>
-    buttons.map((b) => b.getAttribute("aria-label") ?? ""),
-  );
-  report.check(
-    "the palette shows the puzzle's five colors",
-    swatches.length === puzzle.palette.length && puzzle.palette.every((s, i) => swatches[i]?.includes(s.hex)),
-    swatches,
-  );
-  report.check("no image is on screen at the palette stage", (await imageSrcs(page)).length === 0, await imageSrcs(page));
-  await checkAssetAccess(ctx, "palette stage", { hidden: [neutral, graded, blurred, still] });
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "at the palette stage", secrets);
-
-  // --- A wrong guess: clues, and the graded photo. ---
-  const [decoy] = await decoyFilms(ctx.db, 1, [answer.id]);
-  await playMove(ctx, colorGrade, 1, () =>
-    pickFromSearch(page, "Name the film", decoy.title, { primary: decoy.title, secondaryPrefix: String(decoy.year) }),
-  );
-  await checkLogRow(ctx, "Your tries", 0, { kind: "miss", film: decoy, chips: expectedChips(decoy, answer, GRADE_CLUES) });
-  await checkLastGuess(ctx, "color grade", decoy, answer, GRADE_CLUES);
-  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(graded));
-  report.check("the miss reveals the graded photo", true);
-  await checkAssetAccess(ctx, "graded stage", { shown: [neutral, graded], hidden: [blurred, still] });
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "after the wrong guess", secrets);
-  await waitForImages(page);
-  await checkNoSidewaysScroll(ctx, "mid-play");
-  await shot(ctx, "color-grade-mid");
-
-  // --- A skip: the blurred still. ---
-  await playMove(ctx, colorGrade, 2, () => clickButton(page, "Skip to the blur"));
-  await checkLogRow(ctx, "Your tries", 1, { kind: "skip" });
-  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(blurred));
-  await checkAssetAccess(ctx, "blurred stage", { shown: [blurred], hidden: [still] });
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "after the skip", secrets);
-
-  // --- The answer. ---
-  const row = await playMove(ctx, colorGrade, 3, () =>
-    pickFromSearch(page, "Name the film", answer.title, { primary: answer.title, secondaryPrefix: answer.year === null ? null : String(answer.year) }),
-  );
-  report.equal("the play is won", row.status, "won");
-  await checkLogRow(ctx, "Your tries", 2, { kind: "hit", film: answer });
-  await checkResultCard(ctx, row, { score: attemptsScore(3, MAX_TRIES, true), label: `3/${MAX_TRIES}`, grid: "🟥⬛🟩⬜⬜" });
-  await waitForText(page, "h3", answer.title);
-  report.check("the verdict names the film", await hasText(page, "p", "✓ You named it on try 3"));
-  await checkAssetAccess(ctx, "after finishing, every image", { shown: [neutral, graded, blurred, still] });
-  await checkFriendsResults(ctx, row);
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "after finishing");
-  await checkFinishedImages(ctx, "finished");
-  await checkNoSidewaysScroll(ctx, "finished");
-  await shot(ctx, "color-grade-finished");
-}
-
-// ---------------------------------------------------------------------------------------------
 // Fade to Color
 // ---------------------------------------------------------------------------------------------
 
@@ -705,7 +639,7 @@ async function checkToday(ctx: Ctx): Promise<void> {
     report.check(`Movies lists ${game.name}`, card !== undefined && card.text.includes(game.name), movies.cards);
     report.check(`${game.name} is marked Testing and ready to play`, card !== undefined && card.text.includes("Testing") && card.text.includes("Play"), card?.text);
   }
-  report.equal("Movies holds exactly the four Movies games", movies.cards.length, MOVIES_GAMES.length);
+  report.equal("Movies holds exactly the three Movies games", movies.cards.length, MOVIES_GAMES.length);
   await checkNoSidewaysScroll(ctx, "Today");
   await shot(ctx, "today");
 }
@@ -726,7 +660,7 @@ async function main(): Promise<boolean> {
   const profile = await profileByUsername(db, env.E2E_TEST_USERNAME);
   if (!report.check(`${profile.username} is an admin (Movies games are still in testing)`, profile.is_admin)) return false;
   for (const game of MOVIES_GAMES) await loadPuzzle(db, game, date);
-  report.check(`today (${date}) has a puzzle for all four Movies games`, true);
+  report.check(`today (${date}) has a puzzle for all three Movies games`, true);
   const removed = await resetPlays(db, profile.id, MOVIES_GAMES.map((g) => g.id), date);
   report.note(`reset ${removed} earlier play${removed === 1 ? "" : "s"} of today's Movies puzzles`);
   const health = await fetch(`${env.E2E_BASE_URL}/login`).catch((error: unknown) => error);
@@ -746,7 +680,6 @@ async function main(): Promise<boolean> {
     await report.runSection("Today", () => checkToday(ctx));
     await report.runSection("Degrees of Separation", () => playDegrees(ctx));
     await report.runSection("Frame by Frame", () => playFrameByFrame(ctx));
-    await report.runSection("Color Grade", () => playColorGrade(ctx));
     await report.runSection("Fade to Color", () => playFadeToColor(ctx));
     await report.runSection("Fade to Color: the final pick", () => playFadeToColorFinalPick(ctx));
 

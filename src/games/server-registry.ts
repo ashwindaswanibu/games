@@ -1,7 +1,6 @@
 import "server-only";
 import type { RegisteredGameServer } from "@/server/game-server";
 import { fadeToColorServer } from "./fade-to-color/server";
-import { colorGradeServer } from "./color-grade/server";
 import { degreesServer } from "./degrees/server";
 import { frameByFrameServer } from "./frame-by-frame/server";
 
@@ -13,7 +12,6 @@ import { frameByFrameServer } from "./frame-by-frame/server";
 export const GAME_SERVERS: readonly RegisteredGameServer[] = [
   degreesServer,
   frameByFrameServer,
-  colorGradeServer,
   fadeToColorServer,
 ];
 
