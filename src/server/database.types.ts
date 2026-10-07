@@ -5,8 +5,9 @@
  * `search_films().year`, `search_films().aka` and `search_people().known_for` are nullable;
  * `movie_film_titles.kind` is its CHECK-constrained union; generated `search_key`, `compact_key`
  * and `fame` columns are never null (the values they derive from are NOT NULL), while
- * `movie_film_titles.number_key` is null unless a name has sequel numbering;
- * `catalog_match_class()` returns null for no match;
+ * `movie_film_titles.number_key` is null unless a name has sequel numbering, and `split_key` (titles
+ * and people) unless a name has an apostrophe inside a word;
+ * `catalog_match_class()` and `catalog_name_match_class()` return null for no match;
  * `replace_unplayed_puzzle()` returns one of its four outcomes.
  * After a migration, run `npm run db:types` and diff against this file.
  */
@@ -236,6 +237,7 @@ export type Database = {
           search_key: string;
           compact_key: string;
           number_key: string | null;
+          split_key: string | null;
         };
         Insert: {
           film_id: number;
@@ -245,6 +247,7 @@ export type Database = {
           search_key?: never;
           compact_key?: never;
           number_key?: never;
+          split_key?: never;
         };
         Update: {
           film_id?: number;
@@ -254,6 +257,7 @@ export type Database = {
           search_key?: never;
           compact_key?: never;
           number_key?: never;
+          split_key?: never;
         };
         Relationships: [
           {
@@ -276,6 +280,7 @@ export type Database = {
           is_human: boolean | null;
           search_key: string;
           compact_key: string;
+          split_key: string | null;
         };
         Insert: {
           id?: number;
@@ -287,6 +292,7 @@ export type Database = {
           is_human?: boolean | null;
           search_key?: never;
           compact_key?: never;
+          split_key?: never;
         };
         Update: {
           id?: number;
@@ -298,6 +304,7 @@ export type Database = {
           is_human?: boolean | null;
           search_key?: never;
           compact_key?: never;
+          split_key?: never;
         };
         Relationships: [];
       };
@@ -376,12 +383,20 @@ export type Database = {
         Args: { value: string };
         Returns: string;
       };
+      catalog_split_key: {
+        Args: { value: string };
+        Returns: string;
+      };
       catalog_number_key: {
         Args: { key: string };
         Returns: string;
       };
       catalog_match_class: {
         Args: { name_key: string; query_key: string };
+        Returns: number | null;
+      };
+      catalog_name_match_class: {
+        Args: { name_key: string; name_split: string; query_key: string; query_split: string };
         Returns: number | null;
       };
       search_films: {

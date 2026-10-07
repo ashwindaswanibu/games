@@ -273,6 +273,7 @@ async function lockdownChecks(alice: Player) {
 
   for (const [fn, args] of [
     ["catalog_search_key", { value: "Amélie" }],
+    ["catalog_split_key", { value: "O'Hara" }],
     ["orphan_auth_user_for_email", { p_email: `smoke_alice_${tag}@users.daily.invalid` }],
     ["take_rate_limit", { p_key: "x", p_limit: 1, p_window_seconds: 1 }],
     ["allow_password_change", { p_user_id: alice.id }],
@@ -639,8 +640,42 @@ async function catalogChecks(player: SupabaseClient) {
   check("a title with an apostrophe is keyed as one word", fourthRows?.find((f) => f.title.endsWith("Look Up"))?.search_key === `dn${tag}t look up`, fourthRows);
   const dn = (await searchHits(`dn${tag}`)).map((r) => r.title);
   check("an exact title outranks a longer word that starts with the query", dn[0] === `Dn${tag}` && dn[1] === `Dn${tag}'t Look Up`, dn);
-  for (const q of [`dn${tag}'t look up`, `dn${tag}’t look up`, `dn${tag}t look up`]) {
+  for (const q of [`dn${tag}'t look up`, `dn${tag}’t look up`, `dn${tag}t look up`, `dn${tag} t look up`]) {
     check(`…and "${q}" finds the title with the apostrophe first`, (await searchHits(q))[0]?.title === `Dn${tag}'t Look Up`);
+  }
+
+  // A name is also searched by its split key (apostrophes as spaces), for its later words only: a
+  // word after an apostrophe is a word of its own ("hara" → the O'Haras, "avventura" → L'Avventura).
+  const { data: splitKey } = await admin.rpc("catalog_split_key", { value: "Don’t Look Up: Ocean's" });
+  check("split keys turn apostrophes into spaces, curly ones too", splitKey === "don t look up ocean s", splitKey);
+  const { data: fourthNames } = await admin.from("movie_film_titles").select("title, split_key").in("film_id", (fourthRows ?? []).map((f) => f.id)).order("title");
+  check(
+    "…stored for a name with an apostrophe, and only for one",
+    JSON.stringify(fourthNames) === JSON.stringify([{ title: `Dn${tag}`, split_key: null }, { title: `Dn${tag}'t Look Up`, split_key: `dn${tag} t look up` }]),
+    fourthNames,
+  );
+  const { data: elided } = await admin
+    .from("movie_films")
+    .insert([
+      { title: `L'Avvx${tag}`, imdb_votes: 100_000 },
+      { title: `Zed Avvx${tag}ing`, imdb_votes: 1_000_000 },
+    ])
+    .select("id");
+  filmIds.push(...(elided ?? []).map((f) => f.id));
+  const avvx = (await searchHits(`avvx${tag}`)).map((r) => r.title);
+  check("a word after an apostrophe is a later whole word, above a partial one", avvx.join("|") === `L'Avvx${tag}|Zed Avvx${tag}ing`, avvx);
+  const { data: haras } = await admin
+    .from("movie_people")
+    .insert([
+      { name: `Kth${tag} O'Hzr${tag}`, popularity: 72 },
+      { name: `Stk${tag} Hzr${tag}`, popularity: 30 },
+    ])
+    .select("id, name, split_key");
+  personIds.push(...(haras ?? []).map((p) => p.id));
+  check("people get a split key too", haras?.find((p) => p.name.startsWith("Kth"))?.split_key === `kth${tag} o hzr${tag}`, haras);
+  for (const q of [`hzr${tag}`, `o hzr${tag}`, `o'hzr${tag}`, `ohzr${tag}`]) {
+    const hzr = await searchPeople(q);
+    check(`"${q}" finds a surname after O' as a word of its own`, hzr[0] === `Kth${tag} O'Hzr${tag}`, hzr);
   }
 
   // Adult films stay in the catalog (ids are referenced) but search never lists them.

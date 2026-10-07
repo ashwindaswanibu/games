@@ -1,4 +1,4 @@
-import { catalogSearchKey } from "@/games/_movies/search-key";
+import { catalogSearchKey, catalogSplitKey } from "@/games/_movies/search-key";
 
 /**
  * Pure catalog rules: which films are in, what a film is called and which of its names are
@@ -132,7 +132,10 @@ export interface FilmNames {
  * name; then the English Wikipedia title (without its "(… film)" qualifier), else IMDb's main
  * title. Labels are sometimes literal translations nobody uses ("Sometimes Happiness Sometimes
  * Sadness..." for Kabhi Khushi Kabhie Gham) or vandalized; IMDb's main title is sometimes the US
- * release title ("Like Stars on Earth" for Taare Zameen Par). Names compare by search key.
+ * release title ("Like Stars on Earth" for Taare Zameen Par). Names compare by split key, where
+ * an apostrophe still separates words: the search key drops apostrophes ("Mothers' Instinct" and
+ * "Mother's Instinct" search alike), but a label with the apostrophe in another place isn't the
+ * name the film goes by.
  */
 export function displayTitle(names: FilmNames): string | null {
   const label = usableName(names.label);
@@ -140,19 +143,12 @@ export function displayTitle(names: FilmNames): string | null {
   const primary = usableName(names.imdbPrimary);
   const original = usableName(names.imdbOriginal);
   if (label) {
-    const key = sameNameKey(label);
+    const key = catalogSplitKey(label);
     const witnesses = [wiki, primary, original].filter((name): name is string => name !== null);
-    if (witnesses.length === 0 || witnesses.some((name) => sameNameKey(name) === key)) return label;
+    if (witnesses.length === 0 || witnesses.some((name) => catalogSplitKey(name) === key)) return label;
   }
   return wiki ?? primary ?? label ?? original;
 }
-
-/**
- * How `displayTitle` compares names: the search key, except that an apostrophe still separates
- * words. The search key drops apostrophes ("Mothers' Instinct" and "Mother's Instinct" search
- * alike), but a label with the apostrophe in another place isn't the name the film goes by.
- */
-const sameNameKey = (name: string) => catalogSearchKey(name.replace(/['ʹʻʼʽˈ‘’‛′＇]/g, " "));
 
 function usableName(value: string | null | undefined): string | null {
   const text = cleanText(value);
@@ -312,8 +308,9 @@ export const NOT_A_SERIES: ReadonlyMap<string, string> = new Map([
 /**
  * Whether a P179 value is a series in the sense the games use it (films a player would take for
  * one another: sequels, prequels, remakes in one line): Wikidata types it as a series of creative
- * works, and it isn't a universe (owner's call, 2026-10-07: the MCU's films are many series, not
- * one), a universe's phase or saga (typed as brands), a list, or a studio catalogue.
+ * works, and it isn't a universe (the MCU's films are many series, not one; pending the owner's
+ * confirmation, see TODO.md), a universe's phase or saga (typed as brands), a list, or a studio
+ * catalogue.
  */
 export function isSeries(value: SeriesValue): boolean {
   return value.creative && !value.universe && !value.brand && !value.list && !NOT_A_SERIES.has(value.qid);

@@ -154,17 +154,24 @@ Locally this took the catalog's indexes from 163 MB to 134 MB. Check the total a
 
 Three catalog fixes on top of the rollout above (`scripts/content/movies/README.md`, section 1):
 Wikidata's series (`movie_films.series_qids`) for Fade to Color's four and the film picker, adult
-films hidden (`movie_films.is_adult`), and an apostrophe kept inside its word in search keys. Same
-ground rules as above: the owner runs it, from `main` with the branch merged, in a terminal with
-`.env.hosted` loaded. In this order:
+films hidden (`movie_films.is_adult`), and an apostrophe kept inside its word in search keys, with
+a second key that still finds the word after it ("hara" → the O'Haras). Same ground rules as above:
+the owner runs it, from `main` with the branch merged, in a terminal with `.env.hosted` loaded. In
+this order:
 
-1. **Schema and key recompute:** `npx supabase migration list`, then `npx supabase db push`. Two
+1. **Schema and key recompute:** `npx supabase migration list`, then `npx supabase db push`. Three
    migrations: `20261014000000_catalog_search_apostrophes` replaces `catalog_search_key` and
    rewrites every stored key that changes (locally 2,429 films, 976 people and 4,356 of 102,427
    searchable names, 49 of which merge into another name of the same film; seconds);
    `20261014000100_catalog_series_and_adult` adds `series_qids` (empty) and `is_adult` (false) and
-   replaces `search_films` / `search_people` (same signatures). Search uses the new keys from here
-   on ("don" lists Don first). No reindex needed: only a few thousand rows are rewritten.
+   replaces `search_films` / `search_people` (same signatures);
+   `20261014000200_catalog_search_split_key` adds the split key (`split_key`, apostrophes as
+   spaces) to `movie_film_titles` and `movie_people` and replaces the two search functions again.
+   Adding a stored generated column rewrites both tables and rebuilds their indexes: about 6 s
+   locally (titles 26 → 28 MB, people unchanged at 54 MB), during which searches wait. Search uses
+   the new keys from here on ("don" lists Don first, "hara" Catherine O'Hara). No reindex needed:
+   the rewritten tables get fresh indexes, and the first migration rewrites only a few thousand
+   rows.
 2. **Deploy the app.** It reads `movie_films.is_adult`, so it must not go out before step 1; the
    old app keeps working after step 1.
 3. **Build against hosted** (read-only): `npm run content:movies:catalog -- --build-only
@@ -187,5 +194,5 @@ ground rules as above: the owner runs it, from `main` with the branch merged, in
 8. **Degrees,** as after every apply: `npm run content:movies:degrees -- --repar-unplayed --dry-run
    --allow-remote-read`, then with `--allow-remote` if it lists days.
 
-Afterwards search the app for "don" (Don, 2006, first), "dont look up", "oceans eleven" and "deep
-throat" (not listed).
+Afterwards search the app for "don" (Don, 2006, first), "dont look up", "oceans eleven", "deep
+throat" (not listed), and people for "hara" (Catherine O'Hara first; in Degrees, Home Alone's cast).

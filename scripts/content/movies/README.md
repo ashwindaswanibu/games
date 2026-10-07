@@ -181,10 +181,11 @@ snapshot writes nothing.
   source was probably incomplete); `--allow-mass-removal` overrides.
 
 **Search** (`search_films` / `search_people`, latest in
-`supabase/migrations/20261014000100_catalog_series_and_adult.sql`; the ranking is
+`supabase/migrations/20261014000200_catalog_search_split_key.sql`; the ranking is
 `20261013000000_catalog_search_word_starts.sql`'s). A film matches by any of its names; adult films
-(`is_adult`) never match. How a name matches the query (`catalog_match_class`, one definition for films,
-filmographies and people; `matchClass` in `src/games/_movies/scoped-search.ts` mirrors it):
+(`is_adult`) never match. How a name matches the query (`catalog_match_class` for one pair of
+keys, `catalog_name_match_class` for both keys below; one definition for films, filmographies and
+people, mirrored by `matchClass` and `nameMatchClass` in `src/games/_movies/scoped-search.ts`):
 
 0. exact;
 1. the name starts with the query as whole words ("stree" → Stree 2), also right after a leading
@@ -197,19 +198,30 @@ filmographies and people; `matchClass` in `src/games/_movies/scoped-search.ts` m
 6. typos (4+ characters: trigram similarity, or one or two edits at the start of a name for short
    titles like "sholey"), only when the others found fewer results than asked for.
 
-Names and queries are compared by their search key (`catalog_search_key` in SQL,
-`catalogSearchKey` in `src/games/_movies/search-key.ts`, kept identical: lowercase, accents
-removed, **apostrophes dropped**, other punctuation a space). An apostrophe is part of its word
-(`20261014000000_catalog_search_apostrophes.sql`): "Don't Look Up" is keyed "dont look up", so
-"don" finds Don (2006) as an exact title before Don't Look Up (a longer word that starts with the
-query; before, "don t" made it a whole-word start that outranked Don with its 15 times the votes),
-and "dont look up", "don't look up" and "don’t look up" are the same query, as are "oceans eleven"
-and "ocean's eleven". Every apostrophe-like character counts (’ ‘ ‛ ′ ＇ ʼ ʻ ʹ ʽ ˈ: whatever
-Postgres' `unaccent` turns into "'"). The trade-off: a word after an elided "O'" or "L'" is no
-longer a word of its own, so "hara" lists Setsuko Hara before the O'Haras (a substring match now;
-"o'hara", "ohara" and "catherine o hara" find Catherine O'Hara first), while "oneal" now finds the
-O'Neals. Measured before and after with 82 queries, 79 of them with an expected result (2026-10-07):
-74 → 78 as expected; the only miss left is "hara".
+Names and queries have two keys, each the same in SQL and TypeScript
+(`src/games/_movies/search-key.ts`): lowercase, accents removed, punctuation a space, and
+
+- the **search key** (`catalog_search_key`, `catalogSearchKey`) **drops apostrophes**: an
+  apostrophe is part of its word (`20261014000000_catalog_search_apostrophes.sql`), so "Don't Look
+  Up" is keyed "dont look up", and "dont look up", "don't look up" and "don’t look up" are the same
+  query, as are "oceans eleven" and "ocean's eleven";
+- the **split key** (`catalog_split_key`, `catalogSplitKey`) makes them spaces: "don t look up",
+  "maureen o hara" (stored as `split_key` on titles and people where it differs,
+  `20261014000200_catalog_search_split_key.sql`).
+
+A name matches by its search key, and its split key adds later words (classes 3 and 4): a word
+after an apostrophe is a word of its own ("hara" → Catherine O'Hara, "connell" → Jack and Jerry
+O'Connell, "souza" → Genelia D'Souza, "avventura" → L'Avventura), a later word may end at one
+("cuckoo" → One Flew Over the Cuckoo's Nest), and "o hara" or "o'hara" find the O'Haras either way.
+The split key makes no starts: "don" starts "don t look up" with a whole word, which would give
+Don't Look Up (15 times Don's votes) the whole-word bonus over Don (2006); by the search key the
+word is "dont", a longer word, so "don" lists Don first (Don't Look Up 4th, after Donnie Darko and
+Don Jon). Every apostrophe-like character counts (’ ‘ ‛ ′ ＇ ʼ ʻ ʹ ʽ ˈ: whatever Postgres'
+`unaccent` turns into "'"). Measured on the local catalog (2026-10-07) with 82 queries, 79 with an
+expected result: 74 as expected with the old key (apostrophes as spaces only, adult films listed),
+78 with the search key alone ("hara" missed the O'Haras), 79 with both keys. Of the 40 people with
+an O'/D' surname and the most Wikipedia editions, a search for the bare surname lists 30 in its top
+8 with both keys, the same 30 as with the old key (12 with the search key alone).
 
 Spaces and punctuation don't matter for exact matches and starts (a generated no-spaces key,
 `compact_key`, on titles and people's names): "xmen" finds X-Men, "walle" WALL-E, "raone" Ra.One,
