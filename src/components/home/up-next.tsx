@@ -33,7 +33,7 @@ export function UpNext({
           <span className={styles.upNextLbl}>{primary.kind === "standings" ? "All played" : "Up next"}</span>
           {gameName && <span className={styles.upNextName}>{gameName}</span>}
         </span>
-        <Link href={primary.href} className={styles.upNextPill} onClick={game ? (e) => onOpen(e, game) : undefined}>
+        <Link href={primary.href} className={styles.upNextPill} data-primary-action="" onClick={game ? (e) => onOpen(e, game) : undefined}>
           {verb}
           <Arrow />
         </Link>

@@ -83,7 +83,7 @@ export function Band({
             )}
           </span>
         ) : (
-          <Link href={primary?.href ?? "/leaderboard"} className={styles.standings} data-n-now="" data-primary="">
+          <Link href={primary?.href ?? "/leaderboard"} className={styles.standings} data-n-now="" data-primary="" data-primary-action="">
             Today&apos;s standings
             <Arrow />
           </Link>

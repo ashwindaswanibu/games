@@ -77,7 +77,7 @@ export function Credit({
     );
   } else if (game.state !== "unavailable") {
     action = primary ? (
-      <span className={styles.pill} data-pill="">
+      <span className={styles.pill} data-pill="" data-primary-action="">
         {verb}
         <Arrow />
       </span>

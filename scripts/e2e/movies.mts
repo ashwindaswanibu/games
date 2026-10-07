@@ -706,6 +706,27 @@ async function checkToday(ctx: Ctx): Promise<void> {
     report.check(`${game.name} is marked Testing and ready to play`, card !== undefined && card.text.includes("Testing") && card.text.includes("Play"), card?.text);
   }
   report.equal("Movies holds exactly the four Movies games", movies.cards.length, MOVIES_GAMES.length);
+
+  // A first visit of the day plays the home's opening titles: measure the page once it has settled.
+  await page.waitForFunction(() => document.querySelector("[data-home][data-moment]") === null);
+  const layout = await page.evaluate(() => {
+    const shown = (el: Element | null): el is Element => el !== null && el.getClientRects().length > 0;
+    // The page's one filled primary (`data-primary-action`): on a phone the Up next slip holds it when
+    // its game isn't in the first sheet, so the first one laid out wins.
+    const primary = [...document.querySelectorAll("[data-primary-action]")].find(shown) ?? null;
+    const tabBar = document.querySelector('[data-app-chrome="bottom-nav"]');
+    return {
+      h1s: document.querySelectorAll("h1").length,
+      primaryBottom: primary ? Math.round(primary.getBoundingClientRect().bottom) : null,
+      tabBarTop: shown(tabBar) ? Math.round(tabBar.getBoundingClientRect().top) : null,
+    };
+  });
+  report.equal("Today has exactly one h1", layout.h1s, 1);
+  report.check(
+    "Today's primary action is clear of the tab bar",
+    layout.primaryBottom !== null && layout.tabBarTop !== null && layout.primaryBottom <= layout.tabBarTop,
+    layout,
+  );
   await checkNoSidewaysScroll(ctx, "Today");
   await shot(ctx, "today");
 }
