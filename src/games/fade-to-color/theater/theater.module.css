@@ -22,7 +22,7 @@
   --mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
   --sprocket: clamp(12px, 1.45vw, 22px);
   /* Everything on screen that isn't the picture: the picture takes the rest of the height. */
-  --chrome: 420px;
+  --chrome: 432px;
   --reel-w: max(300px, min(94vw, 1560px, calc((100dvh - var(--chrome)) * 3)));
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
@@ -41,12 +41,12 @@
 }
 
 .theater[data-finished] {
-  --chrome: 470px;
+  --chrome: 482px;
 }
 
 /* The final pick's four films need more room than the guess line. */
 .theater[data-picking] {
-  --chrome: 520px;
+  --chrome: 532px;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -149,15 +149,6 @@
   stroke-width: 1.5;
 }
 
-.wordmark {
-  margin: 0;
-  font-size: clamp(25px, 2.25vw, 36px);
-  line-height: 1;
-  font-weight: 400;
-  letter-spacing: -0.012em;
-  white-space: nowrap;
-}
-
 .dateline {
   font: 500 10.5px/1 var(--mono);
   letter-spacing: 0.22em;
@@ -165,39 +156,101 @@
   color: var(--ink-3);
 }
 
-/* A title whose last word lights up with the barcode. */
-.litTitle {
-  font-family: var(--display);
+/*
+ * The wordmark: a dip to black. Layers stack in place; only opacity changes. Before the film rolls,
+ * "Fade to" is full ink and "Color" a ghost. Lit, "Fade to" steps down letter by letter and "Color"
+ * rises filled with the film. `data-intro` slows it into the moment the film is rolled.
+ */
+.wordmark {
+  --wm-out: 600ms;
+  --wm-out-delay: 0ms;
+  --wm-up: 700ms;
+  --wm-up-delay: 0ms;
+  --wm-halo: 900ms;
+  --wm-halo-delay: 0ms;
+  justify-self: start;
+  isolation: isolate;
+  margin: 0;
+  font: 400 clamp(30px, 2.9vw, 44px)/1 var(--display);
+  letter-spacing: -0.012em;
+  white-space: nowrap;
 }
 
-.litWord {
-  position: relative;
-  display: inline-block;
-  padding: 0 0.07em 0 0.02em;
+.wordmark[data-intro] {
+  --wm-out: 1800ms;
+  --wm-out-delay: 300ms;
+  --wm-up: 2400ms;
+  --wm-up-delay: 1500ms;
+  --wm-halo: 3000ms;
+  --wm-halo-delay: 2000ms;
+}
+
+.wmFade,
+.wmColor {
+  display: inline-grid;
+  vertical-align: baseline;
+}
+
+.wmFade > span,
+.wmColor > span {
+  grid-area: 1 / 1;
+}
+
+.wmFull {
+  transition: opacity var(--wm-out) cubic-bezier(0.45, 0, 0.55, 1) var(--wm-out-delay);
+}
+
+.wordmark[data-lit] .wmFull {
+  opacity: 0;
+}
+
+.wmColor {
+  margin-left: 0.24em;
+  font-size: 1.18em;
   font-style: italic;
-  color: var(--ink-3);
-  transition: color 1800ms ease;
 }
 
-.litWord::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  padding: inherit;
-  background: var(--fill) center / 100% 100% no-repeat;
+.wmGhost {
+  padding: 0.06em 0.12em 0.12em 0.02em;
+  color: rgb(239 233 223 / 0.16);
+  transition: opacity 800ms ease;
+}
+
+.wordmark[data-lit] .wmGhost {
+  opacity: 0;
+}
+
+.wmLit,
+.wmHalo {
+  padding: 0.06em 0.12em 0.12em 0.02em;
+  color: transparent;
+  background: var(--fill) 0 0 / 100% 100% no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
   opacity: 0;
-  transition: opacity 1800ms ease 300ms;
 }
 
-.litTitle[data-lit] .litWord {
-  color: transparent;
+.wmLit {
+  filter: contrast(1.15) saturate(1.4);
+  transition: opacity var(--wm-up) cubic-bezier(0.3, 0, 0.2, 1) var(--wm-up-delay);
 }
 
-.litTitle[data-lit] .litWord::after {
+/* A soft halo of the film's own colours: one small static blur, pulled well back. */
+.wmHalo {
+  z-index: -1;
+  margin: -28px;
+  padding: calc(0.06em + 28px) calc(0.12em + 28px) calc(0.12em + 28px) calc(0.02em + 28px);
+  background-origin: content-box;
+  filter: blur(12px) saturate(1.4);
+  transition: opacity var(--wm-halo) cubic-bezier(0.3, 0, 0.2, 1) var(--wm-halo-delay);
+}
+
+.wordmark[data-lit] .wmLit {
   opacity: 1;
+}
+
+.wordmark[data-lit] .wmHalo {
+  opacity: 0.3;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -1180,7 +1233,13 @@
   }
 
   .wordmark {
-    font-size: 23px;
+    font-size: 22px;
+  }
+
+  .wmHalo {
+    margin: -16px;
+    padding: calc(0.06em + 16px) calc(0.12em + 16px) calc(0.12em + 16px) calc(0.02em + 16px);
+    filter: blur(7px) saturate(1.4);
   }
 
   .dateline {
@@ -1273,7 +1332,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fadeIn,
+  /* Near-instant rather than none, so the crossfade still hears animationend and drops the old layer. */
+  .fadeIn {
+    animation-duration: 1ms;
+  }
+
   .printImage,
   .optionTile,
   .leader::before,
@@ -1290,8 +1353,10 @@
   .kicker,
   .go,
   .roll,
-  .litWord,
-  .litWord::after,
+  .wmFull,
+  .wmGhost,
+  .wmLit,
+  .wmHalo,
   .creditsWrap,
   .whisper {
     transition: none;

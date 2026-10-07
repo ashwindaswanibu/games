@@ -15,7 +15,7 @@ import { Reel, type ReelMove } from "./reel";
 import { Slate } from "./slate";
 import styles from "./theater.module.css";
 import { HOUSE_ACCENT, useLevelArt } from "./use-level-art";
-import { LitTitle } from "./wordmark";
+import { Wordmark } from "./wordmark";
 
 type Props = ImmersiveGameUiProps<typeof fadeToColor>;
 
@@ -55,9 +55,10 @@ export function FadeToColorTheater(props: Props) {
   // The newest reel: the one being played, or the film's last once it's over (the payoff).
   const latest = finished ? LEVEL_COUNT - 1 : Math.max(0, levels.length - 1);
 
-  // Looking back at an earlier reel lasts until the next one is earned.
-  const [picked, setPicked] = useState<{ index: number; latest: number } | null>(null);
-  const target = picked && picked.latest === latest && picked.index < levels.length ? picked.index : latest;
+  // Looking back at an earlier reel lasts until the next one is earned or the play ends.
+  const [picked, setPicked] = useState<{ index: number; latest: number; finished: boolean } | null>(null);
+  const target = picked && picked.latest === latest && picked.finished === finished && picked.index < levels.length ? picked.index : latest;
+  const lookAt = (index: number) => setPicked({ index, latest, finished });
 
   // What the reel shows moves to the target once its art is in; how it gets there depends on why.
   const [rolled, setRolled] = useState(false);
@@ -105,17 +106,21 @@ export function FadeToColorTheater(props: Props) {
     const onKey = (event: KeyboardEvent) => {
       const el = document.activeElement;
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || event.metaKey || event.ctrlKey || event.altKey) return;
+      // Not while a dialog (everyone's results) is open over the reel.
+      if (event.target instanceof Element && event.target.closest('[role="dialog"]')) return;
       const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
       if (!step) return;
       const next = Math.min(levels.length - 1, Math.max(0, target + step));
       if (next !== target) {
         event.preventDefault();
-        setPicked({ index: next, latest });
+        lookAt(next);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [view, levels.length, target, latest]);
+    // `lookAt` closes over `latest` and `finished`, both listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, levels.length, target, latest, finished]);
 
   const accent = litArt?.accent ?? HOUSE_ACCENT;
   const picking = playing && state !== null && awaitingPick(state);
@@ -154,7 +159,7 @@ export function FadeToColorTheater(props: Props) {
           </svg>
           <span>Today</span>
         </Link>
-        <LitTitle text={fadeToColor.name} fill={firstArt?.bands || null} as="h1" className={styles.wordmark} />
+        <Wordmark text={fadeToColor.name} fill={firstArt?.bands || null} intro={rolled} />
         <span className={styles.dateline}>{today}</span>
       </header>
 
@@ -219,7 +224,7 @@ export function FadeToColorTheater(props: Props) {
                 thumbs={levels.map((l) => art.get(l.id)?.thumb)}
                 showing={showing}
                 current={playing ? latest : null}
-                onPick={(index) => setPicked({ index, latest })}
+                onPick={lookAt}
               />
               <p className={styles.status}>
                 {picking ? (
@@ -231,7 +236,7 @@ export function FadeToColorTheater(props: Props) {
                     Reel <em>{attempt}</em> of {MAX_GUESSES} <span className={styles.dot}>·</span> <em>{left}</em> left
                   </>
                 )}
-                {showing !== null && showing !== latest && (
+                {target !== latest && (
                   <button type="button" className={styles.toLatest} onClick={() => setPicked(null)}>
                     Back to reel {latest + 1} ▸
                   </button>
@@ -262,7 +267,7 @@ export function FadeToColorTheater(props: Props) {
 
           {finished && reveal && view?.result && (
             <>
-              <ContactStrip thumbs={levels.map((l) => art.get(l.id)?.thumb)} showing={showing} current={null} onPick={(index) => setPicked({ index, latest })} />
+              <ContactStrip thumbs={levels.map((l) => art.get(l.id)?.thumb)} showing={showing} current={null} onPick={lookAt} />
               {/* Inert until the last reel has unreeled and the card has come up. */}
               <div className={styles.creditsWrap} data-show={creditsReady || undefined} inert={!creditsReady}>
                 <Credits

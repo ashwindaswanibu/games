@@ -36,9 +36,13 @@ export function Slate(props: {
     },
   });
 
+  // A choice holds only while the field still shows it: clearing or editing the text (Escape, ×,
+  // typing) drops it, however the field was changed.
+  const picked = chosen && search.query === chosen.title ? chosen : null;
+
   async function guess() {
-    if (!chosen || disabled) return;
-    const sent = chosen;
+    if (!picked || disabled) return;
+    const sent = picked;
     if (await onGuess(sent)) {
       setChosen(null);
       search.fill("");
@@ -77,7 +81,7 @@ export function Slate(props: {
             search.inputProps.onChange(event);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !open && chosen) {
+            if (event.key === "Enter" && !open && picked) {
               event.preventDefault();
               void guess();
               return;
@@ -85,7 +89,7 @@ export function Slate(props: {
             search.inputProps.onKeyDown(event);
           }}
         />
-        {chosen && <span className={styles.chosen}>{byline(chosen)}</span>}
+        {picked && <span className={styles.chosen}>{byline(picked)}</span>}
         <ul ref={listRef} id={listId} role="listbox" aria-label="Films" hidden={!open} className={styles.list}>
           {status === "ready" &&
             results.map((hit, index) => {
@@ -133,7 +137,7 @@ export function Slate(props: {
         <button type="button" className={styles.quiet} disabled={disabled} onClick={() => (lastReel ? setConfirming(true) : onSkip())}>
           {lastReel ? "Give up" : "Skip"}
         </button>
-        <button type="button" className={styles.go} disabled={disabled || !chosen} onClick={() => void guess()}>
+        <button type="button" className={styles.go} disabled={disabled || !picked} onClick={() => void guess()}>
           Guess
         </button>
       </div>

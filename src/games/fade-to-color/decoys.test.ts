@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "@/core/random";
-import { pickDecoys, pickOptions, seriesKey, type DecoyCandidate } from "./decoys";
+import { pickDecoys, pickOptions, sameSeries, seriesKey, type DecoyCandidate } from "./decoys";
 import { OPTION_COUNT } from "./logic";
 
 let nextId = 100;
@@ -26,8 +26,37 @@ describe("seriesKey", () => {
     ["Mad Max: Fury Road", "mad max"],
     ["Amélie", "amelie"],
     ["Star Wars – Episode IV", "star wars"],
+    ["Harry Potter and the Goblet of Fire", "harry potter"],
+    ["The Exorcist", "exorcist"],
+    ["Exorcist II: The Heretic", "exorcist"],
   ])("%s → %s", (title, key) => {
     expect(seriesKey(title)).toBe(key);
+  });
+});
+
+describe("sameSeries", () => {
+  it.each([
+    ["Harry Potter and the Goblet of Fire", "Harry Potter and the Chamber of Secrets"],
+    ["The Bourne Identity", "The Bourne Supremacy"],
+    ["Spider-Man 3", "The Amazing Spider-Man"],
+    ["Rogue One: A Star Wars Story", "Star Wars: Episode IV – A New Hope"],
+    ["Mad Max: Fury Road", "Furiosa: A Mad Max Saga"],
+    ["Twilight", "The Twilight Saga: New Moon"],
+    ["The Exorcist", "Exorcist II: The Heretic"],
+    ["The Matrix", "The Matrix Reloaded"],
+    ["Alien", "Aliens"],
+    ["Dune", "Dune: Part Two"],
+  ])("%s and %s are one series", (a, b) => {
+    expect(sameSeries(a, b)).toBe(true);
+    expect(sameSeries(b, a)).toBe(true);
+  });
+
+  it.each([
+    ["Dune: Part Two", "Arrival"],
+    ["Heat", "Collateral"],
+    ["Barbie", "Oppenheimer"],
+  ])("%s and %s are not", (a, b) => {
+    expect(sameSeries(a, b)).toBe(false);
   });
 });
 
@@ -48,11 +77,13 @@ describe("pickDecoys", () => {
   ];
 
   it("picks three look-alikes: same kind of film, era and fame", () => {
-    const decoys = pickDecoys(dune2, near, rng());
-    expect(decoys).toHaveLength(OPTION_COUNT - 1);
-    for (const d of decoys) {
-      expect(Math.abs(d.year! - dune2.year!)).toBeLessThanOrEqual(5);
-      expect(d.genres.some((g) => dune2.genres.includes(g))).toBe(true);
+    for (let seed = 0; seed < 20; seed++) {
+      const decoys = pickDecoys(dune2, near, createRng([seed, 3, 3, 3]));
+      expect(decoys).toHaveLength(OPTION_COUNT - 1);
+      for (const d of decoys) {
+        expect(Math.abs(d.year! - dune2.year!)).toBeLessThanOrEqual(8);
+        expect(d.genres.some((g) => dune2.genres.includes(g))).toBe(true);
+      }
     }
   });
 
@@ -68,9 +99,26 @@ describe("pickDecoys", () => {
   });
 
   it("doesn't pick two decoys from one series", () => {
-    const pool = [film("Saga Part 1", 2023, ["Science fiction"], 50), film("Saga Part 2", 2024, ["Science fiction"], 50), film("Other A", 2022, ["Action"], 55), film("Other B", 2024, ["Epic"], 60)];
+    const pool = [film("Saga Part 1", 2023, ["Science fiction"], 50), film("Saga Part 2", 2024, ["Science fiction"], 50), film("Northern Lights", 2022, ["Action"], 55), film("Quiet Planet", 2024, ["Epic"], 60)];
     const titles = pickDecoys(dune2, pool, rng()).map((d) => d.title);
     expect(titles.filter((t) => t.startsWith("Saga"))).toHaveLength(1);
+  });
+
+  it("keeps all four options within one window of years, with the answer anywhere in it", () => {
+    // A rich catalog: five similar films a year, so the strictest bound (5 years) always holds.
+    const pool = Array.from({ length: 60 }, (_, i) => film(`Space Saga No ${i} ${"xyz"[i % 3]}`, 2012 + Math.floor(i / 5), ["Science fiction", "Action"], 55));
+    pool.forEach((f, i) => (f.title = `Film${i} Space`));
+    const ranks = new Map<number, number>();
+    for (let seed = 0; seed < 300; seed++) {
+      const decoys = pickDecoys(dune2, pool.map((f) => ({ ...f, year: f.year! + 6 })), createRng([seed, 9, 9, 9]));
+      const years = [dune2.year!, ...decoys.map((d) => d.year!)];
+      expect(Math.max(...years) - Math.min(...years)).toBeLessThanOrEqual(5);
+      const rank = years.filter((y) => y < dune2.year!).length;
+      ranks.set(rank, (ranks.get(rank) ?? 0) + 1);
+    }
+    // The answer is sometimes the earliest, sometimes the latest, sometimes between: its year gives nothing away.
+    expect(ranks.get(0)).toBeGreaterThan(30);
+    expect(ranks.get(3)).toBeGreaterThan(30);
   });
 
   it("is deterministic for a given seed", () => {
@@ -78,7 +126,7 @@ describe("pickDecoys", () => {
   });
 
   it("widens its bounds when the strict ones leave too few", () => {
-    const pool = [film("Old A", 1990, ["Drama"], 50), film("Old B", 1985, ["Comedy"], 40), film("Old C", 1980, ["Western"], 90)];
+    const pool = [film("Harbor Lights", 1990, ["Drama"], 50), film("Grey Morning", 1985, ["Comedy"], 40), film("Winter Fields", 1980, ["Western"], 90)];
     expect(pickDecoys(dune2, pool, rng())).toHaveLength(3);
   });
 
@@ -89,7 +137,8 @@ describe("pickDecoys", () => {
 
 describe("pickOptions", () => {
   it("returns the answer and three decoys as film refs, shuffled", () => {
-    const pool = Array.from({ length: 12 }, (_, i) => film(`Space Film ${String.fromCharCode(65 + i)}`, 2020 + (i % 5), ["Science fiction", "Action"], 50 + i));
+    const names = ["Orbit", "Nebula", "Comet", "Quasar", "Pulsar", "Zenith", "Vortex", "Aurora", "Eclipse", "Meteor", "Horizon", "Solstice"];
+    const pool = names.map((name, i) => film(name, 2020 + (i % 5), ["Science fiction", "Action"], 50 + i));
     const options = pickOptions(dune2, pool, rng());
     expect(options).toHaveLength(OPTION_COUNT);
     expect(options.filter((o) => o.id === dune2.id)).toHaveLength(1);

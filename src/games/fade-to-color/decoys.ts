@@ -12,6 +12,12 @@ import { OPTION_COUNT } from "./logic";
  * editions, compared as a ratio so a classic and a new release are each measured against films of
  * their own standing). The best few are shuffled so the same answer doesn't always draw the same
  * decoys. If the strict bounds leave too few, they widen step by step.
+ *
+ * The options show their years, so the answer must not stand out by them: all four come from one
+ * window of years that holds the answer at a random place, and closeness in year is measured from
+ * the window's middle, not from the answer. (Genres and fame aren't shown.) The `Rng` must be
+ * seeded with the server's secret (see `scripts/content/movies/lib/decoys.mts`): with a public seed
+ * the shuffle could be replayed to find the answer.
  */
 
 export interface DecoyCandidate {
@@ -46,23 +52,37 @@ const words = (title: string) =>
     .trim();
 
 const SEQUEL_TAIL = /\s+(?:part|chapter|episode|vol|volume)?\s*(?:\d+|[ivx]+|two|three|four|five)$/;
+const ARTICLE = /^(?:the|a|an)\s+/;
 
 /**
- * A film's series, roughly: its title before any subtitle, without a trailing number ("Dune: Part
- * Two" → "dune", "Toy Story 3" → "toy story"). Two films are the same series when one key starts
- * the other ("the matrix" / "the matrix reloaded"). The catalog has no franchise data; this errs
- * on the side of calling films related, which only ever removes a candidate.
+ * A film's series, roughly: its title before any subtitle (or "and the …"), without a leading
+ * article or a trailing number. "Dune: Part Two" → "dune", "Harry Potter and the Goblet of Fire" →
+ * "harry potter", "The Exorcist" / "Exorcist II: The Heretic" → "exorcist".
  */
 export function seriesKey(title: string): string {
-  const head = title.split(/:|\s[-–—]\s/)[0] ?? title;
-  return words(head).replace(SEQUEL_TAIL, "").trim();
+  const head = title.split(/:|\s[-–—]\s|\s+and\s+the\s+/i)[0] ?? title;
+  return words(head).replace(ARTICLE, "").replace(SEQUEL_TAIL, "").trim();
 }
 
-function sameSeries(a: string, b: string): boolean {
+const stem = (word: string) => word.replace(/s$/, "");
+
+/**
+ * Whether two titles look like one series. The catalog has no franchise data, so this matches
+ * generously, which only ever removes a candidate: the same key, one key starting the other ("the
+ * matrix" / "the matrix reloaded"), the same first word ("bourne identity" / "bourne supremacy",
+ * "alien" / "aliens"), or a key of two or more words inside the other title ("mad max" in "Furiosa:
+ * A Mad Max Saga", "spider man" in "The Amazing Spider-Man", "star wars" in "Rogue One: A Star Wars
+ * Story"). Sequels that share no words with their series ("The Empire Strikes Back") still slip
+ * through, unless they share a director.
+ */
+export function sameSeries(a: string, b: string): boolean {
   const ka = seriesKey(a);
   const kb = seriesKey(b);
   if (!ka || !kb) return false;
-  return ka === kb || `${kb} `.startsWith(`${ka} `) || `${ka} `.startsWith(`${kb} `);
+  if (ka === kb || `${kb} `.startsWith(`${ka} `) || `${ka} `.startsWith(`${kb} `)) return true;
+  if (stem(ka.split(" ")[0]!) === stem(kb.split(" ")[0]!)) return true;
+  const inside = (key: string, title: string) => key.includes(" ") && ` ${words(title)} `.includes(` ${key} `);
+  return inside(ka, b) || inside(kb, a);
 }
 
 const lower = (items: readonly string[]) => new Set(items.map((s) => s.trim().toLowerCase()).filter(Boolean));
@@ -80,15 +100,20 @@ export function pickDecoys(answer: DecoyCandidate, pool: readonly DecoyCandidate
   const usable = pool.filter((c) => c.year !== null && c.popularity !== null && !related(answer, c));
 
   for (const bound of BOUNDS) {
+    // The window of years all four options come from, holding the answer at a random place.
+    const span = answer.year !== null && Number.isFinite(bound.years) ? bound.years : null;
+    const from = span === null ? null : answer.year! - rng.int(0, span);
+    const middle = from === null ? null : from + span! / 2;
     const ranked = usable
       .map((c) => {
         const genres = lower(c.genres);
         const shared = [...genres].filter((g) => answerGenres.has(g)).length;
         const union = new Set([...genres, ...answerGenres]).size || 1;
-        const years = answer.year === null ? 0 : Math.abs(c.year! - answer.year);
+        const inWindow = from === null || (c.year! >= from && c.year! <= from + span!);
+        const fromMiddle = middle === null ? 0 : Math.abs(c.year! - middle);
         const fame = Math.max(answerFame, c.popularity!) / Math.max(1, Math.min(answerFame, c.popularity!));
-        const fits = shared >= bound.sharedGenres && years <= bound.years && fame <= bound.fame;
-        const likeness = 3 * (shared / union) + (1 - Math.min(1, years / 15)) + (1 - Math.min(1, Math.log(fame) / Math.log(6)));
+        const fits = shared >= bound.sharedGenres && inWindow && fame <= bound.fame;
+        const likeness = 3 * (shared / union) + (1 - Math.min(1, fromMiddle / 15)) + (1 - Math.min(1, Math.log(fame) / Math.log(6)));
         return { c, fits, likeness };
       })
       .filter((r) => r.fits)

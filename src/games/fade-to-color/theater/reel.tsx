@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { Crossfade } from "./crossfade";
 import styles from "./theater.module.css";
 
@@ -147,6 +148,9 @@ export function Reel(props: {
       if (cancelled) return;
       latest.current.onLight(target.key);
       await place();
+      if (cancelled) return;
+      // Show the picture (and take the leader down) before the wipe goes, or the leader can flash for a frame.
+      flushSync(() => setHasPicture(true));
       delete screen.current!.dataset.unreeling;
       animations.forEach((a) => a.cancel());
       settle();

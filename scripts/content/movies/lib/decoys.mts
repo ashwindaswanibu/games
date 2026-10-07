@@ -6,7 +6,7 @@ import type { PuzzleDate } from "@/core/day";
 import { createRng } from "@/core/random";
 import type { FilmRef } from "@/games/_movies/schemas";
 import { pickOptions, type DecoyCandidate } from "@/games/fade-to-color/decoys";
-import { selectAllPages, type ContentDb } from "./pipeline.mjs";
+import { contentSeed, selectAllPages, type ContentDb } from "./pipeline.mjs";
 
 /** Films below this many Wikipedia editions are too obscure to be anyone's guess. */
 const MIN_POPULARITY = 25;
@@ -25,8 +25,9 @@ export async function decoyPool(db: ContentDb): Promise<DecoyCandidate[]> {
 }
 
 /**
- * The final pick for `answerId` on `date`: the answer and three look-alikes, shuffled. Seeded by
- * the film and the day, so re-running a dry run shows the same options.
+ * The final pick for `answerId` on `date`: the answer and three look-alikes, shuffled. Seeded with
+ * the server's secret and the day (like every other content choice), so a dry run shows the same
+ * options again but nobody can replay the shuffle from the public code to find the answer.
  */
 export async function finalPickOptions(db: ContentDb, answerId: number, date: PuzzleDate): Promise<FilmRef[]> {
   const pool = await decoyPool(db);
@@ -34,6 +35,6 @@ export async function finalPickOptions(db: ContentDb, answerId: number, date: Pu
     pool.find((film) => film.id === answerId) ??
     (await db.from("movie_films").select("id, title, year, genres, directors, popularity").eq("id", answerId).single()).data;
   if (!answer) throw new Error(`Film ${answerId} isn't in the catalog`);
-  const rng = createRng([answerId, Number(date.replaceAll("-", "")), 0x0f1c, 0xdec0]);
+  const rng = createRng(contentSeed("fade-to-color:final-pick", date));
   return pickOptions(answer, pool, rng);
 }

@@ -119,7 +119,7 @@ function FriendsPanel({ friends, viewerId, onClose }: { friends: readonly Friend
           </button>
         </div>
         {friends === null ? (
-          <p className={styles.panelNote}>Loading…</p>
+          <p className={styles.panelNote}>Results are on their way. If they don&rsquo;t show, refresh the page.</p>
         ) : (
           <ol className={styles.people}>
             {friends.map((f) => {

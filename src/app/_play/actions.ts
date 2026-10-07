@@ -40,7 +40,10 @@ export async function startGame(gameId: string, date: string): Promise<StartResp
   if (args.date !== current) return { ok: false, message: DAY_OVER };
 
   try {
-    return { ok: true, view: await startPlay(profile.id, game, current) };
+    const view = await startPlay(profile.id, game, current);
+    // Already finished (in another tab or on another device): re-render the server parts too.
+    if (view.status !== "in_progress") refresh();
+    return { ok: true, view };
   } catch (error) {
     if (error instanceof PuzzleUnavailableError) return { ok: false, message: "Today's puzzle isn't ready yet. Check back soon." };
     throw error;
@@ -55,7 +58,8 @@ export async function submitMove(gameId: string, date: string, version: number, 
   if (args.date !== current) return { ok: false, reason: "day_over", message: DAY_OVER };
 
   const response = await applyMove({ userId: profile.id, game, date: current, expectedVersion: args.version, rawMove: move });
-  // Finishing unlocks friends' results and changes the Today screen; re-render server parts.
-  if (response.ok && response.view.status !== "in_progress") refresh();
+  // Finishing unlocks friends' results and changes the Today screen; re-render server parts. That
+  // includes a rejected move that hands back a play finished elsewhere (another tab or device).
+  if (response.view && response.view.status !== "in_progress") refresh();
   return response;
 }

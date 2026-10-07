@@ -532,7 +532,7 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
 
   // --- Before the film: no app chrome, the leader, three rules and "Roll film". ---
   await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
-  await waitForText(page, "h1", fadeToColor.name);
+  await page.waitForSelector(`h1[aria-label="${fadeToColor.name}"]`);
   report.equal("full screen: no app nav", await page.$$eval("nav", (navs) => navs.length), 0);
   report.check("the rules are on the opening screen", await pageSays(page, fadeToColor.rules[0]!));
   await spoilerCheckpoint(ctx, fadeToColor, loaded, "before starting", secrets);
