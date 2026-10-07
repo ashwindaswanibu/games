@@ -26,15 +26,19 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [ ] Bring the same level of design to every screen and game (laptop first, phone good too).
 
 ## Content and data
-- [ ] **A much bigger film catalog for guessing** (Ashwin, 2026-10-06). Today's has 4,986 films, too few for the guess dropdown and weak on Indian cinema. Every known film is freely available. Wikidata has about 350,000 films (31,000 Indian; CC0). IMDb's datasets have every title, its cast and vote counts; they're free for personal, non-commercial use and refreshed daily. Plan: import them, rank search results by how well-known a film is (IMDb votes, Wikipedia editions), and include original and English titles, so the dropdown finds anything without burying the films people mean.
-- [ ] **Use the same catalog for Degrees of Separation**, with cast for every film. IMDb's cast list covers all films; Wikidata has cast for about 22,700 of its 31,000 Indian films. That fixes the missing Indian films.
+- [x] **A much bigger film catalog for guessing** (Ashwin, 2026-10-06; built 2026-10-07 on branch `catalog-expansion`, local database only). 60,559 films (was 4,986; 5,400 Indian, was 156) from IMDb's datasets and Wikidata; search finds a film by any of its names ("K3G", "Sen to Chihiro") and ranks by IMDb votes. See `scripts/content/movies/README.md`, section 1.
+- [x] **Use the same catalog for Degrees of Separation**, with cast for every film (IMDb's billed cast plus Wikidata's): 646,000 credits, 168,000 people.
+- [ ] **Roll the bigger catalog out to the hosted database** (Ashwin): `npx supabase db push`, then `npm run content:movies:catalog -- --apply-only --allow-remote` with the snapshot built locally, then `npm run content:movies:catalog-check -- --allow-remote --baseline <file>`, then reindex the four catalog tables (README, section 1). ~140 MB of the 500 MB free tier.
+- [ ] **IMDb credit line** where players can see it (footer or credits, with the TMDB notice), required by IMDb's non-commercial licence before the catalog goes live: "Information courtesy of IMDb (https://www.imdb.com). Used with permission." Confirm the wording on IMDb's licensing page.
+- [ ] **Degrees with the bigger catalog** (Ashwin decides): the actor pool (top 300 by Wikipedia editions with 3+ top-5 billings) now includes 9 Bollywood stars, so some days pair Bollywood with Hollywood (5 of 30 sample days), and famous non-actors with a few lead roles (Michael Jackson, Tupac Shakur, Nancy Reagan, Mick Jagger). Keep, or keep start and end in one film industry, or tighten the pool? Ranking solutions by IMDb votes instead of editions would favour films people actually watched (a follow-up with tests).
+- [ ] **Adult films in the catalog**: the old Wikidata import brought in a few (Deep Throat, Debbie Does Dallas); the new rules exclude adult titles, but stored films are never dropped. Hide them from search?
 - [ ] **TMDB API key** (Ashwin) for better popularity data (vote counts) and stills.
-- [ ] **Weekly catalog refresh** from Wikidata, with a lower bar for films from the last 2 years.
+- [ ] **Weekly catalog refresh**: a scheduled `content:movies:catalog` (build, then apply). IMDb updates daily and the recent-films rule (300 votes) already brings new releases in. Later: IMDb's alternate titles (title.akas) if friends still miss films by name, and 500+ votes (~76,000 films, +30 MB) if they miss films.
 - [ ] Optional genre caps per month for film selection.
 
 ## Infrastructure and cost
 - [ ] **Connect Vercel to the GitHub repo** for auto-deploys (Ashwin grants Vercel's GitHub access).
-- [ ] **Purge old puzzle images nightly**, keeping yesterday (a Supabase scheduled job).
+- [ ] **Purge old puzzle images nightly**, keeping yesterday (a Supabase scheduled job). Needed before launch: images grow 1–2 MB a day, and the bigger catalog takes ~140 MB of the free tier's 500 MB.
 - [ ] **Serve level images from Cloudflare R2** behind signed links, so there are no egress costs.
 - [ ] **Cache leaderboards** (recompute on finish or every minute) instead of recalculating on every view.
 - [ ] Decide the global scoring rule across buckets (plain sum vs equal-weight buckets vs best-N).

@@ -12,7 +12,7 @@ The plan behind all this is `design/movies-build-plan.md` (section 5). The game 
 
 ```bash
 npm run db:start                         # local Supabase (if it isn't running)
-npm run content:movies:catalog           # Wikidata → films, people, credits (~30–40 min, no key)
+npm run content:movies:catalog           # IMDb + Wikidata → ~60k films, people, credits (~6 min, no key)
 npm run content:movies:degrees           # Degrees puzzles: today (New York) + 30 days
 npm run content:movies:stills -- --top 100   # needs TMDB_API_KEY (see below)
 npm run content:movies:fixtures          # DEV FIXTURE puzzles for all four Movies games, today + 7 days
@@ -43,59 +43,140 @@ fixture" tag from the same flag).
 
 ## 1. Catalog: `content:movies:catalog`
 
-**Source.** [Wikidata](https://www.wikidata.org), CC0 licensed, no key needed.
+About 60,000 films (every film people are likely to name, Indian and world cinema included),
+170,000 people and 650,000 credits, from two sources:
 
-**Which films.** Every film item (`film`, `feature film`, `animated film`) released from 1950 on,
-ranked by **sitelink count**: the number of Wikipedia language editions with an article about it.
-That is a robust, language-neutral measure of fame. The script takes:
+- **[IMDb's non-commercial datasets](https://developer.imdb.com/non-commercial-datasets/)**
+  (`title.basics`, `title.ratings`, `title.principals`, `title.crew`, `name.basics`; refreshed
+  daily). They decide which films are in and give vote counts, top-billed cast, IMDb's titles and,
+  where Wikidata has none, directors and genres. **Personal and non-commercial use only**, with
+  the credit line *"Information courtesy of IMDb (https://www.imdb.com). Used with permission."*
+  shown where players can see it (`IMDB_ATTRIBUTION` in `lib/imdb.mts`; see TODO.md).
+- **[Wikidata](https://www.wikidata.org)** (CC0), read in bulk through
+  [QLever](https://qlever.dev) (a fast public SPARQL engine over Wikidata; the official query
+  service is too slow and rate-limited for whole tables). It adds the Wikidata id, Wikipedia
+  editions, the English label and aliases, the English Wikipedia title, year, genres, directors,
+  TMDB id and deeper cast.
 
-- the top `--limit` films of that global ranking (default 4,500), plus
-- the 40 best-known films in each of about 30 major non-English original languages (Hindi,
-  Japanese, Korean, French, Italian, Spanish, Chinese, Tamil, Telugu, Persian and others). These
-  guarantee that world cinema is represented even where English Wikipedia dominates the global
-  ranking.
+**Which films** (`selectionReason` in `lib/catalog-model.mts`). A title that isn't adult is in when:
 
-Films with no release date, no cast, or a release year in the future are skipped. A typical run
-gives about 5,000 films.
+1. it is a feature film (IMDb `movie`) with **at least 1,000 IMDb votes or an article in at least
+   8 Wikipedias** (the second rule catches world cinema IMDb under-votes);
+2. it is a feature film from the last two calendar years with 300+ votes (new releases);
+3. it is a TV movie or direct-to-video feature with 5,000+ votes, at least 40 minutes long (or of
+   unknown length) and not tagged Short or Adult (The Animatrix, the DC animated films);
+4. it is already in the catalog. Nothing is ever dropped.
 
-**What is stored for each film.** Title (the English label, else the original title), year
-(earliest release), genres (display names such as "Science fiction", taken from Wikidata's genre
-labels), directors, popularity (the sitelink count), TMDB and IMDb ids, and the Wikidata id.
+Released films only (a known year, not after this one); any year from 1870. About 1,000 votes is
+where films stop being something a friend would guess; 500 would give ~76,000 films (+30 MB).
 
-**Cast and billing.** The top 30 cast members (P161) in **the order Wikidata lists them**. That
-order is the `billing` column, where 0 means top billed. RDF and SPARQL have no statement order,
-so cast is read through the Action API (`wbgetentities`), which keeps the order editors entered.
-They usually copy it from the credits, which makes it the best free billing signal. A person's
-popularity is their own sitelink count.
+**What is stored for each film.**
+- **Title** (`displayTitle`): Wikidata's English label, unless neither English Wikipedia nor IMDb
+  uses that name; then the English Wikipedia title (without "(… film)"), else IMDb's main title.
+  That fixes literal translations nobody uses ("Sometimes Happiness Sometimes Sadness..." is shown
+  as *Kabhi Khushi Kabhie Gham*) without taking IMDb's US titles ("Like Stars on Earth" stays
+  *Taare Zameen Par*).
+- **Every searchable name**, in `movie_film_titles`: the display title, IMDb's main and original
+  titles, Wikidata's English label and aliases ("K3G", "DDLJ"), the English Wikipedia title, and
+  every display title the film had before (kept by a trigger). Latin script only, one row per
+  search key.
+- **Year** (Wikidata's earliest release with at least year precision, else IMDb's), **genres**
+  (Wikidata's genre labels as display names, most specific first; IMDb's genres mapped onto the
+  same names when Wikidata has none), **directors** (Wikidata's, else IMDb's, named by their
+  Wikidata label when they have one), TMDB, IMDb and Wikidata ids. A refresh keeps a film's stored
+  order of genres and directors.
+- **`popularity`: Wikipedia editions** (Wikidata sitelinks; 0 without a Wikidata item). Its
+  meaning hasn't changed: Degrees, Fade to Color decoys, stills and the fixtures rank by it.
+- **`imdb_votes`** and the generated **`fame`** = ln(1 + IMDb votes), or ln(1 + 437 × popularity)
+  when IMDb has no rating (437 is the catalog's average votes per edition). Search ranks by fame.
 
-**How it runs.**
-1. One SPARQL query lists the candidates, and one query per language adds the language picks.
-2. `wbgetentities` fetches the films' statements, 50 per request, one request at a time. The
-   Action API rate-limits bursts. When it returns HTTP 429 the script waits as long as
-   `Retry-After` says, which is why a full run takes 30–40 minutes.
-3. SPARQL fetches the labels and sitelink counts of genres, directors and roughly 70,000 actors,
-   400 per query.
-4. Rows are upserted into `movie_films`, `movie_people` and `movie_credits`.
+**Cast and billing** (`imdbCastToKeep`, `mergeCast`). IMDb's billed cast (actors and actresses in
+`title.principals`, up to 10 a film; "self" and archive footage are left out, so documentary
+subjects aren't lead actors): the first 4 always, places 5–10 when the person has a Wikipedia
+article. Plus Wikidata's cast list (P161). `billing` (0 = top billed) is IMDb's order first, then
+the film's stored order (for films imported before IMDb, Wikidata's credited order), then Wikidata
+cast with no known order (no billing). At most 30 credits; over that, the least known unordered
+ones go. People are Wikidata's (English label, else the language-neutral one, else IMDb's name;
+`popularity` = Wikipedia editions; IMDb person id) or IMDb-only (IMDb's name, popularity 0). IMDb's
+cast lands on the Wikidata person with the same IMDb id.
 
-Every request retries transient failures (network errors, 408, 429, 5xx) with exponential backoff
-and jitter, and honours `Retry-After`. Responses are validated with zod.
+**How it runs.** Two steps, so local and hosted get identical content and every rule is testable
+without a database:
 
-**Idempotent.** Films and people are upserted on `wikidata_id`, so a rerun refreshes them in place
-and never duplicates anything. Each imported film's credits are replaced by its current Wikidata
-cast. Films and people are **never deleted**: a published puzzle or a play may refer to them.
+1. **Build** (`lib/catalog-build.mts`, no writes). Downloads IMDb's files into `--cache-dir` (only
+   when IMDb has a newer file than the cached one: ~1.4 GB, under a minute on a fast line), runs
+   nine QLever queries (~45 s, ~280 MB of CSV, cached), then reads IMDb's files as streams,
+   keeping only what the selected films need (IMDb's principals alone are ~100 million lines). It
+   writes a **snapshot** (`<cache-dir>/snapshot/`: films and people as NDJSON plus `meta.json`
+   with the counts) and prints its summary. About 3.5 minutes; peaks at ~850 MB of memory. If
+   QLever fails, the last cached result (at most 30 days old) is reused with a loud warning.
+2. **Apply** (`lib/catalog-apply.mts`). Reads the target's rows, plans every write with the pure
+   functions in `lib/catalog-plan.mts`, writes in batches of at most 500 rows (well inside the
+   API's 8-second limit) and checks the id contract afterwards. About 2 minutes locally for the
+   first import, seconds when little changed; expect 15–25 minutes against the hosted database.
 
-Some Wikidata items share a TMDB or IMDb id, which the catalog requires to be unique. In that case
-the more popular film keeps the id, and an id already stored for another item stays with that
-item.
+A full local run (`npm run content:movies:catalog`) took 5.5 minutes. Rerunning on an unchanged
+snapshot writes nothing.
+
+**Catalog ids never change.** Stored puzzles, solutions and plays reference films and people by
+`movie_films.id` / `movie_people.id` (as JSON, which no foreign key protects). So:
+
+- An incoming film matches a stored one by Wikidata id, else IMDb id (people: Wikidata id, else
+  IMDb person id), and is written under the stored row's own id. A new film is inserted without
+  an id. A stored external id is never changed; an empty one is filled in unless another row
+  holds it. Nothing is merged or moved: when the two ids point at two stored rows, the Wikidata
+  match wins and the other row is left alone (`planCatalogWrites`, property-tested).
+- Films and people are never deleted. A credit no source lists any more is removed, except one a
+  stored Degrees chain uses (solutions and players' chains replay).
+- Triggers refuse any update that changes a film's or person's id.
+- Before writing, apply saves every film's and person's ids to
+  `<cache-dir>/baselines/catalog-ids-<time>.json`; afterwards it checks that every one still exists
+  with the same non-empty Wikidata, IMDb and TMDB ids, that every catalog id a stored puzzle or play
+  references exists, and that every link of a stored Degrees solution is still a credit. Any
+  failure exits non-zero. The same checks run read-only with
+  `npm run content:movies:catalog-check [-- --baseline <file>]`.
+- A run that would remove more than 20% of the stored credits of the films it covers stops (a
+  source was probably incomplete); `--allow-mass-removal` overrides.
+
+**Search** (`search_films` / `search_people` in
+`supabase/migrations/20261011000000_catalog_expansion.sql`). A film matches by any of its names:
+exact, then prefix of the name or of a word in it, then substring (3+ characters), then typos
+(4+ characters: trigram similarity, or one or two edits at the start of a name for short titles
+like "sholey"), the last only when the others found fewer results than asked for. Films rank by
+fame within a tier; an exact title beats a prefix match unless that one has ten times the votes.
+A hit carries `aka`, the other name it matched by, shown in the dropdown as "also: K3G". With a
+person it searches their filmography the same way (Degrees). Each tier is its own indexed, limited
+query: typical searches take 5–20 ms, "the" ~40 ms.
+
+**Rolling out to the hosted database** (the owner's call; agents never pass `--allow-remote`):
+
+```bash
+npx supabase db push                                                   # the migration
+npm run content:movies:catalog -- --apply-only --allow-remote          # the same snapshot as local
+npm run content:movies:catalog-check -- --allow-remote --baseline <the baseline file it printed>
+```
+
+Then, in the Supabase SQL editor, `reindex table concurrently public.movie_people;` (and the same
+for `movie_credits`, `movie_films`, `movie_film_titles`): indexes built row by row are ~25% larger
+than freshly built ones (locally 163 MB → 134 MB). The catalog then takes ~140 MB of the free
+tier's 500 MB.
 
 | Flag | Default | |
 |---|---|---|
-| `--limit` | 4500 | Films taken from the global ranking |
-| `--min-sitelinks` | 20 | Smallest sitelink count considered for the global ranking |
-| `--min-year` | 1950 | Earliest release year |
-| `--per-language` | 40 | Films guaranteed per non-English language (0 turns this off) |
-| `--language-min-sitelinks` | 12 | Smallest sitelink count for a language pick |
-| `--dry-run` | | Fetch everything and print the counts, but write nothing |
+| `--min-votes` | 1000 | IMDb votes that bring a feature film in |
+| `--min-sitelinks` | 8 | Wikipedia editions that bring a feature film in |
+| `--recent-min-votes` | 300 | Votes for a feature film from the last two calendar years |
+| `--extra-min-votes` | 5000 | Votes for a TV movie or direct-to-video feature |
+| `--imdb-cast` | 4 | IMDb's billed cast always kept |
+| `--imdb-cast-known` | 10 | IMDb's billed cast kept down to here when the person has a Wikipedia article |
+| `--cache-dir` | `content/movies/catalog-cache` | Downloads, query results, snapshot, id baselines (git-ignored; never commit IMDb data) |
+| `--snapshot` | `<cache-dir>/snapshot` | Where the snapshot is written or read |
+| `--build-only` | | Build the snapshot, write nothing to the database |
+| `--apply-only` | | Apply the existing snapshot (no downloads) |
+| `--dry-run` | | Build (or read) the snapshot and print what would change, write nothing |
+| `--offline` | | Use cached downloads and query results only |
+| `--allow-mass-removal` | | Allow removing over 20% of the covered films' stored credits |
+| `--allow-remote` | | Write to a non-local database (owner only) |
 
 ## 2. Degrees puzzles: `content:movies:degrees`
 
@@ -300,8 +381,14 @@ caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
 |---|---|
 | `pipeline.mts` | `pipelineDb({ allowRemote })` (the service-role client, refusing non-local databases by default); `puzzleDateRange(days, from?)` (dates in the game timezone, via `src/core/day.ts`); `contentSeed(gameId, date)`; `selectAllPages(...)` (reads past PostgREST's 1000-row cap); `existingPuzzleDates(...)`; `replaceableFixtureDates(...)` and `deleteFixturePuzzle(...)` (for `--replace-fixtures`); `deleteUnplayedPuzzle(...)` (for `--replace-unplayed`, guarded by the plays foreign key); `newAsset(kind, image)` and `insertPuzzleIfAbsent(db, { gameId, date, puzzle, solution, assets })` (writes a puzzle and its assets, never overwrites, rolls back on a failed asset); `positiveInt` for flags |
 | `http.mts` | `fetchWithRetry` (timeouts, backoff with jitter, `Retry-After`, a descriptive User-Agent), `mapPool`, `chunk` |
-| `wikidata.mts` | SPARQL and `wbgetentities` clients with zod validation, plus claim helpers |
-| `catalog-model.mts` | Pure Wikidata → catalog rules: which films qualify, genre names, external-id conflicts |
+| `imdb.mts` | IMDb's datasets: download when newer, streaming gzip line reader, line parsers, compact `IntTable` |
+| `qlever.mts` | QLever (bulk Wikidata) queries, a streaming RFC 4180 CSV parser, cached results with a fallback |
+| `catalog-model.mts` | Pure catalog rules: which films are in, display title and searchable names, genre and director names, IMDb cast depth, `mergeCast` billing |
+| `catalog-build.mts` | The build step: sources → snapshot (`buildSnapshot`, `matchWikidataItems`) |
+| `catalog-snapshot.mts` | The snapshot format (zod-validated NDJSON) |
+| `catalog-plan.mts` | Pure apply planning: `planCatalogWrites` (ids never change), `planTitles`, `planCredits` |
+| `catalog-apply.mts` | The apply step: plan against the target, write in batches, check |
+| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits |
 | `degrees-graph.mts` | Pure graph code: `buildGraph`, `linkDistances` (BFS), `bestShortestPath`, `actorPool`, `pickPuzzle` |
 | `tmdb.mts` | The TMDB client (`tmdbClient`, `fetchFilmStills`, `encodeStill`, `rankBackdrops`) |
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |
@@ -319,7 +406,10 @@ header.
 
 ## Tests
 
-The pure parts are unit-tested with no network or database: the retry and backoff logic, Wikidata
-parsing, catalog rules, the graph and puzzle picker, TMDB ranking and re-encoding (including a
+The pure parts are unit-tested with no network or database: the retry and backoff logic, IMDb line
+parsing and streaming, the CSV parser, catalog rules (selection, titles, names, genres, cast
+billing), the write planner (including a randomized test that stored ids never change), the id
+checks, the graph and puzzle picker, TMDB ranking and re-encoding (including a
 check that metadata is stripped), the Degrees schema, the Fade to Color level maths (on synthetic
 images) and the movie-screencaps.com page and directory parsing. Run them with `npx vitest run scripts`.
+The catalog's database side (search, names, fame, the id guard) is covered by `npm run test:db`.
