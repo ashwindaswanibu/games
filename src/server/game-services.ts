@@ -72,8 +72,8 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
 const FILM_COLUMNS = "id, title, year, genres, directors, popularity, tmdb_id, imdb_id, wikidata_id";
 const PERSON_COLUMNS = "id, name, popularity, wikidata_id";
 
-type FilmColumns = Omit<MovieFilmRow, "search_key">;
-type PersonColumns = Omit<MoviePersonRow, "search_key">;
+type FilmColumns = Pick<MovieFilmRow, "id" | "title" | "year" | "genres" | "directors" | "popularity" | "tmdb_id" | "imdb_id" | "wikidata_id">;
+type PersonColumns = Pick<MoviePersonRow, "id" | "name" | "popularity" | "wikidata_id">;
 
 export function toFilmRecord(row: FilmColumns): FilmRecord {
   return {

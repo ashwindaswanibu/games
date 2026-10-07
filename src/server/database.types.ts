@@ -2,8 +2,9 @@
  * Database types in the shape `supabase gen types typescript` emits, verified against the
  * generated output. Deliberately tighter where the generator can't infer: `plays.status` and
  * `puzzle_assets.mime` are the CHECK-constrained unions; `leaderboard().avg_score`,
- * `search_films().year` and `search_people().known_for` are nullable; generated `search_key`
- * columns are never null (the title/name they derive from is NOT NULL).
+ * `search_films().year`, `search_films().aka` and `search_people().known_for` are nullable;
+ * `movie_film_titles.kind` is its CHECK-constrained union; generated `search_key` and `fame`
+ * columns are never null (the values they derive from are NOT NULL).
  * After a migration, run `npm run db:types` and diff against this file.
  */
 
@@ -178,6 +179,8 @@ export type Database = {
           genres: string[];
           directors: string[];
           popularity: number;
+          imdb_votes: number | null;
+          fame: number;
           tmdb_id: number | null;
           imdb_id: string | null;
           wikidata_id: string | null;
@@ -190,6 +193,8 @@ export type Database = {
           genres?: string[];
           directors?: string[];
           popularity?: number;
+          imdb_votes?: number | null;
+          fame?: never;
           tmdb_id?: number | null;
           imdb_id?: string | null;
           wikidata_id?: string | null;
@@ -202,6 +207,8 @@ export type Database = {
           genres?: string[];
           directors?: string[];
           popularity?: number;
+          imdb_votes?: number | null;
+          fame?: never;
           tmdb_id?: number | null;
           imdb_id?: string | null;
           wikidata_id?: string | null;
@@ -209,12 +216,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      movie_film_titles: {
+        Row: {
+          film_id: number;
+          title: string;
+          kind: MovieFilmTitleKind;
+          fame: number;
+          search_key: string;
+        };
+        Insert: {
+          film_id: number;
+          title: string;
+          kind: MovieFilmTitleKind;
+          fame?: number;
+          search_key?: never;
+        };
+        Update: {
+          film_id?: number;
+          title?: string;
+          kind?: MovieFilmTitleKind;
+          fame?: number;
+          search_key?: never;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "movie_film_titles_film_id_fkey";
+            columns: ["film_id"];
+            isOneToOne: false;
+            referencedRelation: "movie_films";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       movie_people: {
         Row: {
           id: number;
           name: string;
           popularity: number;
           wikidata_id: string | null;
+          imdb_id: string | null;
           search_key: string;
         };
         Insert: {
@@ -222,6 +262,7 @@ export type Database = {
           name: string;
           popularity?: number;
           wikidata_id?: string | null;
+          imdb_id?: string | null;
           search_key?: never;
         };
         Update: {
@@ -229,6 +270,7 @@ export type Database = {
           name?: string;
           popularity?: number;
           wikidata_id?: string | null;
+          imdb_id?: string | null;
           search_key?: never;
         };
         Relationships: [];
@@ -309,13 +351,14 @@ export type Database = {
         Returns: string;
       };
       search_films: {
-        Args: { p_query: string; p_limit?: number };
+        Args: { p_query: string; p_limit?: number; p_person?: number };
         Returns: {
           id: number;
           title: string;
           year: number | null;
           directors: string[];
-          popularity: number;
+          fame: number;
+          aka: string | null;
         }[];
       };
       search_people: {
@@ -366,3 +409,7 @@ export type PuzzleAssetRow = Database["public"]["Tables"]["puzzle_assets"]["Row"
 export type MovieFilmRow = Database["public"]["Tables"]["movie_films"]["Row"];
 export type MoviePersonRow = Database["public"]["Tables"]["movie_people"]["Row"];
 export type MovieCreditRow = Database["public"]["Tables"]["movie_credits"]["Row"];
+export type MovieFilmTitleRow = Database["public"]["Tables"]["movie_film_titles"]["Row"];
+
+/** `movie_film_titles.kind`: the display title, IMDb's titles, Wikidata/Wikipedia names, or a former display title. */
+export type MovieFilmTitleKind = "display" | "original" | "alias" | "former";
