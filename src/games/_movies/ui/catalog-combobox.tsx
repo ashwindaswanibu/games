@@ -1,5 +1,6 @@
 "use client";
 
+import { IMDB_ATTRIBUTION } from "../attribution";
 import { MOVIES_FONT_VARS } from "./fonts";
 import styles from "./movies.module.css";
 import { useCatalogSearch, type CatalogSearchConfig } from "./use-catalog-search";
@@ -94,6 +95,13 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
               </li>
             );
           })}
+        {status === "ready" && results.length > 0 && (
+          // IMDb's required credit wherever its data is shown. Hidden from assistive tech here (it
+          // isn't an option); the board's foot carries the same line for everyone.
+          <li role="presentation" aria-hidden className={styles.listCredit} onMouseDown={(event) => event.preventDefault()}>
+            {IMDB_ATTRIBUTION}
+          </li>
+        )}
         {status === "ready" && results.length === 0 && (
           <li role="presentation" className={styles.listNote}>
             {emptyNote ? emptyNote(query.trim()) : <>No {noun.many} match &ldquo;{query.trim()}&rdquo;.</>}

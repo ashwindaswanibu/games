@@ -38,6 +38,7 @@ interface StoredPerson {
   id: number;
   name: string;
   popularity: number;
+  is_actor: boolean;
   wikidata_id: string | null;
   imdb_id: string | null;
 }
@@ -85,7 +86,7 @@ export async function applySnapshot(db: ContentDb, snapshot: Snapshot, options: 
     selectAllById<StoredFilm>((after, limit) =>
       db.from("movie_films").select("id, title, year, genres, directors, popularity, imdb_votes, tmdb_id, imdb_id, wikidata_id").gt("id", after).order("id").limit(limit),
     ),
-    selectAllById<StoredPerson>((after, limit) => db.from("movie_people").select("id, name, popularity, wikidata_id, imdb_id").gt("id", after).order("id").limit(limit)),
+    selectAllById<StoredPerson>((after, limit) => db.from("movie_people").select("id, name, popularity, is_actor, wikidata_id, imdb_id").gt("id", after).order("id").limit(limit)),
   ]);
   log(`  ${storedFilms.length} films, ${storedPeople.length} people stored`);
   const baseline: IdBaseline = {
@@ -147,6 +148,7 @@ export async function applySnapshot(db: ContentDb, snapshot: Snapshot, options: 
   const personRow = (person: SnapshotPerson, ids: { wikidataId: string | null; imdbId: string | null }): PersonRow => ({
     name: person.name,
     popularity: person.popularity,
+    is_actor: person.isActor,
     wikidata_id: ids.wikidataId,
     imdb_id: ids.imdbId,
   });

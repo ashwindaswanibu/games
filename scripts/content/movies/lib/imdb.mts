@@ -10,13 +10,12 @@ import { fetchWithRetry } from "./http.mjs";
 /**
  * IMDb's non-commercial datasets (https://developer.imdb.com/non-commercial-datasets/): gzipped,
  * tab-separated, `\N` for null, refreshed daily. Personal and non-commercial use only, with the
- * attribution line in `IMDB_ATTRIBUTION`. The files are large (title.principals is ~800 MB gzipped,
- * ~4 GB of text), so they are only ever read as a stream, line by line, keeping just what a caller
- * selects. Line parsers are pure and unit-tested.
+ * credit line `IMDB_ATTRIBUTION` (src/games/_movies/attribution.ts) shown to players. The files
+ * are large (title.principals is ~800 MB gzipped, ~4 GB of text), so they are only ever read as a
+ * stream, line by line, keeping just what a caller selects. Line parsers are pure and unit-tested.
  */
 
 export const IMDB_DATASETS_URL = "https://datasets.imdbws.com";
-export const IMDB_ATTRIBUTION = "Information courtesy of IMDb (https://www.imdb.com). Used with permission.";
 
 export const IMDB_FILES = ["title.basics", "title.ratings", "title.principals", "title.crew", "name.basics"] as const;
 export type ImdbFile = (typeof IMDB_FILES)[number];
@@ -152,13 +151,15 @@ export function parseCrewLine(line: string): ImdbCrew | null {
 export interface ImdbName {
   nconst: number;
   name: string;
+  /** primaryProfession: up to three, e.g. ["music_artist", "actor", "composer"] (not ranked by prominence). */
+  professions: string[];
 }
 
 /** name.basics: nconst, primaryName, birthYear, deathYear, primaryProfession, knownForTitles. */
 export function parseNameLine(line: string): ImdbName | null {
-  const [id, name] = tsvFields(line);
+  const [id, name, , , professions] = tsvFields(line);
   const nconst = parseNconst(id);
-  return nconst === null || !name ? null : { nconst, name };
+  return nconst === null || !name ? null : { nconst, name, professions: professions ? professions.split(",").filter(Boolean) : [] };
 }
 
 // ---------------------------------------------------------------------------------------------

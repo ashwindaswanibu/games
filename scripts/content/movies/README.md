@@ -2,8 +2,10 @@
 
 Scripts that build the Movies bucket's data on your machine and write it into Supabase: the movie
 catalog, the daily Degrees of Separation puzzles and the film stills the image games are made from.
-They run locally (`npm run content:movies:*`), load `.env.local`, and refuse to write to anything
-but a local Supabase unless you pass `--allow-remote`.
+They run locally (`npm run content:movies:*`), load `.env.local`, and refuse anything but a local
+Supabase unless you pass `--allow-remote` (writes; the owner's call) or, for a run that only reads
+(a catalog build, a dry run, a check), `--allow-remote-read`, which gives a client that refuses
+every write before it is sent.
 
 The plan behind all this is `design/movies-build-plan.md` (section 5). The game side is in
 `src/games/_movies/README.md`.
@@ -33,6 +35,7 @@ at any time. A day someone has played is never replaced by anything. Otherwise, 
 | Script | A day that already has a puzzle |
 |---|---|
 | `degrees`, `frame-by-frame` | Skipped. With `--replace-fixtures`, a DEV FIXTURE puzzle nobody has played is replaced; a curated one never is |
+| `degrees --repar-unplayed` | A curated day nobody has played whose par the catalog made stale is fixed in place (section 2); DEV FIXTURE days are left alone |
 | `color-grade` | Skipped. With `--replace`, any puzzle nobody has played is regenerated (DEV FIXTURE or curated: use it to redo a bad pick) |
 | `barcode-levels` | Refused. With `--replace-fixtures`, a DEV FIXTURE nobody has played is replaced; a curated one never is |
 | `content:fixtures` (DEV FIXTURES) | Skipped. With `--replace`, only a DEV FIXTURE nobody has played is regenerated; a curated puzzle is never touched |
@@ -49,9 +52,11 @@ About 60,000 films (every film people are likely to name, Indian and world cinem
 - **[IMDb's non-commercial datasets](https://developer.imdb.com/non-commercial-datasets/)**
   (`title.basics`, `title.ratings`, `title.principals`, `title.crew`, `name.basics`; refreshed
   daily). They decide which films are in and give vote counts, top-billed cast, IMDb's titles and,
-  where Wikidata has none, directors and genres. **Personal and non-commercial use only**, with
-  the credit line *"Information courtesy of IMDb (https://www.imdb.com). Used with permission."*
-  shown where players can see it (`IMDB_ATTRIBUTION` in `lib/imdb.mts`; see TODO.md).
+  where Wikidata has none, directors and genres, and who acts (`primaryProfession`). **Personal
+  and non-commercial use only**, with the credit line *"Information courtesy of IMDb
+  (https://www.imdb.com). Used with permission."* (IMDb's exact wording) shown where players see
+  the data: `IMDB_ATTRIBUTION` in `src/games/_movies/attribution.ts`, rendered at the foot of every
+  Movies board, under the hits of every catalog search list and on Fade to Color's end card.
 - **[Wikidata](https://www.wikidata.org)** (CC0), read in bulk through
   [QLever](https://qlever.dev) (a fast public SPARQL engine over Wikidata; the official query
   service is too slow and rate-limited for whole tables). It adds the Wikidata id, Wikipedia
@@ -85,6 +90,11 @@ where films stop being something a friend would guess; 500 would give ~76,000 fi
   same names when Wikidata has none), **directors** (Wikidata's, else IMDb's, named by their
   Wikidata label when they have one), TMDB, IMDb and Wikidata ids. A refresh keeps a film's stored
   order of genres and directors.
+- **People**: name, `popularity` (Wikipedia editions), Wikidata and IMDb ids, and **`is_actor`**:
+  IMDb lists actor or actress among their primary professions, or Wikidata gives them the
+  occupation actor, film actor or voice actor (`isActor` in `lib/catalog-model.mts`). Degrees
+  starts and ends only at actors. 161,000 of the 168,000 people qualify: nearly everyone credited
+  in a cast list has acted.
 - **`popularity`: Wikipedia editions** (Wikidata sitelinks; 0 without a Wikidata item). Its
   meaning hasn't changed: Degrees, Fade to Color decoys, stills and the fixtures rank by it.
 - **`imdb_votes`** and the generated **`fame`** = ln(1 + IMDb votes), or ln(1 + 437 × popularity)
@@ -138,28 +148,51 @@ snapshot writes nothing.
 - A run that would remove more than 20% of the stored credits of the films it covers stops (a
   source was probably incomplete); `--allow-mass-removal` overrides.
 
-**Search** (`search_films` / `search_people` in
-`supabase/migrations/20261011000000_catalog_expansion.sql`). A film matches by any of its names:
-exact, then prefix of the name or of a word in it, then substring (3+ characters), then typos
-(4+ characters: trigram similarity, or one or two edits at the start of a name for short titles
-like "sholey"), the last only when the others found fewer results than asked for. Films rank by
-fame within a tier; an exact title beats a prefix match unless that one has ten times the votes.
-A hit carries `aka`, the other name it matched by, shown in the dropdown as "also: K3G". With a
-person it searches their filmography the same way (Degrees). Each tier is its own indexed, limited
-query: typical searches take 5–20 ms, "the" ~40 ms.
+**Search** (`search_films` / `search_people`, latest in
+`supabase/migrations/20261012000000_catalog_search_tiers.sql`). A film matches by any of its names.
+Tiers: exact; the name starts with the query; a later word starts with it (3+ characters);
+substring (3+ characters); typos (4+ characters: trigram similarity, or one or two edits at the
+start of a name for short titles like "sholey"), the last only when the others found fewer
+results than asked for. Spaces and punctuation don't matter for exact and starts-with matches
+(a generated no-spaces key, `compact_key`, on titles and people's names): "xmen" finds X-Men,
+"walle" WALL-E, "raone" Ra.One, "shahrukh" Shah Rukh Khan (prefix matches only from 3
+characters, so "it" doesn't find "I, Tonya"). The first three tiers rank together, by fame:
 
-**Rolling out to the hosted database** (the owner's call; agents never pass `--allow-remote`):
+- an exact title gets a bonus of ln 10, so a name that *starts with* the query outranks it only
+  with ten times the votes ("the dark" → The Dark Knight, not the little-known The Dark);
+- a name where only a *later word* starts with the query never outranks an exact title ("stree" →
+  Stree, not The Wolf of Wall Street; "guide" → Guide; "earth" → Earth);
+- an exact match on a film's display title beats an exact match on another film's other name
+  unless that film has ten times the votes ("court" → Court, not Court – State Vs A Nobody, a.k.a.
+  Court; "godfather" → The Godfather, a.k.a. Godfather, over the films titled Godfather).
+
+People rank the same way by ln(1 + Wikipedia editions): "deepika" → Deepika Padukone, not an
+IMDb-only "Deepika". A hit carries `aka`, the other name it matched by, shown in the dropdown as
+"also: K3G". With a person it searches their filmography the same way (Degrees); a film's cast is
+searched in memory by the same rules (`src/games/_movies/scoped-search.ts`). Each tier is its own
+indexed, limited query: typical searches take 10–30 ms end to end, "the" ~70 ms.
+
+**Rolling out to the hosted database** (the owner's call; agents never pass `--allow-remote`). One
+sequence, explained step by step in `design/catalog-rollout.md`. With the hosted project's
+`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `PUZZLE_SEED_SECRET` exported in the shell
+(they win over `.env.local`):
 
 ```bash
-npx supabase db push                                                   # the migration
-npm run content:movies:catalog -- --apply-only --allow-remote          # the same snapshot as local
-npm run content:movies:catalog-check -- --allow-remote --baseline <the baseline file it printed>
+npx supabase db push                                                             # 1. schema
+#                                                                                  2. deploy the app (it shows IMDb's credit line)
+npm run content:movies:catalog -- --build-only --allow-remote-read               # 3. snapshot against hosted's films (read-only)
+npm run content:movies:catalog -- --apply-only --dry-run --allow-remote-read     # 4. compare the plan's counts
+npm run content:movies:catalog -- --apply-only --allow-remote                    # 5. apply; note the FIRST baseline path it prints
+npm run content:movies:catalog-check -- --allow-remote-read --baseline <first baseline>   # 6.
+npm run content:movies:degrees -- --repar-unplayed --dry-run --allow-remote-read # 7. stale Degrees pars…
+npm run content:movies:degrees -- --repar-unplayed --allow-remote                #    …fixed on unplayed days
 ```
 
-Then, in the Supabase SQL editor, `reindex table concurrently public.movie_people;` (and the same
-for `movie_credits`, `movie_films`, `movie_film_titles`): indexes built row by row are ~25% larger
-than freshly built ones (locally 163 MB → 134 MB). The catalog then takes ~140 MB of the free
-tier's 500 MB.
+8. Then, in the Supabase SQL editor, one statement per run (`reindex … concurrently` can't run in
+the transaction the editor wraps a script in): `reindex table concurrently public.movie_people;`,
+then the same for `movie_credits`, `movie_films` and `movie_film_titles`. Indexes built row by row
+are ~25% larger than fresh ones (locally 163 MB → 134 MB). The catalog then takes ~140 MB of the
+free tier's 500 MB.
 
 | Flag | Default | |
 |---|---|---|
@@ -176,6 +209,7 @@ tier's 500 MB.
 | `--dry-run` | | Build (or read) the snapshot and print what would change, write nothing |
 | `--offline` | | Use cached downloads and query results only |
 | `--allow-mass-removal` | | Allow removing over 20% of the covered films' stored credits |
+| `--allow-remote-read` | | Read a non-local database (only with `--build-only` or `--dry-run`; writes are refused) |
 | `--allow-remote` | | Write to a non-local database (owner only) |
 
 ## 2. Degrees puzzles: `content:movies:degrees`
@@ -186,8 +220,9 @@ beat par with a credit the generator ignored.
 
 For each date:
 
-1. **Pool.** The 300 best-known people (`--pool-size`) who are clearly actors in this catalog:
-   at least 6 films, at least 3 of them billed in the top 5.
+1. **Pool.** The 300 best-known people (`--pool-size`, by Wikipedia editions) who are actors
+   (`is_actor`: IMDb or Wikidata says so) and clearly act in this catalog: at least 6 films, at
+   least 3 of them billed in the top 5. Anyone credited can still be a link in a chain.
 2. **Target par.** The seeded rng chooses 2 links (about 55% of days) or 3. If no pair fits the
    target, it falls back to the other.
 3. **Pair.** A start from the pool, then an end from the pool whose shortest chain to the start
@@ -212,8 +247,28 @@ must be a real pair of credits.
 
 **Never overwrites a real puzzle.** A date that already has a `degrees` puzzle is skipped, whoever
 wrote it. Pass `--replace-fixtures` to let real puzzles take over DEV FIXTURE days nobody has played
-(for example after `content:movies:fixtures` filled the coming week). To regenerate an unplayed
-curated day, delete that row yourself first.
+(for example after `content:movies:fixtures` filled the coming week). The one rewrite of a curated
+day is `--repar-unplayed` (below), and only for a day nobody has played whose par the catalog made
+stale. To regenerate an unplayed curated day for any other reason, delete that row yourself first.
+
+**Stale par after a catalog import** (`--repar-unplayed`). More credits can give a stored day's
+pair a chain shorter than its par (locally, after the 60k-film import: 13 of 29 unplayed days;
+Justin Timberlake and Julie Andrews became co-stars through Shrek the Third). `catalog-check`
+lists such days as warnings. `--repar-unplayed` goes through every stored day from `--from`
+(default today) on and recomputes the shortest chain over the current credits
+(`reparDecision` in `lib/degrees-graph.mts`, unit-tested):
+
+- a day someone has played is never touched (its results already count against that par);
+- a DEV FIXTURE day is left alone (`--replace-fixtures` replaces those with real puzzles);
+- par still the shortest: kept;
+- shorter but still 2+ links: par and solution rewritten, same start and end (and the names
+  players were shown);
+- the pair are now co-stars: the day is regenerated by the rules above (seeded by its date,
+  `--spacing` respected).
+
+Writes go through the database function `replace_unplayed_puzzle`, which locks the day, refuses
+it if anyone has started it (even a moment ago) or if it changed since it was read, and only then
+rewrites it in place (the day is never empty). Run it with `--dry-run` first.
 
 **Variety.** Nobody appears as a start or end actor twice within `--spacing` days (default 45).
 Puzzles already stored on either side of the range count towards this.
@@ -228,7 +283,10 @@ from the source code. Rerunning a date against the same catalog reproduces the s
 | `--pool-size` | 300 | Size of the start/end actor pool |
 | `--spacing` | 45 | Days before the same actor can be a start or end again |
 | `--replace-fixtures` | | Also replace DEV FIXTURE puzzles nobody has played |
+| `--repar-unplayed` | | Instead of new days: fix stale par on stored days nobody has played (above); takes `--from`, not `--days` |
 | `--dry-run` | | Print the picks, but write nothing |
+| `--allow-remote-read` | | Read a non-local database (with `--dry-run` only) |
+| `--allow-remote` | | Write to a non-local database (owner only) |
 
 ## 3. Stills: `content:movies:stills`
 
@@ -379,7 +437,7 @@ caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
 
 | Module | What it gives you |
 |---|---|
-| `pipeline.mts` | `pipelineDb({ allowRemote })` (the service-role client, refusing non-local databases by default); `puzzleDateRange(days, from?)` (dates in the game timezone, via `src/core/day.ts`); `contentSeed(gameId, date)`; `selectAllPages(...)` (reads past PostgREST's 1000-row cap); `existingPuzzleDates(...)`; `replaceableFixtureDates(...)` and `deleteFixturePuzzle(...)` (for `--replace-fixtures`); `deleteUnplayedPuzzle(...)` (for `--replace-unplayed`, guarded by the plays foreign key); `newAsset(kind, image)` and `insertPuzzleIfAbsent(db, { gameId, date, puzzle, solution, assets })` (writes a puzzle and its assets, never overwrites, rolls back on a failed asset); `positiveInt` for flags |
+| `pipeline.mts` | `pipelineDb({ allowRemote, allowRemoteRead })` (the service-role client: refuses non-local databases by default, read-write with `allowRemote`, and with `allowRemoteRead` a `readOnlyDb` that throws on any insert, upsert, update, delete or function call before it is sent); `puzzleDateRange(days, from?)` (dates in the game timezone, via `src/core/day.ts`); `contentSeed(gameId, date)`; `selectAllPages(...)` (reads past PostgREST's 1000-row cap); `existingPuzzleDates(...)`; `replaceableFixtureDates(...)` and `deleteFixturePuzzle(...)` (for `--replace-fixtures`); `deleteUnplayedPuzzle(...)` (for `--replace-unplayed`, guarded by the plays foreign key); `newAsset(kind, image)` and `insertPuzzleIfAbsent(db, { gameId, date, puzzle, solution, assets })` (writes a puzzle and its assets, never overwrites, rolls back on a failed asset); `positiveInt` for flags |
 | `http.mts` | `fetchWithRetry` (timeouts, backoff with jitter, `Retry-After`, a descriptive User-Agent), `mapPool`, `chunk` |
 | `imdb.mts` | IMDb's datasets: download when newer, streaming gzip line reader, line parsers, compact `IntTable` |
 | `qlever.mts` | QLever (bulk Wikidata) queries, a streaming RFC 4180 CSV parser, cached results with a fallback |
@@ -388,8 +446,8 @@ caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
 | `catalog-snapshot.mts` | The snapshot format (zod-validated NDJSON) |
 | `catalog-plan.mts` | Pure apply planning: `planCatalogWrites` (ids never change), `planTitles`, `planCredits` |
 | `catalog-apply.mts` | The apply step: plan against the target, write in batches, check |
-| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits |
-| `degrees-graph.mts` | Pure graph code: `buildGraph`, `linkDistances` (BFS), `bestShortestPath`, `actorPool`, `pickPuzzle` |
+| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits; and the stale-par warning (`staleDegreesDays` over `chainNeighbourhood`, the credits a shorter chain could use, read without loading the whole graph) |
+| `degrees-graph.mts` | Pure graph code: `buildGraph`, `linkDistances` (BFS), `bestShortestPath`, `actorPool`, `pickPuzzle`, `reparDecision` |
 | `tmdb.mts` | The TMDB client (`tmdbClient`, `fetchFilmStills`, `encodeStill`, `rankBackdrops`) |
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |
 | `film-stills.mts` | `stillsSource()`: a film's stills from the cache, else TMDB (what the image pipelines use) |
@@ -408,8 +466,10 @@ header.
 
 The pure parts are unit-tested with no network or database: the retry and backoff logic, IMDb line
 parsing and streaming, the CSV parser, catalog rules (selection, titles, names, genres, cast
-billing), the write planner (including a randomized test that stored ids never change), the id
-checks, the graph and puzzle picker, TMDB ranking and re-encoding (including a
+billing, who counts as an actor), the write planner (including a randomized test that stored ids
+never change), the id checks and the stale-par check, the read-only database guard, the graph,
+puzzle picker and stale-par decisions, TMDB ranking and re-encoding (including a
 check that metadata is stripped), the Degrees schema, the Fade to Color level maths (on synthetic
 images) and the movie-screencaps.com page and directory parsing. Run them with `npx vitest run scripts`.
-The catalog's database side (search, names, fame, the id guard) is covered by `npm run test:db`.
+The catalog's database side (search tiers, no-spaces keys, names, fame, the id guard,
+`replace_unplayed_puzzle`) is covered by `npm run test:db`.

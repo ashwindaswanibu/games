@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { chainCreditPairs, collectCatalogRefs, compareIdBaseline, type IdBaseline } from "./catalog-check.mjs";
+import { chainCreditPairs, collectCatalogRefs, compareIdBaseline, staleDegreesDays, type IdBaseline, type StoredDegreesDay } from "./catalog-check.mjs";
+import { buildGraph } from "./degrees-graph.mjs";
 
 describe("compareIdBaseline", () => {
   const baseline: IdBaseline = {
@@ -55,5 +56,57 @@ describe("chainCreditPairs", () => {
       [200, 2],
       [200, 3],
     ]);
+  });
+});
+
+describe("staleDegreesDays", () => {
+  // 1 ─(100)─ 2 ─(101)─ 3, and a new film 102 puts 1 and 3 together.
+  const graph = buildGraph([
+    { filmId: 100, personId: 1, billing: 0 },
+    { filmId: 100, personId: 2, billing: 1 },
+    { filmId: 101, personId: 2, billing: 0 },
+    { filmId: 101, personId: 3, billing: 1 },
+    { filmId: 101, personId: 4, billing: 2 },
+    { filmId: 102, personId: 1, billing: 0 },
+    { filmId: 102, personId: 3, billing: 1 },
+  ]);
+  const person = (id: number) => ({ id, name: `P${id}` });
+  const day = (date: string, start: number, end: number, par: number, extra: Partial<StoredDegreesDay> = {}): StoredDegreesDay => ({
+    date,
+    start: person(start),
+    end: person(end),
+    par,
+    fixture: false,
+    played: false,
+    ...extra,
+  });
+
+  it("lists unplayed days from today on whose pair is now closer than par, with what --repar-unplayed will do", () => {
+    const stale = staleDegreesDays(
+      [
+        day("2026-10-08", 1, 3, 3), // now co-stars: regenerate
+        day("2026-10-09", 2, 4, 3), // now 1 link too: regenerate
+        day("2026-10-10", 1, 4, 3), // 1 → 102 → 3 → 101 → 4 is 2 links: par 2
+        day("2026-10-11", 1, 4, 2), // still 2: fine
+      ],
+      graph,
+      "2026-10-08",
+      2,
+    );
+    expect(stale.map((d) => [d.date, d.shortest, d.decision])).toEqual([
+      ["2026-10-08", 1, { action: "regenerate" }],
+      ["2026-10-09", 1, { action: "regenerate" }],
+      ["2026-10-10", 2, { action: "repar", par: 2 }],
+    ]);
+  });
+
+  it("ignores played days and days before today, and marks DEV FIXTURE days as left alone", () => {
+    const stale = staleDegreesDays(
+      [day("2026-10-07", 1, 3, 3), day("2026-10-08", 1, 3, 3, { played: true }), day("2026-10-09", 1, 3, 3, { fixture: true })],
+      graph,
+      "2026-10-08",
+      2,
+    );
+    expect(stale.map((d) => [d.date, d.decision])).toEqual([["2026-10-09", { action: "skip", reason: "fixture" }]]);
   });
 });

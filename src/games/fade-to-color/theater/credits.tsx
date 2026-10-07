@@ -6,6 +6,7 @@ import { APP_NAME } from "@/config";
 import type { PuzzleDate } from "@/core/day";
 import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
+import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import type { FilmDetails } from "@/games/_movies/schemas";
 import { fadeToColor, LEVEL_COUNT } from "../logic";
 import styles from "./theater.module.css";
@@ -37,8 +38,8 @@ function describeGrid(marks: readonly string[]): string {
 
 /**
  * The end card under the reel: the film's title cut out of its own barcode, who made it, the
- * result, sharing (spoiler-free) and everyone else's results. (The frames' source is credited on
- * the reel's edge.)
+ * result, sharing (spoiler-free), everyone else's results and the catalog's data credit (IMDb).
+ * (The frames' source is credited on the reel's edge.)
  */
 export function Credits(props: {
   film: FilmDetails;
@@ -94,6 +95,7 @@ export function Credits(props: {
           How everyone did
         </button>
       </div>
+      <p className={styles.dataCredit}>{IMDB_ATTRIBUTION}</p>
       {showFriends && <FriendsPanel friends={friends} viewerId={viewerId} onClose={() => setShowFriends(false)} />}
     </section>
   );

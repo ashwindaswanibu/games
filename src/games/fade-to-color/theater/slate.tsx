@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import { filmSearchResponseSchema, type FilmSearchHit } from "@/games/_movies/schemas";
 import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
 import styles from "./theater.module.css";
@@ -115,6 +116,12 @@ export function Slate(props: {
                 </li>
               );
             })}
+          {status === "ready" && results.length > 0 && (
+            // IMDb's required credit wherever its data is shown (the end card repeats it for everyone).
+            <li role="presentation" aria-hidden className={styles.listCredit} onMouseDown={(event) => event.preventDefault()}>
+              {IMDB_ATTRIBUTION}
+            </li>
+          )}
           {status === "ready" && results.length === 0 && (
             <li role="presentation" className={styles.listNote}>
               No films match &ldquo;{search.query.trim()}&rdquo;.

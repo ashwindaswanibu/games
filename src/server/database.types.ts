@@ -3,8 +3,9 @@
  * generated output. Deliberately tighter where the generator can't infer: `plays.status` and
  * `puzzle_assets.mime` are the CHECK-constrained unions; `leaderboard().avg_score`,
  * `search_films().year`, `search_films().aka` and `search_people().known_for` are nullable;
- * `movie_film_titles.kind` is its CHECK-constrained union; generated `search_key` and `fame`
- * columns are never null (the values they derive from are NOT NULL).
+ * `movie_film_titles.kind` is its CHECK-constrained union; generated `search_key`, `compact_key`
+ * and `fame` columns are never null (the values they derive from are NOT NULL);
+ * `replace_unplayed_puzzle()` returns one of its four outcomes.
  * After a migration, run `npm run db:types` and diff against this file.
  */
 
@@ -223,6 +224,7 @@ export type Database = {
           kind: MovieFilmTitleKind;
           fame: number;
           search_key: string;
+          compact_key: string;
         };
         Insert: {
           film_id: number;
@@ -230,6 +232,7 @@ export type Database = {
           kind: MovieFilmTitleKind;
           fame?: number;
           search_key?: never;
+          compact_key?: never;
         };
         Update: {
           film_id?: number;
@@ -237,6 +240,7 @@ export type Database = {
           kind?: MovieFilmTitleKind;
           fame?: number;
           search_key?: never;
+          compact_key?: never;
         };
         Relationships: [
           {
@@ -255,7 +259,9 @@ export type Database = {
           popularity: number;
           wikidata_id: string | null;
           imdb_id: string | null;
+          is_actor: boolean;
           search_key: string;
+          compact_key: string;
         };
         Insert: {
           id?: number;
@@ -263,7 +269,9 @@ export type Database = {
           popularity?: number;
           wikidata_id?: string | null;
           imdb_id?: string | null;
+          is_actor?: boolean;
           search_key?: never;
+          compact_key?: never;
         };
         Update: {
           id?: number;
@@ -271,7 +279,9 @@ export type Database = {
           popularity?: number;
           wikidata_id?: string | null;
           imdb_id?: string | null;
+          is_actor?: boolean;
           search_key?: never;
+          compact_key?: never;
         };
         Relationships: [];
       };
@@ -370,6 +380,10 @@ export type Database = {
           known_for: string | null;
         }[];
       };
+      replace_unplayed_puzzle: {
+        Args: { p_game_id: string; p_date: string; p_expected_payload: Json; p_payload: Json; p_solution: Json };
+        Returns: ReplaceUnplayedPuzzleOutcome;
+      };
       orphan_auth_user_for_email: {
         Args: { p_email: string };
         Returns: {
@@ -413,3 +427,6 @@ export type MovieFilmTitleRow = Database["public"]["Tables"]["movie_film_titles"
 
 /** `movie_film_titles.kind`: the display title, IMDb's titles, Wikidata/Wikipedia names, or a former display title. */
 export type MovieFilmTitleKind = "display" | "original" | "alias" | "former";
+
+/** `replace_unplayed_puzzle()`: done, or why not (no puzzle; someone has played it; rewritten since it was read). */
+export type ReplaceUnplayedPuzzleOutcome = "replaced" | "missing" | "played" | "changed";

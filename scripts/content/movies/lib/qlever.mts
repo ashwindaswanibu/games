@@ -128,6 +128,15 @@ SELECT ?person ?en ?mul ?links ?nm WHERE {
   OPTIONAL { ?person wdt:P345 ?nm FILTER(STRSTARTS(?nm, "nm")) }
 }`,
   },
+  actors: {
+    name: "actors",
+    columns: ["person"],
+    // Everyone with an acting occupation: actor (Q33999), film actor (Q10800557), voice actor (Q2405480).
+    sparql: `${PREFIXES}
+SELECT DISTINCT ?person WHERE {
+  ?person wdt:P106 ?occupation . VALUES ?occupation { wd:Q33999 wd:Q10800557 wd:Q2405480 }
+}`,
+  },
   imdbPeople: {
     name: "imdb-people",
     columns: ["person", "nm", "en", "mul", "links"],

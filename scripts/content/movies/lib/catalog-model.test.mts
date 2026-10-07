@@ -6,6 +6,7 @@ import {
   genreDisplayName,
   imdbCastToKeep,
   imdbGenreNames,
+  isActor,
   isLatinText,
   keepStoredOrder,
   lowestVoteBar,
@@ -249,5 +250,25 @@ describe("mergeCast", () => {
       { personId: 1, billing: 0 },
       { personId: 2, billing: null },
     ]);
+  });
+});
+
+describe("isActor", () => {
+  it("is true when IMDb lists actor or actress among the professions, in any position", () => {
+    expect(isActor(["actor", "producer"], false)).toBe(true);
+    expect(isActor(["producer", "actor", "writer"], false)).toBe(true); // Tom Hanks: IMDb lists producer first
+    expect(isActor(["music_artist", "actress", "composer"], false)).toBe(true);
+  });
+
+  it("is true when Wikidata gives an acting occupation", () => {
+    expect(isActor([], true)).toBe(true);
+    expect(isActor(["director", "writer"], true)).toBe(true);
+  });
+
+  it("is false otherwise", () => {
+    expect(isActor([], false)).toBe(false);
+    expect(isActor(["camera_department", "miscellaneous", "soundtrack"], false)).toBe(false); // George W. Bush
+    expect(isActor(["director", "writer", "editor"], false)).toBe(false); // Jean-Luc Godard
+    expect(isActor(["actors"], false)).toBe(false);
   });
 });

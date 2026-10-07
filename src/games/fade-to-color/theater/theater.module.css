@@ -749,6 +749,17 @@
   padding: 10px 12px;
 }
 
+/* The data credit under the hits: fine print, not uppercase (it quotes a URL). */
+.listCredit {
+  margin-top: 4px;
+  padding: 8px 12px 4px;
+  border-top: 1px solid var(--hair);
+  font: 500 9.5px/1.4 var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+  cursor: default;
+}
+
 .slateActions {
   flex: none;
   display: flex;
@@ -1015,6 +1026,13 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.dataCredit {
+  margin: 14px 0 0;
+  font: 500 9.5px/1.4 var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
 }
 
 .byline {

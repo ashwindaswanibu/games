@@ -3,8 +3,8 @@
  * username emails (including renames, which move the sign-in email), the lock-down of the public
  * API roles, what Supabase Auth's public sign-up can and can't do, the password-change guard,
  * display-name rules, puzzle upsert semantics, optimistic concurrency on plays, check constraints,
- * the leaderboard/streak functions (with the spoiler wall), puzzle assets, and the movie catalog
- * search.
+ * the leaderboard/streak functions (with the spoiler wall), puzzle assets, the movie catalog
+ * search, and rewriting a puzzle nobody has played (`replace_unplayed_puzzle`).
  *
  * Runs against a live Supabase (local by default) and cleans up after itself.
  *   npm run db:start && npm run test:db
@@ -227,6 +227,34 @@ async function main() {
   await profileChecks(alice);
   await assetChecks(alice.client);
   await catalogChecks(alice.client);
+  await replacePuzzleChecks(alice);
+}
+
+// --- Rewriting a puzzle nobody has played (degrees --repar-unplayed) ---------------------------
+async function replacePuzzleChecks(alice: Player) {
+  const date = (n: number) => `2001-03-${String(n).padStart(2, "0")}`;
+  await admin.from("puzzles").insert([
+    { game_id: GAME, puzzle_date: date(1), payload: { par: 3 }, solution: { path: 3 } },
+    { game_id: GAME, puzzle_date: date(2), payload: { par: 3 }, solution: { path: 3 } },
+  ]);
+  await admin.from("plays").insert({ user_id: alice.id, game_id: GAME, puzzle_date: date(2), state: {} });
+  const replace = (n: number, expected: object) =>
+    admin.rpc("replace_unplayed_puzzle", { p_game_id: GAME, p_date: date(n), p_expected_payload: expected, p_payload: { par: 2 }, p_solution: { path: 2 } });
+  const stale = await replace(1, { par: 4 });
+  check("replace_unplayed_puzzle refuses when the payload changed since it was read", stale.data === "changed", stale);
+  const done = await replace(1, { par: 3 });
+  const { data: row } = await admin.from("puzzles").select("payload, solution").eq("game_id", GAME).eq("puzzle_date", date(1)).single();
+  check(
+    "replace_unplayed_puzzle rewrites an unplayed puzzle in place",
+    done.data === "replaced" && (row?.payload as { par: number }).par === 2 && (row?.solution as { path: number }).path === 2,
+    { done, row },
+  );
+  const played = await replace(2, { par: 3 });
+  const { data: kept } = await admin.from("puzzles").select("payload").eq("game_id", GAME).eq("puzzle_date", date(2)).single();
+  check("replace_unplayed_puzzle never touches a played puzzle", played.data === "played" && (kept?.payload as { par: number }).par === 3, { played, kept });
+  check("replace_unplayed_puzzle reports a missing day", (await replace(9, { par: 3 })).data === "missing");
+  const { error: denied } = await alice.client.rpc("replace_unplayed_puzzle", { p_game_id: GAME, p_date: date(1), p_expected_payload: { par: 2 }, p_payload: {}, p_solution: {} });
+  check("players cannot call replace_unplayed_puzzle() directly", Boolean(denied));
 }
 
 // --- Public roles: the publishable key and a user session reach nothing in `public` -----------
@@ -466,6 +494,25 @@ async function catalogChecks(player: SupabaseClient) {
   const hit = (people as { name: string; known_for: string | null }[] | null)?.[0];
   check("people search finds a person with their best-known film", hit?.name === `Ana ${W}` && hit.known_for === `${W} Returns`, people);
 
+  // People rank by popularity: an exact name leads unless another has ten times the editions.
+  const { data: namesakes } = await admin
+    .from("movie_people")
+    .insert([
+      { name: `Dee${tag}`, popularity: 0 },
+      { name: `Dee${tag} Padu`, popularity: 89 },
+      { name: `Shah${tag} Rukh`, popularity: 50 },
+    ])
+    .select("id");
+  personIds.push(...(namesakes ?? []).map((p) => p.id));
+  const searchPeople = async (q: string) => {
+    const { data, error } = await admin.rpc("search_people", { p_query: q, p_limit: 5 });
+    if (error) throw new Error(`search_people failed: ${error.message}`);
+    return (data as { name: string }[]).map((p) => p.name);
+  };
+  const dee = await searchPeople(`dee${tag}`);
+  check("people search ranks a far better-known name above an exact one", dee[0] === `Dee${tag} Padu` && dee[1] === `Dee${tag}`, dee);
+  check("people search ignores spaces", (await searchPeople(`shah${tag}rukh`))[0] === `Shah${tag} Rukh`);
+
   // Every name a film is known by is searchable; fame (IMDb votes, else Wikipedia editions) ranks.
   const { error: aliasError } = await admin.from("movie_film_titles").insert([
     { film_id: idOf(`${W} Returns`)!, title: `Zq${tag} Rises`, kind: "alias" },
@@ -491,14 +538,36 @@ async function catalogChecks(player: SupabaseClient) {
     Math.abs((fameRow?.fame ?? 0) - Math.log(1 + 90 * 437)) < 1e-3 && (titleFame ?? []).length === 2 && titleFame!.every((t) => t.fame === fameRow?.fame),
     { fameRow, titleFame },
   );
-  await admin.from("movie_films").update({ imdb_votes: 5_000_000 }).eq("id", idOf(`Cinematography of ${W}`)!);
+  await admin.from("movie_films").update({ imdb_votes: 5_000_000 }).in("id", [idOf(`${W} Returns`)!, idOf(`Cinematography of ${W}`)!]);
   const reranked = (await searchHits(W)).map((r) => r.title);
-  // An exact title keeps the lead over a prefix match unless that one has ten times the votes.
+  // An exact title keeps the lead over a name that starts with the query unless that one has ten
+  // times the votes; a name in which only a later word starts with it never leads an exact title.
   check(
-    "IMDb votes outrank Wikipedia editions, and a far better-known prefix match outranks an exact title",
-    reranked[0] === `Cinematography of ${W}` && reranked[1] === W,
+    "IMDb votes outrank Wikipedia editions; a far better-known name starting with the query outranks an exact title, a later-word match never does",
+    reranked[0] === `${W} Returns` && reranked[1] === W && reranked[2] === `Cinematography of ${W}`,
     reranked,
   );
+
+  // Spaces don't matter ("xmen" → X-Men), and a film's own title beats another film's alias.
+  const more = [
+    { title: `Q${tag}-Men`, year: 2000, popularity: 40 },
+    { title: `Bench${tag}`, year: 2014, popularity: 5 },
+    { title: `Bench${tag} - State Vs A Nobody`, year: 2025, popularity: 20 },
+  ];
+  const { data: moreRows } = await admin.from("movie_films").insert(more).select("id, title");
+  filmIds.push(...(moreRows ?? []).map((f) => f.id));
+  const moreId = (title: string) => moreRows?.find((f) => f.title === title)?.id;
+  check("a title is found without its spaces or punctuation", (await searchHits(`q${tag}men`))[0]?.title === `Q${tag}-Men`);
+  check("…also as the start of a name", (await searchHits(`q${tag}m`))[0]?.title === `Q${tag}-Men`);
+  await admin.from("movie_film_titles").insert({ film_id: moreId(`Bench${tag} - State Vs A Nobody`)!, title: `Bench${tag}`, kind: "alias" });
+  const bench = await searchHits(`bench${tag}`);
+  check(
+    "an exact display title beats another film's exact alias",
+    bench[0]?.title === `Bench${tag}` && bench[1]?.title === `Bench${tag} - State Vs A Nobody` && bench[1].aka === `Bench${tag}`,
+    bench,
+  );
+  await admin.from("movie_films").update({ imdb_votes: 1_000_000 }).eq("id", moreId(`Bench${tag} - State Vs A Nobody`)!);
+  check("…unless that film has ten times the votes", (await searchHits(`bench${tag}`))[0]?.title === `Bench${tag} - State Vs A Nobody`);
   const { data: renamed } = await admin.from("movie_films").update({ title: `${W} Forever` }).eq("id", idOf(`The ${W} Story`)!).select("id");
   const formerHits = await searchHits(`the ${W} story`);
   check(
@@ -532,6 +601,7 @@ async function catalogChecks(player: SupabaseClient) {
   check("film search can be limited to one person's films", JSON.stringify(filmography) === JSON.stringify([`${W} Returns`, W]), filmography);
   const notTheirs = await searchHits(`cinematography of ${W}`, { p_person: person!.id });
   check("…and leaves out films they aren't in", notTheirs.length === 0, notTheirs);
+  check("…ignoring spaces there too", (await searchHits(`${W}returns`, { p_person: person!.id }))[0]?.title === `${W} Returns`);
 
   // Catalog ids never change: stored puzzles and plays reference them.
   const { error: filmIdChange } = await admin.from("movie_films").update({ id: 2_000_000_000 }).eq("id", idOf(W)!);

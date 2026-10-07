@@ -266,6 +266,24 @@ export function keepStoredOrder(stored: readonly string[], incoming: readonly st
 }
 
 // ---------------------------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------------------------
+
+/** IMDb `primaryProfession` values that make someone an actor. */
+const ACTING_PROFESSIONS = new Set(["actor", "actress"]);
+
+/**
+ * Whether a person acts, which Degrees requires of its start and end actors: IMDb lists actor or
+ * actress among their primary professions (IMDb gives up to three, in no order of prominence), or
+ * Wikidata gives them the occupation actor, film actor or voice actor (`wikidataActor`). Pure.
+ */
+export function isActor(imdbProfessions: Iterable<string>, wikidataActor: boolean): boolean {
+  if (wikidataActor) return true;
+  for (const profession of imdbProfessions) if (ACTING_PROFESSIONS.has(profession)) return true;
+  return false;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Cast billing
 // ---------------------------------------------------------------------------------------------
 

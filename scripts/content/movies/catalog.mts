@@ -6,6 +6,8 @@
  *   npm run content:movies:catalog -- --dry-run                   build, then print what would change
  *   npm run content:movies:catalog -- --build-only                build the snapshot only
  *   npm run content:movies:catalog -- --apply-only                apply the last snapshot (no downloads)
+ *   npm run content:movies:catalog -- --build-only --allow-remote-read   build against the hosted catalog (read-only)
+ *   npm run content:movies:catalog -- --apply-only --dry-run --allow-remote-read   what applying it would change there
  *   npm run content:movies:catalog -- --apply-only --allow-remote apply it to the hosted database (owner only)
  *
  * Two steps (see scripts/content/movies/README.md, section 1):
@@ -17,6 +19,10 @@
  *     films and people keep their ids (stored puzzles and plays reference them); nothing is
  *     deleted except credits no source lists any more (never one a stored Degrees chain uses).
  *     The id contract is checked afterwards (`catalog-check`) and a failure exits non-zero.
+ *
+ * A non-local database (the hosted one) is refused unless the run passes `--allow-remote-read`
+ * (only with `--build-only` or `--dry-run`: the client refuses every write) or `--allow-remote`
+ * (writes; the owner's call). The rollout order is in design/catalog-rollout.md.
  */
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -42,6 +48,7 @@ const { values: args } = parseArgs({
     offline: { type: "boolean", default: false },
     "allow-mass-removal": { type: "boolean", default: false },
     "allow-remote": { type: "boolean", default: false },
+    "allow-remote-read": { type: "boolean", default: false },
   },
   strict: true,
 });
@@ -60,8 +67,13 @@ async function main() {
     extraMinVotes: positiveInt(args["extra-min-votes"], "extra-min-votes", { max: 10_000_000 }),
     currentYear: new Date().getUTCFullYear(),
   };
-  // Refuses a non-local database before minutes of downloads unless --allow-remote.
-  const db = pipelineDb({ allowRemote: args["allow-remote"] });
+  const writes = !args["build-only"] && !args["dry-run"];
+  if (args["allow-remote-read"] && !args["allow-remote"] && writes) {
+    throw new Error("--allow-remote-read only reads: use it with --build-only or --dry-run. Applying to a non-local database needs --allow-remote (owner only).");
+  }
+  // Refuses a non-local database before minutes of downloads unless a flag allows it; with
+  // --allow-remote-read the client refuses every write.
+  const db = pipelineDb({ allowRemote: args["allow-remote"], allowRemoteRead: args["allow-remote-read"] });
   const started = Date.now();
 
   let snapshot;
@@ -103,6 +115,7 @@ async function main() {
     return;
   }
   for (const note of report.check?.notes ?? []) log(`  · ${note}`);
+  for (const warning of report.check?.warnings ?? []) console.warn(`  ! ${warning}`);
   if (report.check?.problems.length) {
     for (const problem of report.check.problems.slice(0, 50)) console.error(`  ✗ ${problem}`);
     throw new Error(`The catalog id contract is broken (${report.check.problems.length} problems). Baseline: ${report.baselinePath}`);

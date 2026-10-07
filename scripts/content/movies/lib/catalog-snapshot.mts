@@ -12,7 +12,8 @@ import { z } from "zod";
  * identical content. Stored as NDJSON plus a `meta.json` summary; validated with zod on read.
  */
 
-export const SNAPSHOT_VERSION = 1;
+/** 2: people carry `isActor`. */
+export const SNAPSHOT_VERSION = 2;
 
 const qid = z.string().regex(/^Q[1-9][0-9]*$/);
 const tt = z.string().regex(/^tt[0-9]{7,10}$/);
@@ -49,6 +50,8 @@ export const snapshotPersonSchema = z.object({
   imdbId: nm.nullable(),
   name: z.string().min(1).max(200),
   popularity: z.number().int().min(0),
+  /** IMDb or Wikidata says they act (see `isActor`); Degrees' start and end actors must. */
+  isActor: z.boolean(),
 });
 export type SnapshotPerson = z.infer<typeof snapshotPersonSchema>;
 
@@ -103,7 +106,11 @@ export async function writeSnapshot(dir: string, snapshot: Snapshot): Promise<vo
 
 /** Reads and validates a snapshot, including that every credited person is in it. */
 export async function readSnapshot(dir: string): Promise<Snapshot> {
-  const meta = snapshotMetaSchema.parse(JSON.parse(await readFile(join(dir, "meta.json"), "utf8")));
+  const rawMeta = JSON.parse(await readFile(join(dir, "meta.json"), "utf8")) as { version?: unknown };
+  if (rawMeta.version !== SNAPSHOT_VERSION) {
+    throw new Error(`The snapshot in ${dir} is format ${String(rawMeta.version)}; this importer reads format ${SNAPSHOT_VERSION}. Build it again (without --apply-only).`);
+  }
+  const meta = snapshotMetaSchema.parse(rawMeta);
   const films = await readNdjson(join(dir, "films.ndjson"), snapshotFilmSchema);
   const people = await readNdjson(join(dir, "people.ndjson"), snapshotPersonSchema);
   const keys = new Set(people.map((p) => p.key));

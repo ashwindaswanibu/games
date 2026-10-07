@@ -66,7 +66,12 @@ describe("lines", () => {
     expect(parsePrincipalLine("tt0068646\tx\tnm0000008\tactor\t\\N\t\\N")).toBeNull();
     expect(parseCrewLine("tt0133093\tnm0905154,nm0905152,nm0905154\tnm0905152")).toEqual({ tconst: 133093, directors: [905154, 905152] });
     expect(parseCrewLine("tt0133093\t\\N\t\\N")).toEqual({ tconst: 133093, directors: [] });
-    expect(parseNameLine("nm0451321\tShah Rukh Khan\t1965\t\\N\tactor,producer\ttt0112870")).toEqual({ nconst: 451321, name: "Shah Rukh Khan" });
+    expect(parseNameLine("nm0451321\tShah Rukh Khan\t1965\t\\N\tactor,producer\ttt0112870")).toEqual({
+      nconst: 451321,
+      name: "Shah Rukh Khan",
+      professions: ["actor", "producer"],
+    });
+    expect(parseNameLine("nm0000001\tSomeone\t\\N\t\\N\t\\N\t\\N")?.professions).toEqual([]);
   });
 });
 

@@ -1,6 +1,12 @@
+import { today as todayInGameTimezone } from "@/core/day";
 import type { Json } from "@/server/database.types";
+import { isFixturePayload } from "../../lib/fixtures.mjs";
+import { buildGraph, linkDistances, reparDecision, type CastGraph, type Credit, type ReparDecision } from "./degrees-graph.mjs";
 import { chunk } from "./http.mjs";
 import { selectAllById, selectAllPages, type ContentDb } from "./pipeline.mjs";
+
+/** Ids per `in (...)` filter, keeping request URLs short. */
+const ID_CHUNK = 200;
 
 /**
  * The catalog's id contract, checked: stored puzzles, solutions and plays reference films and
@@ -12,6 +18,10 @@ import { selectAllById, selectAllPages, type ContentDb } from "./pipeline.mjs";
  *     with the same non-empty Wikidata, IMDb and TMDB ids.
  *  2. Every catalog id any stored puzzle, solution or play references still exists.
  *  3. Every link of a stored Degrees solution is still a credit pair, so the chain replays.
+ *
+ * And one warning (not a failure: the import is right, the puzzles need catching up): unplayed
+ * Degrees days from today on whose start and end now have a chain shorter than their par. More
+ * credits make shorter chains; `degrees --repar-unplayed` fixes those days.
  */
 
 export interface FilmIds {
@@ -104,8 +114,21 @@ export function chainCreditPairs(startId: number, links: ReadonlyArray<{ film: {
 
 const pairKey = (filmId: number, personId: number) => `${filmId}:${personId}`;
 
+/** A stored Degrees day, as far as par is concerned. */
+export interface StoredDegreesDay {
+  date: string;
+  start: { id: number; name: string };
+  end: { id: number; name: string };
+  par: number;
+  fixture: boolean;
+  /** Someone has started it. */
+  played: boolean;
+}
+
 export interface StoredReferences {
   refs: CatalogRefs;
+  /** Every stored Degrees day whose payload parses. */
+  degreesDays: StoredDegreesDay[];
   /** Credit pairs of stored Degrees solutions: they must stay credits. */
   solutionPairs: [number, number][];
   /** Credit pairs of Degrees chains players built. Never removed either (their history replays). */
@@ -137,6 +160,7 @@ export async function loadStoredReferences(db: ContentDb): Promise<StoredReferen
   const solutionPairs: [number, number][] = [];
   const playPairs: [number, number][] = [];
   const degreesStart = new Map<string, number>();
+  const degreesDays: StoredDegreesDay[] = [];
 
   for (const row of puzzles) {
     collectCatalogRefs(row.payload, refs);
@@ -150,10 +174,16 @@ export async function loadStoredReferences(db: ContentDb): Promise<StoredReferen
     if (row.game_id === "degrees") {
       const puzzle = degreesPuzzleSchema.safeParse(row.payload);
       const solution = degreesSolutionSchema.safeParse(row.solution);
-      if (puzzle.success) degreesStart.set(row.puzzle_date, puzzle.data.start.id);
+      if (puzzle.success) {
+        degreesStart.set(row.puzzle_date, puzzle.data.start.id);
+        const { start, end, par } = puzzle.data;
+        degreesDays.push({ date: row.puzzle_date, start, end, par, fixture: isFixturePayload(row.payload), played: false });
+      }
       if (puzzle.success && solution.success) solutionPairs.push(...chainCreditPairs(puzzle.data.start.id, solution.data.path));
     }
   }
+  const playedDegrees = new Set(plays.filter((row) => row.game_id === "degrees").map((row) => row.puzzle_date));
+  for (const day of degreesDays) day.played = playedDegrees.has(day.date);
   for (const row of plays) {
     collectCatalogRefs(row.state, refs);
     if (row.game_id !== "degrees") continue;
@@ -163,13 +193,84 @@ export async function loadStoredReferences(db: ContentDb): Promise<StoredReferen
       playPairs.push(...chainCreditPairs(start, links.filter((l) => typeof l?.film?.id === "number" && typeof l?.person?.id === "number")));
     }
   }
-  return { refs, solutionPairs, playPairs, unreadable, puzzles: puzzles.length, plays: plays.length };
+  return { refs, degreesDays, solutionPairs, playPairs, unreadable, puzzles: puzzles.length, plays: plays.length };
+}
+
+/** An unplayed Degrees day whose pair is now closer than its par. */
+export interface StaleDegreesDay extends StoredDegreesDay {
+  shortest: number;
+  /** What `degrees --repar-unplayed` will do with it. */
+  decision: ReparDecision;
+}
+
+/**
+ * Unplayed days from `today` on whose start and end are now fewer than `par` links apart in
+ * `graph`. `graph` needs every credit a chain of up to par − 1 links between them could use (see
+ * `chainNeighbourhood`). Pure.
+ */
+export function staleDegreesDays(days: readonly StoredDegreesDay[], graph: CastGraph, today: string, minPar: number): StaleDegreesDay[] {
+  return days.flatMap((day) => {
+    if (day.played || day.date < today) return [];
+    const shortest = linkDistances(graph, day.start.id, day.par - 1).get(day.end.id);
+    if (shortest === undefined) return [];
+    return [{ ...day, shortest, decision: reparDecision({ par: day.par, shortest, played: false, fixture: day.fixture }, minPar) }];
+  });
+}
+
+/**
+ * Every credit that a chain of at most `maxLinks` links between two of `people` can use, read from
+ * the database without loading the whole graph. Each film of such a chain is at most
+ * ⌊(maxLinks − 1) / 2⌋ co-star hops from one end, so: expand that many hops from `people`, then
+ * take every film of everyone reached, with its whole cast. (For par 3, a shorter chain has at most
+ * 2 links: the films of the start and the end, and their casts.)
+ */
+export async function chainNeighbourhood(db: ContentDb, people: Iterable<number>, maxLinks: number): Promise<Credit[]> {
+  const credits: Credit[] = [];
+  let frontier = [...new Set(people)];
+  const seenPeople = new Set(frontier);
+  const seenFilms = new Set<number>();
+  const hops = Math.max(0, Math.floor((maxLinks - 1) / 2));
+  for (let hop = 0; hop <= hops && frontier.length > 0; hop++) {
+    const films: number[] = [];
+    for (const part of chunk(frontier, ID_CHUNK)) {
+      const rows = await selectAllPages<{ film_id: number; person_id: number }>((from, to) =>
+        db.from("movie_credits").select("film_id, person_id").in("person_id", part).order("person_id").order("film_id").range(from, to),
+      );
+      for (const row of rows) {
+        if (seenFilms.has(row.film_id)) continue;
+        seenFilms.add(row.film_id);
+        films.push(row.film_id);
+      }
+    }
+    const next = new Set<number>();
+    for (const part of chunk(films, ID_CHUNK)) {
+      const rows = await selectAllPages<{ film_id: number; person_id: number; billing: number | null }>((from, to) =>
+        db.from("movie_credits").select("film_id, person_id, billing").in("film_id", part).order("film_id").order("person_id").range(from, to),
+      );
+      for (const row of rows) {
+        credits.push({ filmId: row.film_id, personId: row.person_id, billing: row.billing });
+        if (!seenPeople.has(row.person_id)) next.add(row.person_id);
+      }
+    }
+    for (const id of next) seenPeople.add(id);
+    frontier = [...next];
+  }
+  return credits;
+}
+
+/** Unplayed Degrees days from `today` on with a stale par, read from the database (read-only). */
+export async function findStaleDegreesDays(db: ContentDb, days: readonly StoredDegreesDay[], today: string, minPar: number): Promise<StaleDegreesDay[]> {
+  const open = days.filter((day) => !day.played && day.date >= today && day.par > 1);
+  if (open.length === 0) return [];
+  const maxLinks = Math.max(...open.map((day) => day.par)) - 1;
+  const graph = buildGraph(await chainNeighbourhood(db, open.flatMap((day) => [day.start.id, day.end.id]), maxLinks));
+  return staleDegreesDays(open, graph, today, minPar);
 }
 
 /** Ids among `ids` that `table` doesn't have. */
 async function missingIds(db: ContentDb, table: "movie_films" | "movie_people", ids: ReadonlySet<number>): Promise<number[]> {
   const found = new Set<number>();
-  for (const part of chunk([...ids], 200)) {
+  for (const part of chunk([...ids], ID_CHUNK)) {
     const { data, error } = await db.from(table).select("id").in("id", part);
     if (error) throw new Error(`Reading ${table} failed: ${error.message}`);
     for (const row of data ?? []) found.add(row.id);
@@ -193,12 +294,16 @@ async function missingCredits(db: ContentDb, pairs: readonly [number, number][])
 
 export interface CheckReport {
   problems: string[];
+  /** Not failures: things to follow up (stale Degrees pars). */
+  warnings: string[];
   notes: string[];
 }
 
+
 /** Runs every check; `problems` empty means the contract holds. */
-export async function runCatalogChecks(db: ContentDb, options: { baseline?: IdBaseline; stored?: StoredReferences } = {}): Promise<CheckReport> {
+export async function runCatalogChecks(db: ContentDb, options: { baseline?: IdBaseline; stored?: StoredReferences; today?: string } = {}): Promise<CheckReport> {
   const problems: string[] = [];
+  const warnings: string[] = [];
   const notes: string[] = [];
   if (options.baseline) {
     const current = await readCatalogIds(db);
@@ -219,5 +324,19 @@ export async function runCatalogChecks(db: ContentDb, options: { baseline?: IdBa
       `${new Set(stored.solutionPairs.map(([f, p]) => pairKey(f, p))).size} Degrees solution credit pairs`,
   );
   if (stored.unreadable.length) notes.push(`${stored.unreadable.length} stored puzzles this checkout's game schemas can't read (refs still checked): ${stored.unreadable.slice(0, 5).join("; ")}${stored.unreadable.length > 5 ? "; …" : ""}`);
-  return { problems, notes };
+
+  const { DEGREES_MIN_PAR } = await import("@/games/degrees/schema");
+  const today = options.today ?? todayInGameTimezone();
+  const stale = await findStaleDegreesDays(db, stored.degreesDays, today, DEGREES_MIN_PAR);
+  const open = stored.degreesDays.filter((day) => !day.played && day.date >= today).length;
+  notes.push(`${open} unplayed Degrees days from ${today} on checked for a chain shorter than par: ${stale.length} found`);
+  if (stale.length) {
+    warnings.push(`${stale.length} unplayed Degrees day(s) now have a chain shorter than par. Fix: npm run content:movies:degrees -- --repar-unplayed (--dry-run first)`);
+    for (const day of stale) {
+      const what =
+        day.decision.action === "repar" ? `par becomes ${day.decision.par}` : day.decision.action === "regenerate" ? "the day will be regenerated" : "DEV FIXTURE, left alone";
+      warnings.push(`  Degrees ${day.date} ${day.start.name} → ${day.end.name}: par ${day.par}, but ${day.shortest} link${day.shortest === 1 ? "" : "s"} now (${what})`);
+    }
+  }
+  return { problems, warnings, notes };
 }

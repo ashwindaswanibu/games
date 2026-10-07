@@ -28,6 +28,8 @@
   --mv-surface: var(--mv-ink);
   --mv-fg: var(--mv-cream);
   --mv-fg-dim: rgb(247 239 221 / 0.68);
+  /* Fine print (data credits): quieter than --mv-fg-dim. */
+  --mv-fg-faint: rgb(247 239 221 / 0.5);
   --mv-rule: rgb(247 239 221 / 0.2);
   --mv-field: var(--mv-ink-2);
   --mv-raised: var(--mv-ink-3);
@@ -38,6 +40,7 @@
   --mv-slate: var(--mv-ochre);
   --mv-on-slate: var(--mv-ink);
   --mv-image-bg: #000;
+  --mv-mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
 
   font-family: var(--mv-font-sans), "Archivo", "Arial Narrow", Arial, sans-serif;
   color: var(--mv-fg);
@@ -49,6 +52,7 @@
   --mv-surface: #707070;
   --mv-fg: #ffffff;
   --mv-fg-dim: rgb(255 255 255 / 0.94);
+  --mv-fg-faint: rgb(255 255 255 / 0.78);
   --mv-rule: rgb(255 255 255 / 0.34);
   --mv-field: #5c5c5c;
   --mv-raised: #5c5c5c;
@@ -209,6 +213,15 @@
   gap: 18px;
   padding: 22px 16px 22px;
   color: var(--mv-fg);
+}
+
+/* Data credits at the foot of the board: fine print, never competing with the game. */
+.colophon {
+  margin: 0;
+  padding: 0 16px 14px;
+  font: 500 10px/1.45 var(--mv-mono);
+  letter-spacing: 0.02em;
+  color: var(--mv-fg-faint);
 }
 
 /*
@@ -554,6 +567,15 @@
   padding: 14px;
   font-size: 14px;
   color: var(--mv-fg-dim);
+}
+/* The data credit under the hits. */
+.listCredit {
+  padding: 7px 14px 8px;
+  border-top: 1px solid var(--mv-rule);
+  font: 500 10px/1.45 var(--mv-mono);
+  letter-spacing: 0.02em;
+  color: var(--mv-fg-faint);
+  cursor: default;
 }
 
 /* ─────────────────────────── Reveal strip ─────────────────────────── */

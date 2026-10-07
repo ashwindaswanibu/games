@@ -24,13 +24,31 @@ describe("catalogSearchKey", () => {
 });
 
 describe("matchTier", () => {
-  it("ranks exact, then prefix of the text or a word, then substring", () => {
+  it("ranks exact, then the text starting with the query, then a later word, then substring", () => {
     expect(matchTier("heat", "heat")).toBe(0);
-    expect(matchTier("godf", "the godfather")).toBe(1);
+    expect(matchTier("godf", "godfather")).toBe(1);
     expect(matchTier("the", "the godfather")).toBe(1);
-    expect(matchTier("father", "the godfather")).toBe(2);
+    expect(matchTier("godf", "the godfather")).toBe(2);
+    expect(matchTier("father", "the godfather")).toBe(3);
     expect(matchTier("alien", "the godfather")).toBeNull();
     expect(matchTier("", "heat")).toBeNull();
+  });
+
+  it("ignores spaces: exact at any length, prefix from 3 characters", () => {
+    expect(matchTier("xmen", "x men")).toBe(0);
+    expect(matchTier("walle", "wall e")).toBe(0);
+    expect(matchTier("shahrukh", "shah rukh khan")).toBe(1);
+    expect(matchTier("shah rukhkhan", "shah rukh khan")).toBe(0);
+    expect(matchTier("it", "i t")).toBe(0);
+    // Two characters only match the spaced key, so "it" doesn't find "I, Tonya".
+    expect(matchTier("it", "i tonya")).toBeNull();
+    expect(matchTier("ito", "i tonya")).toBe(1);
+  });
+
+  it("needs 3 characters for a later word or a substring", () => {
+    expect(matchTier("ha", "tom hanks")).toBeNull();
+    expect(matchTier("han", "tom hanks")).toBe(2);
+    expect(matchTier("ank", "tom hanks")).toBe(3);
   });
 });
 
@@ -46,17 +64,41 @@ describe("rankByQuery", () => {
   const rank = (query: string, limit = 8) =>
     rankByQuery(films, query, { text: (f) => f.title, popularity: (f) => f.popularity, limit }).map((f) => f.id);
 
-  it("orders by tier, then popularity, then id", () => {
+  it("never ranks a later-word match above an exact name, however popular", () => {
+    // Godfather (exact) first; the rest only have a later word starting with "godfather".
     expect(rank("godfather")).toEqual([3, 5, 2, 1, 6]);
   });
 
-  it("ignores case and punctuation, treating punctuation as a word break", () => {
+  it("ignores case, punctuation and spaces", () => {
     expect(rank("MR. GODFATHERS")).toEqual([5]);
-    expect(rank("god-father")).toEqual([]);
+    // Spaces are ignored for the whole name, not inside later words.
+    expect(rank("god-father")).toEqual([3]);
   });
 
   it("applies the limit", () => {
     expect(rank("godfather", 2)).toEqual([3, 5]);
+  });
+
+  const people = [
+    { id: 1, name: "Deepika", popularity: 0 },
+    { id: 2, name: "Deepika Padukone", popularity: 89 },
+    { id: 3, name: "Deepika Amin", popularity: 14 },
+    { id: 4, name: "Shah Rukh Khan", popularity: 136 },
+    { id: 5, name: "Salman Khan", popularity: 104 },
+    { id: 6, name: "Khan", popularity: 2 },
+    { id: 7, name: "Aamir Khanna", popularity: 3 },
+  ];
+  const rankPeople = (query: string) =>
+    rankByQuery(people, query, { text: (p) => p.name, popularity: (p) => p.popularity, limit: 8 }).map((p) => p.id);
+
+  it("ranks by popularity: an exact name wins unless the other has ten times the popularity", () => {
+    // ln(1 + 89) > ln(1 + 0) + ln 10, so Deepika Padukone leads; ln(1 + 14) > ln 10 too.
+    expect(rankPeople("deepika")).toEqual([2, 3, 1]);
+    expect(rankPeople("shahrukh")).toEqual([4]);
+  });
+
+  it("keeps later-word matches below the exact name, still by popularity among themselves", () => {
+    expect(rankPeople("khan")).toEqual([6, 4, 5, 7]);
   });
 });
 

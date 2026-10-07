@@ -4,6 +4,7 @@ import {
   directorNames,
   displayTitle,
   imdbGenreNames,
+  isActor,
   lowestVoteBar,
   MAX_NAME,
   orderGenresBySpecificity,
@@ -317,6 +318,13 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     const nconst = parseNconst(row.nm);
     if (qid && nconst !== null && (imdbPeopleNeeded.has(nconst) || castQids.has(qid))) addPerson(row, qid);
   });
+  // Who acts, for Degrees' start and end actors: Wikidata's acting occupations here, IMDb's
+  // professions below.
+  const wdActors = new Set<string>();
+  await csv(CATALOG_QUERIES.actors, (row) => {
+    const qid = qidOf(row.person!);
+    if (qid && wdPeople.has(qid)) wdActors.add(qid);
+  });
   // An IMDb person id → the best-known Wikidata person carrying it.
   const qidOfPerson = new Map<number, string>();
   for (const person of wdPeople.values()) {
@@ -342,16 +350,27 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     const nconst = imdbIdOfQid.get(qid);
     if (person && !(person.en ?? person.mul) && nconst !== undefined) imdbNamesNeeded.add(nconst);
   }
+  // IMDb's professions of everyone a snapshot person can carry: IMDb's cast and directors, and
+  // every IMDb id of a Wikidata person.
+  const professionsNeeded = new Set<number>(imdbPeopleNeeded);
+  for (const person of wdPeople.values()) for (const nconst of person.nconsts) professionsNeeded.add(nconst);
   const imdbNames = new Map<number, string>();
+  const imdbActors = new Set<number>();
   await forEachGzipLine(imdb["name.basics"], (line) => {
     const tab = line.indexOf("\t");
     const nconst = parseNconst(tab < 0 ? line : line.slice(0, tab));
-    if (nconst === null || !imdbNamesNeeded.has(nconst)) return;
+    if (nconst === null || (!imdbNamesNeeded.has(nconst) && !professionsNeeded.has(nconst))) return;
     const parsed = parseNameLine(line);
-    const name = cleanText(parsed?.name);
-    if (name) imdbNames.set(nconst, name);
+    if (!parsed) return;
+    const name = cleanText(parsed.name);
+    if (name && imdbNamesNeeded.has(nconst)) imdbNames.set(nconst, name);
+    if (isActor(parsed.professions, false)) imdbActors.add(nconst);
   });
-  log(`  people: ${wdPeople.size} from Wikidata, ${imdbNames.size} names from IMDb (${elapsed(phase)})`);
+  professionsNeeded.clear();
+  log(
+    `  people: ${wdPeople.size} from Wikidata, ${imdbNames.size} names from IMDb; actors: ${wdActors.size} by Wikidata occupation, ` +
+      `${imdbActors.size} by IMDb profession (${elapsed(phase)})`,
+  );
 
   const validName = (name: string | null | undefined): string | null => (name && name.length <= MAX_NAME ? name : null);
   const people = new Map<string, SnapshotPerson>();
@@ -363,7 +382,14 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     const nconst = imdbIdOfQid.get(qid) ?? null;
     const name = validName(person.en) ?? validName(person.mul) ?? validName(nconst !== null ? imdbNames.get(nconst) : null);
     if (!name) return null;
-    people.set(qid, { key: qid, wikidataId: qid, imdbId: nconst !== null ? formatNconst(nconst) : null, name, popularity: person.links });
+    people.set(qid, {
+      key: qid,
+      wikidataId: qid,
+      imdbId: nconst !== null ? formatNconst(nconst) : null,
+      name,
+      popularity: person.links,
+      isActor: isActor([], wdActors.has(qid)) || [...person.nconsts].some((n) => imdbActors.has(n)),
+    });
     return qid;
   };
   /** Snapshot key of an IMDb person: their Wikidata person when there is one, else themselves. */
@@ -378,7 +404,7 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     if (qid && imdbIdOfQid.get(qid) === nconst) return null; // carried by a Wikidata person nobody can name
     const name = validName(imdbNames.get(nconst));
     if (!name) return null;
-    people.set(key, { key, wikidataId: null, imdbId: key, name, popularity: 0 });
+    people.set(key, { key, wikidataId: null, imdbId: key, name, popularity: 0, isActor: imdbActors.has(nconst) });
     return key;
   };
   const directorName = (nconst: number): string | null => {
@@ -472,6 +498,7 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     searchableNamesPerFilm: +(films.reduce((s, f) => s + 1 + f.originalTitles.length + f.aliases.length, 0) / Math.max(1, films.length)).toFixed(2),
     people: snapshotPeople.length,
     imdbOnlyPeople: snapshotPeople.filter((p) => p.wikidataId === null).length,
+    actors: snapshotPeople.filter((p) => p.isActor).length,
     creditsBeforeCap: credits,
     tmdbIdsDropped: tmdbDropped,
     buildSeconds: Math.round((Date.now() - started) / 1000),

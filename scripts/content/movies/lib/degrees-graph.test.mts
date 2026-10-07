@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "@/core/random";
-import { actorPool, bestShortestPath, buildGraph, linkDistances, pickPuzzle, popularityLinkScore, type Credit, type FilmInfo, type PersonInfo } from "./degrees-graph.mjs";
+import {
+  actorPool,
+  bestShortestPath,
+  buildGraph,
+  linkDistances,
+  pickPuzzle,
+  popularityLinkScore,
+  reparDecision,
+  type Credit,
+  type FilmInfo,
+  type PersonInfo,
+} from "./degrees-graph.mjs";
 
 /**
  * People 1–9, films 100+.
@@ -29,7 +40,9 @@ const graph = buildGraph(credits);
 const films = new Map<number, FilmInfo>(
   [100, 101, 102, 103, 104, 105].map((id) => [id, { id, title: `Film ${id}`, year: 2000, popularity: id >= 103 ? 2 : 80 }]),
 );
-const people = new Map<number, PersonInfo>([1, 2, 3, 4, 5, 6, 7].map((id) => [id, { id, name: `Person ${id}`, popularity: id === 5 ? 1 : 60 }]));
+const people = new Map<number, PersonInfo>(
+  [1, 2, 3, 4, 5, 6, 7].map((id) => [id, { id, name: `Person ${id}`, popularity: id === 5 ? 1 : 60, isActor: true }]),
+);
 const score = popularityLinkScore(graph, films, people);
 
 describe("buildGraph", () => {
@@ -72,6 +85,45 @@ describe("actorPool", () => {
     // Person 5 is barely known: cut first when the pool shrinks.
     expect(actorPool(graph, people, { size: 3, minFilms: 2, minLeads: 1, leadBilling: 5 })).toEqual([1, 2, 3]);
     expect(actorPool(graph, people, { size: 10, minFilms: 2, minLeads: 2, leadBilling: 5 })).toEqual([2, 3, 5]);
+  });
+
+  it("leaves out people who aren't actors (they stay in the graph as links)", () => {
+    const withSinger = new Map(people);
+    withSinger.set(2, { ...people.get(2)!, popularity: 300, isActor: false });
+    expect(actorPool(graph, withSinger, { size: 10, minFilms: 2, minLeads: 1, leadBilling: 5 })).toEqual([1, 3, 5]);
+    expect(bestShortestPath(graph, 1, 3, 3, popularityLinkScore(graph, films, withSinger))?.[0]?.personId).toBe(2);
+  });
+});
+
+describe("reparDecision", () => {
+  const day = { par: 3, shortest: 3, played: false, fixture: false };
+
+  it("never touches a played day, whatever the graph says now", () => {
+    for (const shortest of [1, 2, 3, null]) expect(reparDecision({ ...day, shortest, played: true }, 2)).toEqual({ action: "skip", reason: "played" });
+  });
+
+  it("leaves DEV FIXTURE days to the fixture tooling", () => {
+    expect(reparDecision({ ...day, shortest: 1, fixture: true }, 2)).toEqual({ action: "skip", reason: "fixture" });
+  });
+
+  it("keeps a day whose par is still the shortest chain", () => {
+    expect(reparDecision(day, 2)).toEqual({ action: "keep" });
+    expect(reparDecision({ ...day, par: 2, shortest: 2 }, 2)).toEqual({ action: "keep" });
+  });
+
+  it("lowers par (same start and end) when the shorter chain is still long enough", () => {
+    expect(reparDecision({ ...day, shortest: 2 }, 2)).toEqual({ action: "repar", par: 2 });
+  });
+
+  it("regenerates the day when start and end are now closer than any allowed par", () => {
+    expect(reparDecision({ ...day, shortest: 1 }, 2)).toEqual({ action: "regenerate" });
+    expect(reparDecision({ ...day, par: 2, shortest: 1 }, 2)).toEqual({ action: "regenerate" });
+    expect(reparDecision({ ...day, shortest: 0 }, 2)).toEqual({ action: "regenerate" });
+  });
+
+  it("flags a day whose stored chain no longer exists instead of guessing", () => {
+    expect(reparDecision({ ...day, shortest: null }, 2)).toEqual({ action: "skip", reason: "broken" });
+    expect(reparDecision({ ...day, par: 2, shortest: 3 }, 2)).toEqual({ action: "skip", reason: "broken" });
   });
 });
 
