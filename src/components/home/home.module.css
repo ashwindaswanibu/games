@@ -213,14 +213,8 @@
   opacity: 1;
 }
 
-/* Before the first paint of a day's first visit, the home waits unseen under the opening's cover;
-   once the opening runs, its timeline decides what is seen. */
-.home[data-pre~="opening"] .stage,
-.home[data-pre~="opening"] .chrome {
-  visibility: hidden;
-}
-
-/* The opening's first frame, painted before any script runs: the night room, the disc to come. */
+/* Before the first paint of a day's first visit, the home waits under the opening's cover (the
+   night room, the disc to come); once the opening runs, its timeline decides what is seen. */
 .cover {
   position: fixed;
   inset: 0;

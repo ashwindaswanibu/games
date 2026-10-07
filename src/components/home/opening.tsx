@@ -92,7 +92,8 @@ export function Opening({
     const qa = <E extends Element = HTMLElement>(sel: string, root: ParentNode = home) => [...root.querySelectorAll<E>(sel)];
 
     // ---- The room: night, then a hard cut on the frame where the day passes each light ----------
-    const frameAt = (k: number) => SWEEP_FROM + (k * (SWEEP_TO - SWEEP_FROM)) / FRAMES;
+    // Each frame's cut lands half a millisecond early, so a frozen frame on a boundary is never blank.
+    const frameAt = (k: number) => SWEEP_FROM + (k * (SWEEP_TO - SWEEP_FROM)) / FRAMES - (k > 0 ? 0.5 : 0);
     for (const layer of qa("[data-room] [data-c]")) {
       const c = layer.dataset.c as HomeCue;
       const keys: [number, Keyframe][] = [[0, { opacity: plan.cues[0] === c ? 1 : 0, easing: steps(1) }]];
@@ -203,33 +204,33 @@ export function Opening({
 
     // ---- S6 · the home, pasted up in place --------------------------------------------------------
     const stage = q("[data-stage]");
-    T.show(stage, HOME_AT);
+    T.reveal(stage, HOME_AT);
     const strip = q("[data-op='hero-strip']");
-    T.show(strip, HOME_AT);
+    T.reveal(strip, HOME_AT);
     T.key(strip, [
       [HOME_AT, { transform: "translateY(-30%)", easing: EASE_CUT }],
       [HOME_AT + 200, { transform: "translateY(0)" }],
     ]);
-    T.show(q("[data-op='weekday']"), HOME_AT);
+    T.reveal(q("[data-op='weekday']"), HOME_AT);
     qa("[data-op='month-letter']").forEach((letter, i) => {
       const at = HOME_AT + i * S32;
-      T.show(letter, at);
+      T.reveal(letter, at);
       T.key(letter, [
         [at, { transform: "scale(1.12)", easing: steps(2) }],
         [at + 140, { transform: "scale(1)" }],
       ]);
     });
     const numeral = q("[data-op='numeral']");
-    T.show(numeral, HOME_AT + S16);
+    T.reveal(numeral, HOME_AT + S16);
     T.key(numeral, [
       [HOME_AT + S16, { transform: "scale(1.22)", easing: EASE_PUNCH }],
       [HOME_AT + S16 + 140, { transform: "scale(1)" }],
     ]);
-    T.show(q("[data-op='numeral-plate']"), HOME_AT + S16 + S32);
+    T.reveal(q("[data-op='numeral-plate']"), HOME_AT + S16 + S32);
     // Sheets laid top to bottom, a 16th apart.
     qa("[data-op='credits'] > *").forEach((sheet, i) => {
       const at = HOME_AT + 2 * S16 + i * S16;
-      T.show(sheet, at);
+      T.reveal(sheet, at);
       T.key(sheet, [
         [at, { transform: "translateY(28px)", easing: EASE_CUT }],
         [at + 380, { transform: "translateY(0)" }],
@@ -250,7 +251,7 @@ export function Opening({
         [HOME_LEAVE, { transform: "translate(0px, 0px) scale(1)", easing: EASE_IO }],
         [HOME_LAND, { transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${k.toFixed(4)})` }],
       ]);
-      T.show(dial, HOME_LAND);
+      T.reveal(dial, HOME_LAND);
     }
     const band = q("[data-op='band']");
     T.key(band, [
@@ -259,12 +260,12 @@ export function Opening({
     ]);
     // The countdown cuts in on 16ths: its label, then hours, minutes, seconds.
     const COUNT_AT = 3625;
-    T.show(q("[data-op='count-label']"), COUNT_AT);
+    T.reveal(q("[data-op='count-label']"), COUNT_AT);
     const digits = qa("[data-digit]");
     const colons = qa("[data-op='count'] > :not([data-digit])");
-    digits.forEach((d, i) => T.show(d, COUNT_AT + Math.floor(i / 2) * S16));
-    colons.forEach((c, i) => T.show(c, COUNT_AT + (i + 1) * S16));
-    T.show(q("[data-op='count-city']"), COUNT_AT + 2 * S16);
+    digits.forEach((d, i) => T.reveal(d, COUNT_AT + Math.floor(i / 2) * S16));
+    colons.forEach((c, i) => T.reveal(c, COUNT_AT + (i + 1) * S16));
+    T.reveal(q("[data-op='count-city']"), COUNT_AT + 2 * S16);
     // The chrome, the presence line and the billing come up last.
     for (const el of [q("[data-op='strip']"), q("[data-op='presence']"), q("[data-op='billing']"), q("[data-app-chrome]")]) {
       T.key(el, [

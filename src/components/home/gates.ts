@@ -137,10 +137,16 @@ export function prePaintScript(cfg: GateConfig): string {
  * Removes what the pre-paint script added, once the client root has taken over. The come-up is
  * left to finish (it is CSS only, and removing it mid-way would restart nothing but end it early).
  */
-export function clearPrePaint(root: HTMLElement | null): void {
-  if (root && root.getAttribute("data-pre") !== "comes-up") root.removeAttribute("data-pre");
-  root?.removeAttribute("data-pre-setin");
+export function clearPrePaint(root: HTMLElement | null): () => void {
+  if (!root) return () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  if (root.getAttribute("data-pre") === "comes-up") {
+    // Done by then (700 ms, staggered): drop the mark so nothing stays animated at rest.
+    timer = setTimeout(() => root.removeAttribute("data-pre"), 1600);
+  } else root.removeAttribute("data-pre");
+  root.removeAttribute("data-pre-setin");
   document.querySelectorAll("style[data-home-pre]").forEach((el) => el.remove());
+  return () => clearTimeout(timer);
 }
 
 function storage(): Storage | null {

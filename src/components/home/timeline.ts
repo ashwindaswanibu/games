@@ -104,6 +104,18 @@ export class Timeline {
     return this.visible(el, [[ms, Infinity]]);
   }
 
+  /**
+   * A hard cut in at `ms`, by opacity: for the page's own content, which stays in the document's
+   * text (and so readable by anything that reads it) while it waits to be pasted up.
+   */
+  reveal(el: Element | null | undefined, ms: number): Animation | null {
+    return this.key(el, [
+      [0, { opacity: 0, easing: steps(1) }],
+      [Math.max(0, ms), { opacity: 1, easing: steps(1) }],
+      [Math.max(0, ms) + 1, { opacity: 1 }],
+    ]);
+  }
+
   seek(ms: number): void {
     this.time = Math.max(0, Math.min(ms, this.end));
     for (const animation of this.animations) animation.currentTime = this.time;

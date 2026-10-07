@@ -210,10 +210,13 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
   // The pre-paint marks are React's from here on. A page restored from the back/forward cache drops
   // any layer left by a cut to the picture.
   useLayoutEffect(() => {
-    clearPrePaint(rootRef.current);
+    const cancel = clearPrePaint(rootRef.current);
     const restore = () => clearCutLayers(rootRef.current);
     window.addEventListener("pageshow", restore);
-    return () => window.removeEventListener("pageshow", restore);
+    return () => {
+      cancel();
+      window.removeEventListener("pageshow", restore);
+    };
   }, []);
 
   // A set-in waits for the opening to end (or for none), then 200 ms.
