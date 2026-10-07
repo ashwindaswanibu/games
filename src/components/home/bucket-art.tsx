@@ -30,8 +30,10 @@ export function CutLetters({
     <svg className={className} style={style} viewBox={word.viewBox} aria-hidden="true" focusable="false" preserveAspectRatio="xMinYMid meet">
       {word.letters.map((l, i) => (
         <g key={i} transform={l.transform} data-letter={i}>
-          <path d={l.d} fill={plate} fillRule="evenodd" transform={`translate(${plateOffset[0]} ${plateOffset[1]})`} />
-          <path d={l.d} fill={fill} fillRule="evenodd" />
+          <g className="cut-letter">
+            <path d={l.d} fill={plate} fillRule="evenodd" transform={`translate(${plateOffset[0]} ${plateOffset[1]})`} />
+            <path d={l.d} fill={fill} fillRule="evenodd" />
+          </g>
         </g>
       ))}
     </svg>

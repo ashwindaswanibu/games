@@ -25,34 +25,6 @@
   color: var(--fink);
 }
 
-.sheet[data-bucket="words"] {
-  --sheet: var(--verm);
-  --fink: var(--sheet-ink);
-  --fink-2: var(--sheet-ink);
-  --keyline: oklch(0.21 0.01 67 / 0.85);
-}
-
-.sheet[data-bucket="movies"] {
-  --sheet: var(--ochre);
-  --fink: var(--sheet-ink);
-  --fink-2: oklch(0.21 0.01 67 / 0.8);
-  --keyline: oklch(0.21 0.01 67 / 0.66);
-}
-
-.sheet[data-bucket="geography"] {
-  --sheet: var(--teal);
-  --fink: var(--sheet-cream);
-  --fink-2: var(--sheet-cream);
-  --keyline: oklch(0.95 0.025 86 / 0.66);
-}
-
-.sheet[data-bucket="chess"] {
-  --sheet: var(--ultra);
-  --fink: var(--sheet-cream);
-  --fink-2: oklch(0.95 0.025 86 / 0.82);
-  --keyline: oklch(0.95 0.025 86 / 0.66);
-}
-
 .plate,
 .paper,
 .field {
@@ -345,14 +317,18 @@
   min-height: var(--mark-u);
 }
 
+/* The voice line: one line when it fits; a long result line ("Named on the final pick" beside
+   Fade to Color's ten frames) takes a second rather than lose its end. */
 .voice {
   flex: 1 1 auto;
   min-width: 0;
-  font: italic 400 var(--voice) / 1.2 var(--f-voice);
+  font: italic 400 var(--voice) / 1.15 var(--f-voice);
   color: var(--fink-2);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .credit[data-state="finished"] .voice,
@@ -694,11 +670,12 @@
 
 @media (max-width: 760px) {
   .sheet {
-    --sheet-pad: 14px 16px 8px;
+    --sheet-pad: 12px 16px 8px;
   }
 
   /* The Up next slip holds the filled primary: the credit keeps its quiet action. */
   :global([data-upnext]) .credit[data-primary] .pill {
+    align-self: last baseline;
     margin: 0;
     height: auto;
     padding: 6px 0;
@@ -721,15 +698,17 @@
   .head {
     height: auto;
     min-height: var(--head-h);
-    flex-wrap: wrap;
-    row-gap: 6px;
   }
 
   .head > :first-child {
     flex: none;
   }
 
+  /* Beside the title, in two lines if it must. */
   .kicker {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 46%;
     margin-left: auto;
     letter-spacing: 0.14em;
   }
@@ -751,10 +730,8 @@
   }
 
   .kicker {
-    letter-spacing: 0.18em;
     white-space: normal;
     text-align: right;
-    max-width: 58%;
     line-height: 1.4;
   }
 
@@ -767,8 +744,13 @@
     height: auto;
   }
 
-  .creditsCol[data-density="solo"] > .sheet {
+  .creditsCol[data-density="solo"] > .sheet,
+  .creditsCol[data-density="solo"] > .sheet > .body {
     flex: none;
+  }
+
+  .creditsCol {
+    padding-top: 2px;
   }
 
   .creditsCol[data-density="solo"] .credit {
@@ -786,7 +768,8 @@
 
   .creditsCol[data-density="solo"] .head {
     flex: none;
-    height: var(--head-h);
+    height: auto;
+    min-height: var(--head-h);
     flex-direction: row;
     align-items: flex-end;
     justify-content: space-between;

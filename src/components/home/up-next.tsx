@@ -1,6 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import type { CSSProperties } from "react";
-import type { HomePrimary } from "@/core/home-view";
+import type { CSSProperties, MouseEvent } from "react";
+import type { HomeGame, HomePrimary } from "@/core/home-view";
 import { Arrow } from "./band";
 import styles from "./chrome.module.css";
 
@@ -9,10 +11,21 @@ import styles from "./chrome.module.css";
  * the band holds the filled primary above the fold; the credit itself then shows its quiet action
  * (one filled thing per screen). Not inside any bucket's section.
  */
-export function UpNext({ primary, gameName, cut }: { primary: HomePrimary; gameName: string | null; cut: string }) {
+export function UpNext({
+  primary,
+  game,
+  cut,
+  onOpen,
+}: {
+  primary: HomePrimary;
+  game: HomeGame | null;
+  cut: string;
+  onOpen: (e: MouseEvent<HTMLAnchorElement>, game: HomeGame) => void;
+}) {
+  const gameName = game?.name ?? null;
   const verb = primary.kind === "continue" ? "Continue" : primary.kind === "play" ? "Play" : "Today's standings";
   return (
-    <aside className={styles.upNext} style={{ "--cut": cut } as CSSProperties} aria-label="Up next">
+    <aside className={styles.upNext} style={{ "--cut": cut, "--sheet": "var(--sheet-ink)", "--fink": "var(--sheet-cream)" } as CSSProperties} aria-label="Up next" data-sheet="">
       <span className={styles.slipPlate} aria-hidden="true" />
       <span className={styles.slipPaper} aria-hidden="true" />
       <div className={styles.upNextBody}>
@@ -20,7 +33,7 @@ export function UpNext({ primary, gameName, cut }: { primary: HomePrimary; gameN
           <span className={styles.upNextLbl}>{primary.kind === "standings" ? "All played" : "Up next"}</span>
           {gameName && <span className={styles.upNextName}>{gameName}</span>}
         </span>
-        <Link href={primary.href} className={styles.upNextPill}>
+        <Link href={primary.href} className={styles.upNextPill} onClick={game ? (e) => onOpen(e, game) : undefined}>
           {verb}
           <Arrow />
         </Link>

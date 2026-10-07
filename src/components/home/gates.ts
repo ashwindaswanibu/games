@@ -128,7 +128,7 @@ export function prePaintScript(cfg: GateConfig): string {
     'var s=null;try{s=window.localStorage}catch(e){}var rm=false;try{rm=window.matchMedia("(prefers-reduced-motion: reduce)").matches}catch(e){}' +
     `var m=decide(${JSON.stringify(cfg).replace(/</g, "\\u003c")},s,rm);` +
     'if(m.opening)root.setAttribute("data-pre","opening");else if(!m.setIn&&!rm)root.setAttribute("data-pre","comes-up");' +
-    'if(m.setIn){root.setAttribute("data-pre-setin",m.setIn);var st=document.createElement("style");st.setAttribute("data-home-pre","");st.textContent=css(m.setIn);document.head.appendChild(st)}' +
+    'if(m.setIn&&!rm){root.setAttribute("data-pre-setin",m.setIn);var st=document.createElement("style");st.setAttribute("data-home-pre","");st.textContent=css(m.setIn);document.head.appendChild(st)}' +
     "}catch(e){}})();"
   );
 }

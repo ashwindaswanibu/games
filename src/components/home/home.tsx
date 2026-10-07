@@ -6,8 +6,8 @@ import { cueAt } from "@/core/daylight";
 import type { HomeCue, HomeGame, HomeView } from "@/core/home-view";
 import { Billing } from "./billing";
 import type { HomeComposition } from "./composition";
-import type { CreditPhase } from "./credit";
-import { cutToPicture } from "./cut-to-picture";
+import { resultSentence, type CreditPhase } from "./credit";
+import { clearCutLayers, cutToPicture } from "./cut-to-picture";
 import { Fin } from "./fin";
 import { readClock, useGameClock } from "./game-clock";
 import { clearPrePaint, decideMoments, markHomeSeen, markOpeningSeen, markSetInsPlayed, prePaintScript, type GateConfig } from "./gates";
@@ -138,12 +138,13 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
   }, [qa?.cueChange]);
 
   // ---- Moments ------------------------------------------------------------------------------
+  const games = useMemo(() => allGames(view), [view]);
   const finished = useMemo(
     () =>
-      allGames(view)
+      games
         .filter((g) => g.state === "finished" && g.result)
         .map((g) => [g.id, Date.parse(g.result!.finishedAt)] as const),
-    [view],
+    [games],
   );
   const gate: GateConfig = useMemo(
     () => ({
@@ -177,13 +178,18 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
     } catch {
       storage = null;
     }
-    const m = decideMoments(gate, storage, prefersReducedMotion());
+    const still = prefersReducedMotion();
+    const m = decideMoments(gate, storage, still);
     if (m.setIn) markSetInsPlayed(date, m.candidates);
     const next: Moment = qa?.fin ? "fin" : m.opening ? "opening" : null;
+    const landed = m.setIn ? games.find((g) => g.id === m.setIn) : undefined;
     /* eslint-disable react-hooks/set-state-in-effect -- see above: before the first paint, once */
-    if (m.setIn) {
+    if (m.setIn && !still) {
       setPending(m.setIn);
       setSetIn(m.setIn);
+    } else if (landed) {
+      // Reduced motion: no card; the credit is simply finished, and the result is still announced.
+      setAnnounce(resultSentence(landed));
     }
     if (next === "opening") setOpeningRun((n) => n + 1);
     setMoment(next);
@@ -192,9 +198,13 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  // The pre-paint marks are React's from here on.
+  // The pre-paint marks are React's from here on. A page restored from the back/forward cache drops
+  // any layer left by a cut to the picture.
   useLayoutEffect(() => {
     clearPrePaint(rootRef.current);
+    const restore = () => clearCutLayers(rootRef.current);
+    window.addEventListener("pageshow", restore);
+    return () => window.removeEventListener("pageshow", restore);
   }, []);
 
   // A set-in waits for the opening to end (or for none), then 200 ms.
@@ -230,8 +240,11 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
     setMoment("fin");
   }, []);
 
+  // The new day's view arrives with a new date, which decides its opening; if it does not come
+  // (a device clock ahead of New York), FIN gives way after a while rather than hang.
   const onFinEnd = useCallback(() => {
     router.refresh();
+    setTimeout(() => setMoment((m) => (m === "fin" ? null : m)), 8000);
   }, [router]);
 
   // Remember when this device last saw the home (for the next visit's set-in).
@@ -261,7 +274,6 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
   );
 
   // ---- Page -------------------------------------------------------------------------------------
-  const games = allGames(view);
   const openBuckets = view.buckets.filter((b) => b.status === "open");
   const quietBuckets = view.buckets.filter((b) => b.status === "in_production");
   const density = games.length === 1 ? "solo" : games.length >= 9 ? "dense" : "standard";
@@ -274,6 +286,7 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
   const initialGone = readClock(view.clock, initialNow).gone;
   const phaseOf = useCallback((id: string): CreditPhase => (id === pending ? "pre" : "rest"), [pending]);
   const setInGame = setIn ? games.find((g) => g.id === setIn) ?? null : null;
+  const setInBucket = setIn ? view.buckets.find((b) => b.games.some((g) => g.id === setIn))?.id ?? null : null;
 
   return (
     <div
@@ -296,7 +309,7 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
         <TitleColumn view={view} comp={comp} clock={clock} initialGone={initialGone} pending={pending} onZero={onZero} />
         <div className={sheetStyles.creditsCol} data-density={density} data-op="credits">
           {view.welcome && <WelcomeSlip welcome={view.welcome} cut={comp.slips.welcome} />}
-          {upNext && view.primary && <UpNext primary={view.primary} gameName={primaryGame?.name ?? null} cut={comp.slips.upNext} />}
+          {upNext && view.primary && <UpNext primary={view.primary} game={primaryGame} cut={comp.slips.upNext} onOpen={onOpen} />}
           {openBuckets.map((b, i) => (
             <Sheet
               key={b.id}
@@ -312,7 +325,18 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
             />
           ))}
           <InProduction buckets={quietBuckets} cuts={comp.wings} words={comp.words} vanishX={comp.vanishX} />
-          {setInLive && setInGame && <SetIn key={setInGame.id} game={setInGame} cut={comp.cards[setInGame.id]} freezeAt={qa?.setInAt ?? null} frames={qa?.frames ?? false} onEnd={onSetInEnd} />}
+          {setInLive && setInGame && setInBucket && (
+            <SetIn
+              key={setInGame.id}
+              game={setInGame}
+              bucket={setInBucket}
+              date={date}
+              cut={comp.cards[setInGame.id]}
+              freezeAt={qa?.setInAt ?? null}
+              frames={qa?.frames ?? false}
+              onEnd={onSetInEnd}
+            />
+          )}
         </div>
       </main>
       <Billing billing={view.billing} />
@@ -331,7 +355,7 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
           onEnd={onOpeningEnd}
         />
       )}
-      {moment === "fin" && <Fin day={view.day} fin={comp.fin} reduced={reduced} hold={qa?.fin ?? false} onEnd={onFinEnd} />}
+      {moment === "fin" && <Fin day={view.day} fin={comp.fin} plate={comp.slips.fin} reduced={reduced} hold={qa?.fin ?? false} onEnd={onFinEnd} />}
     </div>
   );
 }

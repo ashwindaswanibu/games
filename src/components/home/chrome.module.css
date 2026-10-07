@@ -237,7 +237,7 @@
 
 .upNextName {
   min-width: 0;
-  font: 400 26px/0.9 var(--f-display);
+  font: 400 min(26px, 6.4vw) / 0.9 var(--f-display);
   text-transform: uppercase;
   letter-spacing: 0.012em;
   white-space: nowrap;

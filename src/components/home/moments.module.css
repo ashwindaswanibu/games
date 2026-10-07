@@ -1,0 +1,404 @@
+/*
+ * The moments (§8): the opening titles, the set-in, FIN and the cut to the picture. Overlays exist
+ * only while a moment plays. Everything in them starts hidden; one seekable timeline cuts each
+ * piece in and out. Only transform and opacity move.
+ */
+
+/* ---------------------------------------------------------------------------------------------
+ * M1 · The opening
+ * ------------------------------------------------------------------------------------------- */
+
+.opening {
+  --disc: min(52vh, 70vw);
+  --disc-x: 50vw;
+  --disc-y: 44vh;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  contain: strict;
+  overflow: hidden;
+}
+
+.opening > * {
+  position: absolute;
+  visibility: hidden;
+}
+
+.discBox {
+  position: absolute;
+  left: calc(var(--disc-x) - var(--disc) / 2);
+  top: calc(var(--disc-y) - var(--disc) / 2);
+  width: var(--disc);
+  height: var(--disc);
+}
+
+.disc {
+  transform-origin: 50% 50%;
+}
+
+.discSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.frame {
+  visibility: hidden;
+}
+
+.cast {
+  left: 0;
+  right: 0;
+  top: calc(var(--disc-y) + var(--disc) / 2 + clamp(18px, 4vh, 40px));
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  text-align: center;
+  color: oklch(0.935 0.015 81);
+}
+
+.castNames {
+  font: 500 14px/1.6 var(--f-mono);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.present {
+  font: italic 400 40px/1 var(--f-voice);
+}
+
+.stamp {
+  left: 0;
+  right: 0;
+  top: calc(var(--disc-y) + var(--disc) / 2 + clamp(16px, 3vh, 30px));
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.stamp b {
+  font: 400 clamp(44px, 8vh, 72px) / 0.85 var(--f-display);
+  letter-spacing: 0.02em;
+}
+
+.stamp span {
+  font: 500 11px/1 var(--f-mono);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+}
+
+/* The four title cards, full bleed, each its bucket's sheet. */
+.card {
+  inset: 0;
+  overflow: hidden;
+  background-image: url("/home/fibre-light-240.png");
+}
+
+.cardWords {
+  background-color: var(--verm);
+}
+
+.cardMovies {
+  background-color: var(--ochre);
+  color: var(--sheet-ink);
+}
+
+.cardGeo {
+  background-color: var(--teal);
+  color: var(--sheet-cream);
+}
+
+.cardChess {
+  background-color: var(--ultra);
+  color: var(--sheet-cream);
+}
+
+/* WORDS: the O sits on the disc; the word is scaled to fit beside it, and pulled back from the
+   disc's size (the timeline scales it about the O). */
+.cardWord {
+  --s: min(calc(var(--disc) / 80), calc((50vw - 24px) / var(--o-right)), calc((50vw - 24px) / var(--o-left)));
+  position: absolute;
+  left: calc(var(--disc-x) - var(--o-left) * var(--s));
+  top: calc(var(--disc-y) - (var(--o-y) - var(--vb-y)) * var(--s));
+  width: calc(var(--vb-w) * var(--s));
+  height: calc(var(--vb-h) * var(--s));
+  overflow: visible;
+  transform-origin: calc(var(--o-left) * var(--s)) calc((var(--o-y) - var(--vb-y)) * var(--s));
+}
+
+.cardWord :global(.cut-letter) {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.moviesTitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--disc-y) + var(--disc) / 2 + 2vh);
+  text-align: center;
+  font: italic 500 min(15vh, 13vw) / 1 var(--f-voice);
+  font-variation-settings: "opsz" 28;
+}
+
+.rays {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 44%;
+}
+
+.geoTitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--disc-y) + var(--disc) / 2 + 3vh);
+  text-align: center;
+  font: 400 min(9vh, 7vw) / 1 var(--f-display);
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-transform: uppercase;
+  rotate: -8deg;
+}
+
+.spiralBox {
+  position: absolute;
+  left: calc(var(--disc-x) - var(--disc) * 0.8);
+  top: calc(var(--disc-y) - var(--disc) * 0.8);
+  width: calc(var(--disc) * 1.6);
+  height: calc(var(--disc) * 1.6);
+}
+
+.spiral {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.chessTitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 7vh;
+  text-align: center;
+  font: 400 min(16vh, 12vw) / 1 var(--f-display);
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * M2 · The set-in: the bucket's sheet becomes the result's title card for a beat
+ * ------------------------------------------------------------------------------------------- */
+
+.setIn {
+  visibility: hidden;
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  z-index: 4;
+  pointer-events: none;
+  overflow: clip;
+  padding: 0 10px 14px;
+  contain: paint;
+}
+
+.cardPaper,
+.cardPlate {
+  position: absolute;
+  inset: 0 10px 14px;
+  clip-path: var(--cut);
+}
+
+.cardPlate {
+  background: var(--plate);
+  transform: translate(7px, 9px);
+}
+
+.cardPaper {
+  background: var(--sheet) url("/home/fibre-light-240.png");
+}
+
+.cardBody {
+  position: relative;
+  container-type: inline-size;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(14px, 2.6vh, 28px);
+  padding: clamp(18px, 3vh, 34px) clamp(18px, 2vw, 30px);
+  color: var(--fink);
+}
+
+.cardName {
+  font: 400 clamp(30px, 5.2vh, 50px) / 0.9 var(--f-display);
+  text-transform: uppercase;
+  letter-spacing: 0.012em;
+  visibility: hidden;
+}
+
+.cardMark {
+  display: block;
+  line-height: 0;
+  visibility: hidden;
+  transform-origin: 0 0;
+}
+
+.cardMark [data-keyline] {
+  visibility: visible;
+}
+
+.cardMark [data-piece],
+.cardMark [data-unused],
+.cardMark [data-join] {
+  visibility: hidden;
+}
+
+.cardResult {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(18px, 2.4vw, 36px);
+  min-width: 0;
+}
+
+.bigLabel {
+  position: relative;
+  isolation: isolate;
+  font: 400 var(--label-size) / 0.8 var(--f-display);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--label-face);
+  visibility: hidden;
+  transform-origin: 0 100%;
+}
+
+.bigLabelPlate {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: translate(0.02em, 0.018em);
+  color: var(--label-plate);
+}
+
+.aside {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 0.4em;
+  visibility: hidden;
+}
+
+.asideLine {
+  font: italic 400 clamp(20px, 2.8vh, 30px) / 1.15 var(--f-voice);
+}
+
+.asidePts {
+  font: 500 11px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * M4 · FIN
+ * ------------------------------------------------------------------------------------------- */
+
+.fin {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: oklch(0.165 0.007 60) url("/home/fibre-light-240.png");
+  color: oklch(0.935 0.015 81);
+}
+
+.finIn {
+  display: grid;
+  justify-items: center;
+  gap: clamp(14px, 2.6vh, 26px);
+  padding: 0 24px;
+  text-align: center;
+}
+
+.finDial {
+  width: clamp(64px, 10vh, 96px);
+  height: clamp(64px, 10vh, 96px);
+  overflow: visible;
+}
+
+.finWord {
+  position: relative;
+  width: min(56vw, 46vh);
+  padding: 4% 8% 6%;
+}
+
+.finPlate {
+  position: absolute;
+  inset: 0;
+  background: var(--verm);
+  clip-path: var(--cut);
+}
+
+.finWord svg {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.finWhen {
+  margin: 0;
+  font: 500 11px/1.6 var(--f-mono);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.finNext {
+  margin: 0;
+  font: italic 400 clamp(20px, 3vh, 28px) / 1.2 var(--f-voice);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Cut to the picture
+ * ------------------------------------------------------------------------------------------- */
+
+.cutLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.cutName {
+  font: 400 clamp(44px, 9vh, 96px) / 0.9 var(--f-display);
+  text-transform: uppercase;
+  letter-spacing: 0.012em;
+  opacity: 0;
+  animation: cutName 1ms 320ms steps(1, end) forwards;
+}
+
+@keyframes cutName {
+  to {
+    opacity: 1;
+  }
+}

@@ -19,8 +19,8 @@ export interface HomeComposition {
   wings: Readonly<Record<string, string>>;
   /** One title card per game for the set-in (`date:card:<gameId>`). */
   cards: Readonly<Record<string, string>>;
-  /** The slips: welcome, up next. */
-  slips: { welcome: string; upNext: string };
+  /** The slips: welcome, up next; FIN's vermilion plate. */
+  slips: { welcome: string; upNext: string; fin: string };
   /** The phone's torn tab bar. */
   tabTear: string;
   /** Cut letters: the Words title, the opening's Words card, FIN. */
@@ -72,6 +72,7 @@ export function composeHome(view: Pick<HomeView, "day" | "buckets">): HomeCompos
     slips: {
       welcome: sheetClip(rng(`${seed}:slip:welcome`), { cut: 2, depth: 4, tornBottom: true }),
       upNext: sheetClip(rng(`${seed}:slip:up-next`), { cut: 2, depth: 4, tornBottom: true }),
+      fin: polygon(cutRect(rng(`${seed}:fin-plate`), { j: 2.4, a: 0.9, n: [3, 2, 3, 2] })),
     },
     tabTear: tornTopClip(rng(`${seed}:tab-bar`), 9),
     words: cutWord("WORDS", `${seed}:words`, { rot: 3, dy: 3 }),

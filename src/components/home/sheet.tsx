@@ -7,6 +7,7 @@ import type { CutWord } from "./geometry";
 import { Credit, type CreditPhase } from "./credit";
 import { buildMark } from "./mark-geometry";
 import { BUCKET_TIER } from "./palette";
+import paper from "./paper.module.css";
 import styles from "./sheet.module.css";
 
 /**
@@ -49,7 +50,7 @@ export function Sheet({
 
   return (
     <section
-      className={styles.sheet}
+      className={`${styles.sheet} ${paper[bucket.id]}`}
       aria-labelledby={headingId}
       data-bucket={bucket.id}
       data-tier={BUCKET_TIER[bucket.id]}

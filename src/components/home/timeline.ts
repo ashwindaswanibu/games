@@ -1,5 +1,5 @@
 /**
- * One seekable clock for every sequence (the opening titles, the bucket title cards, FIN): a set of
+ * One seekable clock for every sequence on the home (the opening titles, the set-in, FIN): a set of
  * Web Animations created paused and driven together by seeking. A sequence can be scrubbed to any
  * millisecond, played, skipped to the end or cancelled as one thing; nothing moves outside it.
  *
@@ -9,8 +9,18 @@
  * Stop-motion moves use `steps(n, end)`; camera-like moves use the cut / in-out eases.
  */
 
+/** Motion tokens (spec §3.4). Every sequence sits on a 120 BPM grid. */
+export const BEAT = 500;
+export const S16 = BEAT / 4;
+export const S32 = BEAT / 8;
+/** Arrivals (Fade to Color's). */
+export const EASE = "cubic-bezier(.2,.8,.2,1)";
+/** Sheets laid, landings. */
 export const EASE_CUT = "cubic-bezier(.16,.9,.2,1)";
-export const EASE_IO = "cubic-bezier(.76,0,.22,1)";
+/** Travel: FLIP, the disc going home, the cut to the picture. */
+export const EASE_IO = "cubic-bezier(.7,0,.2,1)";
+/** The disc punch, the numeral slam (transform only). */
+export const EASE_PUNCH = "cubic-bezier(.3,1.45,.55,1)";
 export const steps = (n: number) => `steps(${n},end)`;
 
 /** A keyframe at an absolute time on the timeline; `easing` applies from this frame to the next. */
@@ -70,6 +80,28 @@ export class Timeline {
   /** A hard cut: the element is visible only in [inMs, outMs); hidden (by its own CSS) outside. */
   cut(el: Element | null | undefined, inMs: number, outMs: number): Animation | null {
     return this.add(el, [{ visibility: "visible" }, { visibility: "visible" }], { at: inMs, duration: outMs - inMs, fill: "none" });
+  }
+
+  /**
+   * Hard cuts: the element is visible exactly inside each [in, out) window (out may be Infinity) and
+   * hidden outside them, whatever its own CSS says. One animation per element: call it once.
+   */
+  visible(el: Element | null | undefined, windows: readonly (readonly [number, number])[]): Animation | null {
+    const frames: [number, Keyframe][] = [[0, { visibility: "hidden", easing: steps(1) }]];
+    for (const [a, b] of windows) {
+      frames.push([Math.max(0, a), { visibility: "visible", easing: steps(1) }]);
+      if (Number.isFinite(b)) frames.push([b, { visibility: "hidden", easing: steps(1) }]);
+    }
+    // Close on the last value a millisecond later, so the animation never ends on an implicit
+    // (underlying) keyframe: a cut at 0 must hold, not fall back to the element's own CSS.
+    const [lastAt, lastFrame] = frames[frames.length - 1];
+    frames.push([lastAt + 1, { visibility: lastFrame.visibility }]);
+    return this.key(el, frames);
+  }
+
+  /** A hard cut in at `ms` that holds. */
+  show(el: Element | null | undefined, ms: number): Animation | null {
+    return this.visible(el, [[ms, Infinity]]);
   }
 
   seek(ms: number): void {

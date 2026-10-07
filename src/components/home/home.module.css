@@ -213,11 +213,10 @@
   opacity: 1;
 }
 
-/* Under the opening (decided before the first paint, then by the client), the home waits unseen. */
+/* Before the first paint of a day's first visit, the home waits unseen under the opening's cover;
+   once the opening runs, its timeline decides what is seen. */
 .home[data-pre~="opening"] .stage,
-.home[data-pre~="opening"] .chrome,
-.home[data-moment="opening"] .stage,
-.home[data-moment="opening"] .chrome {
+.home[data-pre~="opening"] .chrome {
   visibility: hidden;
 }
 
@@ -259,13 +258,13 @@
     --count-f: 46px;
     --name: 30px;
     --mark-u: 22px;
-    --head-h: 54px;
+    --head-h: 50px;
     --sheet-gap: 14px;
   }
 
   .stage {
     grid-template-columns: minmax(0, 1fr);
-    row-gap: 14px;
+    row-gap: 10px;
     min-height: 0;
     padding-bottom: 0;
   }

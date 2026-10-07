@@ -1,0 +1,41 @@
+/*
+ * Each bucket's paper and the inks printed on it (§3.1), shared by its sheet, its In production
+ * card, its set-in title card and the cut to the picture. Bright sheets (vermilion, ochre) take
+ * ink; deep sheets (teal, ultramarine) take cream. Every pair is checked in spec-work/contrast.mjs.
+ */
+
+.words {
+  --sheet: var(--verm);
+  --fink: var(--sheet-ink);
+  --fink-2: var(--sheet-ink);
+  --keyline: oklch(0.21 0.01 67 / 0.85);
+  --label-face: var(--sheet-ink);
+  --label-plate: var(--verm-plate);
+}
+
+.movies {
+  --sheet: var(--ochre);
+  --fink: var(--sheet-ink);
+  --fink-2: oklch(0.21 0.01 67 / 0.8);
+  --keyline: oklch(0.21 0.01 67 / 0.66);
+  --label-face: var(--sheet-ink);
+  --label-plate: var(--ochre-plate);
+}
+
+.geography {
+  --sheet: var(--teal);
+  --fink: var(--sheet-cream);
+  --fink-2: var(--sheet-cream);
+  --keyline: oklch(0.95 0.025 86 / 0.66);
+  --label-face: var(--sheet-cream);
+  --label-plate: var(--sheet-ink);
+}
+
+.chess {
+  --sheet: var(--ultra);
+  --fink: var(--sheet-cream);
+  --fink-2: oklch(0.95 0.025 86 / 0.82);
+  --keyline: oklch(0.95 0.025 86 / 0.66);
+  --label-face: var(--sheet-cream);
+  --label-plate: var(--sheet-ink);
+}

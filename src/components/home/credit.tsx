@@ -21,6 +21,13 @@ export function markSentence(game: HomeGame): string {
   return `${game.name}: not played yet`;
 }
 
+/** The set-in's announcement: "Fade to Color: 3/10, named on reel 3, 80 points." */
+export function resultSentence(game: HomeGame): string {
+  if (!game.result) return markSentence(game);
+  const { label, line, score } = game.result;
+  return `${game.name}: ${labelText(label)}${line ? `, ${lowerFirst(line)}` : ""}, ${score} points.`;
+}
+
 function lowerFirst(s: string): string {
   return s.charAt(0).toLowerCase() + s.slice(1);
 }

@@ -6,7 +6,9 @@
  */
 
 .title {
-  --side-w: max(calc(var(--count-f) * 2.48), 172px);
+  /* The countdown's width: six digit cells and two colon cells (2.52em), so a two-digit numeral
+     fitted beside it never touches it. */
+  --side-w: max(calc(var(--count-f) * 2.52), 172px);
   position: sticky;
   top: 0;
   align-self: start;
@@ -144,15 +146,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Fixed cells as wide as League Gothic's widest figure (.363em): the digits never jostle. */
 .d {
   display: inline-block;
-  width: 0.47em;
+  width: 0.36em;
   text-align: center;
 }
 
 .c {
   display: inline-block;
-  width: 0.2em;
+  width: 0.18em;
   text-align: center;
   color: var(--ink-3);
 }
@@ -425,6 +428,7 @@
 
   .mo {
     font-size: min(30svh, calc((100vw - 32px) / var(--month-adv)));
+    line-height: 0.76;
   }
 
   .dayRow,
@@ -451,7 +455,7 @@
   }
 
   .band {
-    padding: 13px 16px 13px 18px;
+    padding: 10px 16px 10px 18px;
     gap: 12px;
     margin-top: 6px;
   }

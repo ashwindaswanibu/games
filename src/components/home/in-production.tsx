@@ -3,6 +3,7 @@ import type { HomeBucket } from "@/core/home-view";
 import { BucketField, BucketTitle } from "./bucket-title";
 import type { CutWord } from "./geometry";
 import { BUCKET_TIER } from "./palette";
+import paper from "./paper.module.css";
 import styles from "./sheet.module.css";
 
 /**
@@ -20,7 +21,7 @@ export function InProduction({ buckets, cuts, words, vanishX }: { buckets: reado
           return (
             <section
               key={b.id}
-              className={`${styles.sheet} ${styles.wing}`}
+              className={`${styles.sheet} ${styles.wing} ${paper[b.id]}`}
               aria-labelledby={headingId}
               data-bucket={b.id}
               data-tier={BUCKET_TIER[b.id]}
