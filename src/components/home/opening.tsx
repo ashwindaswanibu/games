@@ -318,9 +318,9 @@ export function Opening({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const geoLetters = [..."GEOGRAPHY"];
-  const castLine = view.cast.join(" · ");
   const bucketName = (id: string) => view.buckets.find((b) => b.id === id)?.name ?? id;
+  const geoLetters = [...bucketName("geography")];
+  const castLine = view.cast.join(" · ");
 
   return (
     <div ref={ref} className={styles.opening} aria-hidden="true" style={wordVars}>
