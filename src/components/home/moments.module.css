@@ -205,8 +205,16 @@
   z-index: 4;
   pointer-events: none;
   overflow: clip;
-  padding: 0 10px 14px;
   contain: paint;
+}
+
+/* Two layers laid out alike: the paper (plate, paper, name, aside), pulled away and cut back, and
+   the flight (the mark and the label), which travels into the credit. Each keeps the other's parts
+   as hidden spacers. */
+.cardLayer {
+  position: absolute;
+  inset: 0;
+  padding: 0 10px 14px;
 }
 
 .cardPaper,
@@ -253,6 +261,10 @@
 
 .cardMark [data-keyline] {
   visibility: visible;
+}
+
+[data-si-layer="paper"] .cardMark [data-keyline] {
+  visibility: hidden;
 }
 
 .cardMark [data-piece],

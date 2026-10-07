@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 import type { HomeViewer } from "@/core/home-view";
 import { navItems } from "./strip";
 import styles from "./chrome.module.css";
@@ -8,9 +8,16 @@ import styles from "./chrome.module.css";
  * The phone chrome (§5.10): a torn strip of ink paper fixed at the foot, in every light. At night
  * its torn edge carries a faint hairline so it separates from the dark room.
  */
-export function TabBar({ viewer, tear }: { viewer: HomeViewer; tear: string }) {
+export const TabBar = memo(function TabBar({ viewer, tear, inert }: { viewer: HomeViewer; tear: string; inert?: boolean }) {
   return (
-    <nav className={styles.tabBar} aria-label="Main" data-app-chrome="bottom-nav" data-op="chrome" style={{ "--tear": tear } as CSSProperties}>
+    <nav
+      className={styles.tabBar}
+      aria-label="Main"
+      data-app-chrome="bottom-nav"
+      data-op="chrome"
+      style={{ "--tear": tear } as CSSProperties}
+      inert={inert}
+    >
       <span className={styles.tabEdge} aria-hidden="true" />
       <span className={styles.tabBg} aria-hidden="true" />
       {navItems(viewer).map((item) => (
@@ -20,4 +27,4 @@ export function TabBar({ viewer, tear }: { viewer: HomeViewer; tear: string }) {
       ))}
     </nav>
   );
-}
+});

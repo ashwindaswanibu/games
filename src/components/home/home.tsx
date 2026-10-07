@@ -61,6 +61,10 @@ type Moment = "opening" | "fin" | null;
 
 const CUE_FADE_MS = 2400;
 const SET_IN_DELAY_MS = 200;
+/** After FIN, the page asks for the new day this often until it comes … */
+const FIN_RETRY_MS = 2000;
+/** … for this long at most (a device clock up to 30 s fast isn't corrected), then gives way. */
+const FIN_WAIT_MS = 40_000;
 
 /** True only while React hydrates the server's HTML: the pre-paint script is rendered then and never created on the client. */
 const noop = () => () => {};
@@ -257,12 +261,25 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
     setMoment("fin");
   }, []);
 
-  // The new day's view arrives with a new date, which decides its opening; if it does not come
-  // (a device clock ahead of New York), FIN gives way after a while rather than hang.
+  // The new day's view arrives with a new date, which decides its opening. A device clock a few
+  // seconds ahead of New York (skew under 30 s isn't corrected) reaches FIN before the server's
+  // midnight and gets yesterday back: FIN holds and the page keeps asking until the date changes,
+  // then gives way rather than hang. (Each answer re-arms the countdown at zero, which only says
+  // "fin" again, harmless while FIN is up.)
+  const [finWait, setFinWait] = useState<{ date: string; until: number } | null>(null);
   const onFinEnd = useCallback(() => {
     router.refresh();
-    setTimeout(() => setMoment((m) => (m === "fin" ? null : m)), 8000);
-  }, [router]);
+    setFinWait({ date, until: Date.now() + FIN_WAIT_MS });
+  }, [router, date]);
+
+  useEffect(() => {
+    if (moment !== "fin" || !finWait || finWait.date !== date) return;
+    const ask = setInterval(() => {
+      if (Date.now() < finWait.until) router.refresh();
+      else setMoment((m) => (m === "fin" ? null : m));
+    }, FIN_RETRY_MS);
+    return () => clearInterval(ask);
+  }, [moment, finWait, date, router]);
 
   // Remember when this device last saw the home (for the next visit's set-in).
   useEffect(() => {
@@ -291,8 +308,12 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
   );
 
   // ---- Page -------------------------------------------------------------------------------------
-  const openBuckets = view.buckets.filter((b) => b.status === "open");
-  const quietBuckets = view.buckets.filter((b) => b.status === "in_production");
+  // The page's parts are memoized (a cue swap changes the tokens, not the content, so it re-renders
+  // only this root and the room), and so is everything they are given.
+  const openBuckets = useMemo(() => view.buckets.filter((b) => b.status === "open"), [view.buckets]);
+  const quietBuckets = useMemo(() => view.buckets.filter((b) => b.status === "in_production"), [view.buckets]);
+  const liveGames = view.progress.chips.filter((c) => !c.testing).length;
+  const opening = moment === "opening";
   const density = games.length === 1 ? "solo" : games.length >= 9 ? "dense" : "standard";
   const primaryId = view.primary?.gameId ?? null;
   const firstOpen = openBuckets[0];
@@ -318,11 +339,12 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
       {hydrating && <script dangerouslySetInnerHTML={{ __html: prePaintScript(gate) }} />}
       <Room lit={lit} light={cue} fadeMs={reduced ? 0 : fadeMs} />
       <div className={styles.cover} aria-hidden="true" />
-      <div className={styles.chrome} data-op="strip" data-comes-up="" style={{ "--i": 0 } as CSSProperties}>
-        <Strip viewer={view.viewer} onReplay={replay} />
+      {/* Everything under the opening is inert while it plays: a tap that skips it lands on nothing. */}
+      <div className={styles.chrome} data-op="strip" data-comes-up="" style={{ "--i": 0 } as CSSProperties} inert={opening}>
+        <Strip viewer={view.viewer} onReplay={reduced ? null : replay} />
       </div>
-      <main className={styles.stage} inert={moment === "opening"} data-stage="">
-        <NightSpill night={cue === "night"} className={styles.spill} />
+      <main className={styles.stage} inert={opening} data-stage="">
+        <NightSpill night={lit === "night"} className={styles.spill} />
         <TitleColumn view={view} comp={comp} clock={clock} initialGone={initialGone} pending={bandSettled ? null : pending} onZero={onZero} />
         <div className={sheetStyles.creditsCol} data-density={density} data-op="credits">
           {view.welcome && <WelcomeSlip welcome={view.welcome} cut={comp.slips.welcome} />}
@@ -357,12 +379,12 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
           )}
         </div>
       </main>
-      <Billing billing={view.billing} />
-      <TabBar viewer={view.viewer} tear={comp.tabTear} />
+      <Billing billing={view.billing} liveGames={liveGames} inert={opening} />
+      <TabBar viewer={view.viewer} tear={comp.tabTear} inert={opening} />
       <p className={styles.srOnly} aria-live="polite">
         {announce}
       </p>
-      {moment === "opening" && (
+      {opening && (
         <Opening
           key={openingRun}
           view={view}

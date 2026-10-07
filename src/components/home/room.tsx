@@ -7,7 +7,28 @@ import styles from "./home.module.css";
 
 const CUES: readonly HomeCue[] = ["morning", "afternoon", "night"];
 
-/** The room's light for a cue: a tiny canvas, scaled to the viewport (no blur, never animated). */
+/** Runs `fn` when the browser is idle (soon at the latest), off any frame a moment is drawing. */
+function whenIdle(fn: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const id = window.requestIdleCallback(fn, { timeout: 400 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const t = setTimeout(fn, 60);
+  return () => clearTimeout(t);
+}
+
+const lights = new Map<HomeCue, string>();
+
+/** The room's light for a cue: a tiny canvas, scaled to the viewport (no blur, never animated). Painted once per cue. */
+function lightFor(cue: HomeCue): string {
+  let url = lights.get(cue);
+  if (url === undefined) {
+    url = paintLight(cue);
+    lights.set(cue, url);
+  }
+  return url;
+}
+
 function paintLight(cue: HomeCue): string {
   const c = document.createElement("canvas");
   c.width = 48;
@@ -41,7 +62,8 @@ function paintLight(cue: HomeCue): string {
 
 /**
  * The room (§5.12): one static layer per cue (ground + paper fibre), crossfaded by opacity only
- * when the light changes while the page is open, and the light canvas. `lit` is the layer on.
+ * when the light changes while the page is open, and the light canvas. `lit` is the layer on;
+ * `light` follows at the crossfade's midpoint (the ink swap), its canvas painted as the fade starts.
  */
 export function Room({ lit, light, fadeMs }: { lit: HomeCue; light: HomeCue; fadeMs: number }) {
   const layers = useRef<Map<HomeCue, HTMLElement>>(new Map());
@@ -50,8 +72,11 @@ export function Room({ lit, light, fadeMs }: { lit: HomeCue; light: HomeCue; fad
 
   useEffect(() => {
     const el = lightEl.current;
-    if (el) el.style.backgroundImage = paintLight(light);
+    if (el) el.style.backgroundImage = lightFor(light);
   }, [light]);
+
+  // The incoming cue's light is ready before the swap, so the swap frame only sets a style.
+  useEffect(() => (lit === light ? undefined : whenIdle(() => void lightFor(lit))), [lit, light]);
 
   useEffect(() => {
     const from = shown.current;
@@ -94,8 +119,9 @@ export function Room({ lit, light, fadeMs }: { lit: HomeCue; light: HomeCue; fad
 
 /**
  * The night's light (§5.12), painted on a 64-wide canvas scaled to the stage: each sheet's colour
- * spills past its edges, and the dial's paper is the lamp. Painted on mount, when night falls, and
- * on resize (debounced); never animated.
+ * spills past its edges, and the dial's paper is the lamp. Painted when the browser is idle on
+ * mount at night and as night begins to fall (`night` is the crossfade's incoming cue, so it is
+ * ready before the ink swap shows it), and on resize (debounced); never animated.
  */
 export function NightSpill({ night, className }: { night: boolean; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -135,7 +161,7 @@ export function NightSpill({ night, className }: { night: boolean; className?: s
       }
       el.style.backgroundImage = `url(${c.toDataURL()})`;
     };
-    paint();
+    const cancelFirst = whenIdle(paint);
     let t: ReturnType<typeof setTimeout> | undefined;
     const onResize = () => {
       clearTimeout(t);
@@ -143,6 +169,7 @@ export function NightSpill({ night, className }: { night: boolean; className?: s
     };
     window.addEventListener("resize", onResize);
     return () => {
+      cancelFirst();
       clearTimeout(t);
       window.removeEventListener("resize", onResize);
     };

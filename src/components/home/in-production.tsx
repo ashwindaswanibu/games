@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 import type { HomeBucket } from "@/core/home-view";
 import { BucketField, BucketTitle } from "./bucket-title";
 import type { CutWord } from "./geometry";
@@ -11,7 +11,7 @@ import styles from "./sheet.module.css";
  * "In production." Cards side by side when the row has room, bands when it is tight (a container
  * query on the row's height), stacked bands on a phone. Never a fake game.
  */
-export function InProduction({ buckets, cuts, words, vanishX }: { buckets: readonly HomeBucket[]; cuts: Readonly<Record<string, string>>; words: CutWord; vanishX: number }) {
+export const InProduction = memo(function InProduction({ buckets, cuts, words, vanishX }: { buckets: readonly HomeBucket[]; cuts: Readonly<Record<string, string>>; words: CutWord; vanishX: number }) {
   if (buckets.length === 0) return null;
   return (
     <div className={styles.wings} data-op="wings" data-comes-up="" style={{ "--i": 6 } as CSSProperties}>
@@ -43,4 +43,4 @@ export function InProduction({ buckets, cuts, words, vanishX }: { buckets: reado
       </div>
     </div>
   );
-}
+});

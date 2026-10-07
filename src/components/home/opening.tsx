@@ -13,6 +13,8 @@ import styles from "./moments.module.css";
 
 /** The day winds from midnight to now in twelve stop-motion frames. */
 const FRAMES = 12;
+/** The disc punches in: its paper, ring, ticks, hand and pin all on this frame. */
+const DISC_IN = 60;
 const SWEEP_FROM = BEAT; // 500
 const SWEEP_TO = BEAT * 3; // 1500
 const NOW_AT = 1500;
@@ -110,7 +112,7 @@ export function Opening({
     const HOME_LAND = HOME_LEAVE + 300;
     if (disc) {
       T.visible(disc, [
-        [60, WORDS_AT],
+        [DISC_IN, WORDS_AT],
         [HOME_AT, HOME_LAND],
       ]);
       // Ring and ticks follow the room they sit in.
@@ -127,7 +129,7 @@ export function Opening({
       T.visible(
         g,
         k < FRAMES
-          ? [[k === 0 ? 0 : frameAt(k), frameAt(k + 1)]]
+          ? [[k === 0 ? DISC_IN : frameAt(k), frameAt(k + 1)]]
           : [
               [frameAt(k), WORDS_AT],
               [HOME_AT, HOME_LAND],
@@ -246,7 +248,7 @@ export function Opening({
       const dy = b.top + b.height / 2 - (a.top + a.height / 2);
       T.key(disc, [
         [0, { transform: "translate(0px, 0px) scale(0.9)", easing: steps(1) }],
-        [60, { transform: "translate(0px, 0px) scale(0.9)", easing: EASE_PUNCH }],
+        [DISC_IN, { transform: "translate(0px, 0px) scale(0.9)", easing: EASE_PUNCH }],
         [170, { transform: "translate(0px, 0px) scale(1)" }],
         [HOME_LEAVE, { transform: "translate(0px, 0px) scale(1)", easing: EASE_IO }],
         [HOME_LAND, { transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${k.toFixed(4)})` }],
@@ -293,7 +295,28 @@ export function Opening({
       T.cancel();
       onEndRef.current();
     };
-    const skip = () => finish();
+    // A tap or click skips, and only skips: the page under the opening is inert while it plays,
+    // and the click that follows the press is swallowed, since by then the page is live again (it
+    // must not press Replay, or follow a link, under the finger).
+    let swallowing = false;
+    let swallowEnd: ReturnType<typeof setTimeout> | undefined;
+    const swallow = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      stopSwallowing();
+    };
+    const stopSwallowing = () => {
+      clearTimeout(swallowEnd);
+      window.removeEventListener("click", swallow, { capture: true });
+    };
+    const skip = (e: Event) => {
+      if (!done && !swallowing && e.type !== "wheel") {
+        swallowing = true;
+        window.addEventListener("click", swallow, { capture: true });
+        swallowEnd = setTimeout(stopSwallowing, 600);
+      }
+      finish();
+    };
     // A key skips; Space or Enter must not also press whatever has focus (the Replay button).
     const skipKey = (e: KeyboardEvent) => {
       if (e.key === " " || e.key === "Enter") e.preventDefault();
@@ -310,6 +333,7 @@ export function Opening({
       window.removeEventListener("pointerdown", skip, opts);
       window.removeEventListener("wheel", skip, opts);
       window.removeEventListener("touchstart", skip, opts);
+      // The swallow outlives the overlay (the click comes after it has gone); it ends on its own.
       for (const el of layers) el.style.willChange = "";
       stopFrames?.(false);
       T.cancel();

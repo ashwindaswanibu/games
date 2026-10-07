@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties } from "react";
+import { memo, useEffect, useState, type CSSProperties } from "react";
 import type { WelcomeNote } from "@/core/home-view";
 import styles from "./chrome.module.css";
 
@@ -9,7 +9,7 @@ import styles from "./chrome.module.css";
  * A first sign-in (§5.7): a slip of cream paper pasted at the top of the credits, saying how
  * friends see you and where to change it. Closes for this page view (the close button or Esc).
  */
-export function WelcomeSlip({ welcome, cut }: { welcome: WelcomeNote; cut: string }) {
+export const WelcomeSlip = memo(function WelcomeSlip({ welcome, cut }: { welcome: WelcomeNote; cut: string }) {
   const [open, setOpen] = useState(true);
   useEffect(() => {
     if (!open) return;
@@ -40,4 +40,4 @@ export function WelcomeSlip({ welcome, cut }: { welcome: WelcomeNote; cut: strin
       </div>
     </aside>
   );
-}
+});

@@ -23,6 +23,31 @@ export const EASE_IO = "cubic-bezier(.7,0,.2,1)";
 export const EASE_PUNCH = "cubic-bezier(.3,1.45,.55,1)";
 export const steps = (n: number) => `steps(${n},end)`;
 
+/**
+ * A CSS `cubic-bezier()` as numbers, for a move that has to know where an eased animation is at a
+ * given moment: `at(x)` is the progress at time fraction x; `when(y)` the time fraction at which a
+ * monotonic curve first reaches progress y. Both clamp to [0, 1].
+ */
+export function cubicBezier(x1: number, y1: number, x2: number, y2: number): { at: (x: number) => number; when: (y: number) => number } {
+  const coord = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  // Both coordinates rise with s on the curves used here, so bisection on s finds either.
+  const solve = (a: number, b: number, v: number) => {
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 32; i++) {
+      const mid = (lo + hi) / 2;
+      if (coord(a, b, mid) < v) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  };
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  return {
+    at: (x) => coord(y1, y2, solve(x1, x2, clamp(x))),
+    when: (y) => coord(x1, x2, solve(y1, y2, clamp(y))),
+  };
+}
+
 /** A keyframe at an absolute time on the timeline; `easing` applies from this frame to the next. */
 export type TimedFrame = readonly [ms: number, frame: Keyframe];
 

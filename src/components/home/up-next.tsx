@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties, MouseEvent } from "react";
+import { memo, type CSSProperties, type MouseEvent } from "react";
 import type { HomeGame, HomePrimary } from "@/core/home-view";
 import { Arrow } from "./band";
 import styles from "./chrome.module.css";
@@ -11,7 +11,7 @@ import styles from "./chrome.module.css";
  * the band holds the filled primary above the fold; the credit itself then shows its quiet action
  * (one filled thing per screen). Not inside any bucket's section.
  */
-export function UpNext({
+export const UpNext = memo(function UpNext({
   primary,
   game,
   cut,
@@ -40,4 +40,4 @@ export function UpNext({
       </div>
     </aside>
   );
-}
+});

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 import type { HomeViewer } from "@/core/home-view";
 import styles from "./chrome.module.css";
 
@@ -30,14 +30,17 @@ export function navItems(viewer: HomeViewer): { href: string; label: string; cur
 
 /**
  * The laptop chrome (§5.1): the viewer, the streak, the nav, the Replay cue mark. On a phone the
- * nav moves to the torn tab bar and the strip keeps the name, the streak and Replay.
+ * nav moves to the torn tab bar and the strip keeps the name, the streak and Replay. With reduced
+ * motion there is no opening, so no Replay (`onReplay` null).
  */
-export function Strip({ viewer, onReplay }: { viewer: HomeViewer; onReplay: () => void }) {
+export const Strip = memo(function Strip({ viewer, onReplay }: { viewer: HomeViewer; onReplay: (() => void) | null }) {
   const { streak } = viewer;
   return (
     <header className={styles.strip} data-op="chrome">
       <div className={styles.who}>
-        <span className={styles.name}>{viewer.firstName}</span>
+        <span className={styles.name} title={viewer.firstName}>
+          {viewer.firstName}
+        </span>
         <StreakTicks streak={streak} />
         {streak.current > 0 && (
           <span className={styles.streak}>
@@ -58,12 +61,14 @@ export function Strip({ viewer, onReplay }: { viewer: HomeViewer; onReplay: () =
           </Link>
         ))}
       </nav>
-      <button type="button" className={styles.replay} aria-label="Replay the opening titles" onClick={onReplay}>
-        <svg viewBox="0 0 30 30" aria-hidden="true" focusable="false">
-          <circle cx="15" cy="15" r="13.2" fill="none" stroke="var(--ink)" strokeWidth="1.6" />
-          <circle cx="15" cy="15" r="4.6" fill="var(--verm)" />
-        </svg>
-      </button>
+      {onReplay && (
+        <button type="button" className={styles.replay} aria-label="Replay the opening titles" onClick={onReplay}>
+          <svg viewBox="0 0 30 30" aria-hidden="true" focusable="false">
+            <circle cx="15" cy="15" r="13.2" fill="none" stroke="var(--ink)" strokeWidth="1.6" />
+            <circle cx="15" cy="15" r="4.6" fill="var(--verm)" />
+          </svg>
+        </button>
+      )}
     </header>
   );
-}
+});

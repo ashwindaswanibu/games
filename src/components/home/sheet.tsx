@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, MouseEvent } from "react";
+import { memo, type CSSProperties, type MouseEvent } from "react";
 import type { HomeBucket, HomeGame } from "@/core/home-view";
 import { BucketField, BucketTitle } from "./bucket-title";
 import type { CutWord } from "./geometry";
@@ -15,7 +15,7 @@ import styles from "./sheet.module.css";
  * fibre; the head (title, one gesture, kicker); a rule; the credits. Never a web card: no radius,
  * no border, no box-shadow.
  */
-export function Sheet({
+export const Sheet = memo(function Sheet({
   bucket,
   date,
   cut,
@@ -76,4 +76,4 @@ export function Sheet({
       </div>
     </section>
   );
-}
+});
