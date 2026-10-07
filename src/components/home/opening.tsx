@@ -293,14 +293,19 @@ export function Opening({
       onEndRef.current();
     };
     const skip = () => finish();
+    // A key skips; Space or Enter must not also press whatever has focus (the Replay button).
+    const skipKey = (e: KeyboardEvent) => {
+      if (e.key === " " || e.key === "Enter") e.preventDefault();
+      finish();
+    };
     const opts = { capture: true, passive: true } as const;
-    window.addEventListener("keydown", skip, opts);
+    window.addEventListener("keydown", skipKey, { capture: true });
     window.addEventListener("pointerdown", skip, opts);
     window.addEventListener("wheel", skip, opts);
     window.addEventListener("touchstart", skip, opts);
     void T.play().then(finish);
     return () => {
-      window.removeEventListener("keydown", skip, opts);
+      window.removeEventListener("keydown", skipKey, { capture: true });
       window.removeEventListener("pointerdown", skip, opts);
       window.removeEventListener("wheel", skip, opts);
       window.removeEventListener("touchstart", skip, opts);

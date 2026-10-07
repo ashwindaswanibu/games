@@ -188,6 +188,8 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
     const still = prefersReducedMotion();
     const m = decideMoments(gate, storage, still);
     if (m.setIn) markSetInsPlayed(date, m.candidates);
+    // Reduced motion: no opening, but today's is still counted as seen.
+    if (still) markOpeningSeen(date);
     const next: Moment = qa?.fin ? "fin" : m.opening ? "opening" : null;
     const landed = m.setIn ? games.find((g) => g.id === m.setIn) : undefined;
     /* eslint-disable react-hooks/set-state-in-effect -- see above: before the first paint, once */
