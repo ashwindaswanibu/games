@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect } from "react";
 import { IMDB_ATTRIBUTION } from "../attribution";
 import { MOVIES_FONT_VARS } from "./fonts";
 import styles from "./movies.module.css";
@@ -36,6 +37,23 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
   const search = useCatalogSearch(config);
   const { query, results, status, error, open: expanded, active, excluded, inputRef, popupRef, listId, optionId } = search;
 
+  // Keep the whole dropdown (hits and the IMDb credit) on screen: below the field when it fits
+  // above the app's bottom nav, otherwise above it if there's more room there, and never taller
+  // than the room it has. Set on the element directly, so measuring causes no extra render.
+  useLayoutEffect(() => {
+    const popup = popupRef.current;
+    const field = inputRef.current?.getBoundingClientRect();
+    if (!expanded || !popup || !field) return;
+    const navTop = document.querySelector('[data-app-chrome="bottom-nav"]')?.getBoundingClientRect().top ?? window.innerHeight;
+    const below = navTop - field.bottom - 14;
+    const above = field.top - 14;
+    const wanted = popup.scrollHeight;
+    const up = placement === "above" || (wanted > below && above > below);
+    popup.dataset.placement = up ? "above" : "below";
+    const cap = Math.min(window.innerHeight * 0.5, 344);
+    popup.style.maxHeight = `${Math.floor(Math.max(160, Math.min(cap, up ? above : below)))}px`;
+  }, [expanded, status, results.length, placement, popupRef, inputRef]);
+
   return (
     <div data-variant={variant} className={`${MOVIES_FONT_VARS} ${styles.root} ${styles.search}`}>
       <label htmlFor={search.inputId} className={styles.searchLabel}>
@@ -69,7 +87,7 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
 
       {/* The hits scroll; IMDb's credit sits under them, outside the scrolling list, so it shows
           whatever the list's height or scroll position. */}
-      <div ref={popupRef} hidden={!expanded} data-placement={placement} className={styles.dropdown}>
+      <div ref={popupRef} hidden={!expanded} className={styles.dropdown}>
         <ul id={listId} role="listbox" aria-label={label} className={styles.listbox}>
           {status === "ready" &&
             results.map((hit, index) => {

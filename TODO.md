@@ -26,6 +26,7 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [ ] Bring the same level of design to every screen and game (laptop first, phone good too).
 
 ## Content and data
+- [ ] Search: "don" ranks *Don't Look Up* above *Don* (2006) because the search key splits "Don't" into "don t". Fix by treating an apostrophe as part of a word in `catalog_search_key` (SQL and TS together, with a migration that recomputes the keys).
 - [x] **A much bigger film catalog for guessing** (Ashwin, 2026-10-06; built 2026-10-07 on branch `catalog-expansion`, local database only). 60,559 films (was 4,986; 5,400 Indian, was 156) from IMDb's datasets and Wikidata; search finds a film by any of its names ("K3G", "Sen to Chihiro") and ranks by IMDb votes. See `scripts/content/movies/README.md`, section 1.
 - [x] **Use the same catalog for Degrees of Separation**, with cast for every film (IMDb's billed cast plus Wikidata's): 646,000 credits, 168,000 people.
 - [ ] **Roll the bigger catalog out to the hosted database** (Ashwin): one sequence, step by step in `design/catalog-rollout.md`: db push → deploy the app → build against hosted (`--allow-remote-read`) → apply `--dry-run` → apply → catalog-check against the first baseline → `degrees --repar-unplayed` → reindex, one statement per run. ~140 MB of the 500 MB free tier.
