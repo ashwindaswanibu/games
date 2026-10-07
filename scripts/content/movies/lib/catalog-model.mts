@@ -268,6 +268,16 @@ export function keepStoredOrder(stored: readonly string[], incoming: readonly st
   return [...kept, ...incoming.filter((name) => !keptSet.has(name))].slice(0, max);
 }
 
+/**
+ * Whether a film's genres (catalog display names, `movie_films.genres`) make it a documentary or a
+ * concert film: "Documentary", any "… documentary" ("Music documentary", "Nature documentary") or
+ * "Documentary …" ("Documentary television"), or "Concert". Fiction that borrows the form
+ * (Mockumentary, Pseudo-documentary, Docudrama, Docufiction) has actors and doesn't count. Pure.
+ */
+export function isNonFictionFilm(genres: readonly string[]): boolean {
+  return genres.some((genre) => /^(?:.+ )?documentary(?: .+)?$/i.test(genre) || /^concert$/i.test(genre));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Series
 // ---------------------------------------------------------------------------------------------
@@ -368,6 +378,71 @@ export function imdbCastToKeep(cast: ReadonlyArray<string | null>, popularity: (
     if (position < depth.always || (position < depth.known && popularity(key) >= 1)) kept.push(key);
   });
   return kept;
+}
+
+/**
+ * How many years after someone died a film can still credit them for work they did alive. Later
+ * than that, a credit only Wikidata gives is archive footage (or Wikidata naming the wrong person).
+ * Posthumous releases IMDb bills are kept whatever the gap: Game of Death (Bruce Lee, five years),
+ * The Other Side of the Wind (shot in the 1970s, released in 2018).
+ */
+export const POSTHUMOUS_YEARS = 2;
+
+export interface CastToKeepInput {
+  /** IMDb's billed cast (after `imdbCastToKeep`), in IMDb's order. */
+  imdb: readonly string[];
+  /** Wikidata's cast, in its own order. */
+  wikidata: readonly string[];
+  /** Everyone IMDb lists in this film's archive footage or archive sound. */
+  archived: ReadonlySet<string>;
+  /** A documentary or a concert film (`isNonFictionFilm`). */
+  nonFiction: boolean;
+  year: number | null;
+  /** The year someone died, or null when they may be alive (or nobody knows). */
+  diedIn(key: string): number | null;
+}
+
+export interface CastKept {
+  imdb: string[];
+  wikidata: string[];
+  /** Credits left out, by rule (one reason per credit, in the order the rules are listed below). */
+  dropped: { archive: number; nonFiction: number; posthumous: number };
+}
+
+/**
+ * A film's cast is the people who play a role in it, the rule IMDb's own cast categories follow
+ * (actors and actresses; not "self", not "archive_footage"). Wikidata's cast lists have no such
+ * categories, so they bring in whoever appears at all. Left out:
+ *  1. anyone IMDb lists in the film's archive footage or sound, from both sources (IMDb often lists
+ *     them as an actor too): Alan Arkin and Grace Kelly in the horror compilation Terror in the Aisles;
+ *  2. Wikidata's cast of a documentary or a concert film, unless IMDb bills them as an actor: the
+ *     people in it appear as themselves (or in footage), which IMDb's cast leaves out too;
+ *  3. Wikidata's cast that IMDb doesn't bill, in a film released more than `POSTHUMOUS_YEARS`
+ *     after they died: footage from elsewhere (John Lennon in Forrest Gump, Lionel Barrymore on a
+ *     television in Home Alone), or the wrong person.
+ * Each of these is a Degrees link between people who never shared a film. Pure.
+ */
+export function castToKeep(input: CastToKeepInput): CastKept {
+  const dropped = { archive: 0, nonFiction: 0, posthumous: 0 };
+  const imdb = input.imdb.filter((key) => {
+    if (!input.archived.has(key)) return true;
+    dropped.archive++;
+    return false;
+  });
+  const billed = new Set(imdb);
+  const wikidata = input.wikidata.filter((key) => {
+    if (billed.has(key)) return true;
+    if (input.archived.has(key)) dropped.archive++;
+    else if (input.nonFiction) dropped.nonFiction++;
+    else if (diedLongBefore(input.diedIn(key), input.year)) dropped.posthumous++;
+    else return true;
+    return false;
+  });
+  return { imdb, wikidata, dropped };
+}
+
+function diedLongBefore(died: number | null, year: number | null): boolean {
+  return died !== null && year !== null && year > died + POSTHUMOUS_YEARS;
 }
 
 export interface MergeCastInput {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  castToKeep,
   DEFAULT_RULES,
   directorNames,
   displayTitle,
@@ -18,6 +19,7 @@ import {
   NOT_A_SERIES,
   orderGenresBySpecificity,
   parseImdbId,
+  POSTHUMOUS_YEARS,
   parseTmdbId,
   searchableNames,
   selectionReason,
@@ -253,6 +255,49 @@ describe("imdbCastToKeep", () => {
     expect(imdbCastToKeep(cast, popularity, { always: 4, known: 10 })).toEqual(["nm1", "Q5", "nm2", "Q7", "Q9", "Q10"]);
     expect(imdbCastToKeep(cast, popularity, { always: 0, known: 0 })).toEqual([]);
     expect(imdbCastToKeep(cast, popularity, { always: 10, known: 10 })).toEqual(["nm1", "Q5", "nm2", "nm3", "Q0", "Q7", "Q9", "Q10"]);
+  });
+});
+
+describe("castToKeep", () => {
+  const base = { imdb: [] as string[], wikidata: [] as string[], archived: new Set<string>(), nonFiction: false, year: 1994, diedIn: () => null };
+
+  it("keeps everyone when nothing says they don't play a role", () => {
+    const kept = castToKeep({ ...base, imdb: ["Q1", "nm2"], wikidata: ["Q1", "Q3"] });
+    expect(kept).toEqual({ imdb: ["Q1", "nm2"], wikidata: ["Q1", "Q3"], dropped: { archive: 0, nonFiction: 0, posthumous: 0 } });
+  });
+
+  it("leaves out anyone IMDb lists in archive footage, from both sources", () => {
+    // Terror in the Aisles: IMDb lists Alan Arkin as archive footage and as an actor; Wikidata lists Grace Kelly.
+    const kept = castToKeep({ ...base, imdb: ["host", "arkin"], wikidata: ["arkin", "kelly", "allen"], archived: new Set(["arkin", "kelly"]) });
+    expect(kept.imdb).toEqual(["host"]);
+    expect(kept.wikidata).toEqual(["allen"]);
+    expect(kept.dropped).toEqual({ archive: 3, nonFiction: 0, posthumous: 0 });
+  });
+
+  it("keeps a documentary's cast only where IMDb bills them as an actor", () => {
+    const kept = castToKeep({ ...base, nonFiction: true, imdb: ["narrator"], wikidata: ["narrator", "subject"] });
+    expect(kept.imdb).toEqual(["narrator"]);
+    expect(kept.wikidata).toEqual(["narrator"]);
+    expect(kept.dropped.nonFiction).toBe(1);
+  });
+
+  it("leaves out Wikidata's cast in a film released years after they died", () => {
+    const died: Record<string, number> = { lennon: 1980, walker: 2013 };
+    const diedIn = (key: string) => died[key] ?? null;
+    // Forrest Gump (1994): John Lennon is archive footage.
+    expect(castToKeep({ ...base, wikidata: ["lennon", "hanks"], diedIn }).wikidata).toEqual(["hanks"]);
+    // Furious 7 (2015): released POSTHUMOUS_YEARS after Paul Walker died, still his film.
+    expect(castToKeep({ ...base, year: 2013 + POSTHUMOUS_YEARS, wikidata: ["walker"], diedIn }).wikidata).toEqual(["walker"]);
+    expect(castToKeep({ ...base, year: 2013 + POSTHUMOUS_YEARS + 1, wikidata: ["walker"], diedIn }).dropped.posthumous).toBe(1);
+    // No year, no rule.
+    expect(castToKeep({ ...base, year: null, wikidata: ["lennon"], diedIn }).wikidata).toEqual(["lennon"]);
+  });
+
+  it("never drops IMDb's billed cast for dying before the release", () => {
+    // Game of Death (1978): Bruce Lee, who died in 1973, is IMDb's top billing.
+    const kept = castToKeep({ ...base, year: 1978, imdb: ["lee"], wikidata: ["lee"], diedIn: () => 1973 });
+    expect(kept.imdb).toEqual(["lee"]);
+    expect(kept.wikidata).toEqual(["lee"]);
   });
 });
 

@@ -17,11 +17,14 @@ const ID_CHUNK = 200;
  *  1. Every film and person in the baseline (the ids taken just before an import) still exists,
  *     with the same non-empty Wikidata, IMDb and TMDB ids.
  *  2. Every catalog id any stored puzzle, solution or play references still exists.
- *  3. Every link of a stored Degrees solution is still a credit pair, so the chain replays.
+ *  3. Every link of a stored Degrees solution is still a credit pair, so the chain replays: the
+ *     solutions of days played, of today and before, and of DEV FIXTURE days.
  *
- * And two warnings (not failures: the import is right, the puzzles need catching up): unplayed
+ * And three warnings (not failures: the import is right, the puzzles need catching up): unplayed
  * Degrees days from today on whose start and end now have a chain shorter than their par (more
- * credits make shorter chains; `degrees --repar-unplayed` fixes those days), and stored puzzles or
+ * credits make shorter chains), unplayed days after today whose solution uses a credit the import
+ * dropped (archive footage: imports don't keep those, see `StoredReferences`), both fixed by
+ * `degrees --repar-unplayed`; and stored puzzles or
  * plays that reference a film now hidden as adult (search can't find it, so a Degrees chain through
  * it can't be played and a Fade to Color four shouldn't show it: look at those days by hand).
  * Chains never go through a hidden film, as in `degrees`.
@@ -132,8 +135,18 @@ export interface StoredReferences {
   refs: CatalogRefs;
   /** Every stored Degrees day whose payload parses. */
   degreesDays: StoredDegreesDay[];
-  /** Credit pairs of stored Degrees solutions: they must stay credits. */
+  /**
+   * Credit pairs of stored Degrees solutions that must stay credits: of days someone played, of
+   * today and before, and of DEV FIXTURE days.
+   */
   solutionPairs: [number, number][];
+  /**
+   * Credit pairs of the other stored solutions (unplayed days after today), by date. An import may
+   * drop one of these credits (someone in a film's archive footage was never in it); the day is
+   * then still to come and nobody has seen it, so `degrees --repar-unplayed` gives it the chain the
+   * catalog has now instead.
+   */
+  openSolutionPairs: Map<string, [number, number][]>;
   /** Credit pairs of Degrees chains players built. Never removed either (their history replays). */
   playPairs: [number, number][];
   /** Rows a game's own schemas couldn't read (informational; their refs are still collected). */
@@ -147,8 +160,8 @@ interface DegreesShapes {
   links: { film: { id: number }; person: { id: number } }[];
 }
 
-/** Reads every stored puzzle and play and collects what they reference. */
-export async function loadStoredReferences(db: ContentDb): Promise<StoredReferences> {
+/** Reads every stored puzzle and play and collects what they reference. `today` is the game's (New York) date. */
+export async function loadStoredReferences(db: ContentDb, today: string = todayInGameTimezone()): Promise<StoredReferences> {
   const { getGame } = await import("@/games/registry");
   const { degreesPuzzleSchema, degreesSolutionSchema } = await import("@/games/degrees/schema");
   const puzzles = await selectAllPages<{ game_id: string; puzzle_date: string; payload: Json; solution: Json }>((from, to) =>
@@ -161,9 +174,11 @@ export async function loadStoredReferences(db: ContentDb): Promise<StoredReferen
   const refs: CatalogRefs = { films: new Set(), people: new Set() };
   const unreadable: string[] = [];
   const solutionPairs: [number, number][] = [];
+  const openSolutionPairs = new Map<string, [number, number][]>();
   const playPairs: [number, number][] = [];
   const degreesStart = new Map<string, number>();
   const degreesDays: StoredDegreesDay[] = [];
+  const playedDegrees = new Set(plays.filter((row) => row.game_id === "degrees").map((row) => row.puzzle_date));
 
   for (const row of puzzles) {
     collectCatalogRefs(row.payload, refs);
@@ -180,13 +195,16 @@ export async function loadStoredReferences(db: ContentDb): Promise<StoredReferen
       if (puzzle.success) {
         degreesStart.set(row.puzzle_date, puzzle.data.start.id);
         const { start, end, par } = puzzle.data;
-        degreesDays.push({ date: row.puzzle_date, start, end, par, fixture: isFixturePayload(row.payload), played: false });
+        degreesDays.push({ date: row.puzzle_date, start, end, par, fixture: isFixturePayload(row.payload), played: playedDegrees.has(row.puzzle_date) });
       }
-      if (puzzle.success && solution.success) solutionPairs.push(...chainCreditPairs(puzzle.data.start.id, solution.data.path));
+      if (puzzle.success && solution.success) {
+        const pairs = chainCreditPairs(puzzle.data.start.id, solution.data.path);
+        const open = row.puzzle_date > today && !playedDegrees.has(row.puzzle_date) && !isFixturePayload(row.payload);
+        if (open) openSolutionPairs.set(row.puzzle_date, pairs);
+        else solutionPairs.push(...pairs);
+      }
     }
   }
-  const playedDegrees = new Set(plays.filter((row) => row.game_id === "degrees").map((row) => row.puzzle_date));
-  for (const day of degreesDays) day.played = playedDegrees.has(day.date);
   for (const row of plays) {
     collectCatalogRefs(row.state, refs);
     if (row.game_id !== "degrees") continue;
@@ -196,7 +214,7 @@ export async function loadStoredReferences(db: ContentDb): Promise<StoredReferen
       playPairs.push(...chainCreditPairs(start, links.filter((l) => typeof l?.film?.id === "number" && typeof l?.person?.id === "number")));
     }
   }
-  return { refs, degreesDays, solutionPairs, playPairs, unreadable, puzzles: puzzles.length, plays: plays.length };
+  return { refs, degreesDays, solutionPairs, openSolutionPairs, playPairs, unreadable, puzzles: puzzles.length, plays: plays.length };
 }
 
 /** An unplayed Degrees day whose pair is now closer than its par. */
@@ -216,7 +234,8 @@ export function staleDegreesDays(days: readonly StoredDegreesDay[], graph: CastG
     if (day.played || day.date < today) return [];
     const shortest = linkDistances(graph, day.start.id, day.par - 1).get(day.end.id);
     if (shortest === undefined) return [];
-    return [{ ...day, shortest, decision: reparDecision({ par: day.par, shortest, played: false, fixture: day.fixture }, minPar) }];
+    // Here shortest < par, so par bounds it as well as the largest par would.
+    return [{ ...day, shortest, decision: reparDecision({ par: day.par, shortest, intact: true, played: false, fixture: day.fixture }, minPar, day.par) }];
   });
 }
 
@@ -336,15 +355,27 @@ export async function runCatalogChecks(db: ContentDb, options: { baseline?: IdBa
         `catalog now has ${current.films.length} films and ${current.people.length} people`,
     );
   }
-  const stored = options.stored ?? (await loadStoredReferences(db));
+  const today = options.today ?? todayInGameTimezone();
+  const stored = options.stored ?? (await loadStoredReferences(db, today));
   const [films, people] = await Promise.all([missingIds(db, "movie_films", stored.refs.films), missingIds(db, "movie_people", stored.refs.people)]);
   for (const id of films) problems.push(`film ${id} is referenced by a stored puzzle or play but isn't in the catalog`);
   for (const id of people) problems.push(`person ${id} is referenced by a stored puzzle or play but isn't in the catalog`);
   for (const pair of await missingCredits(db, stored.solutionPairs)) problems.push(`stored Degrees solution link ${pair} (film:person) is no longer a credit`);
+  const openPairs = [...stored.openSolutionPairs.values()].flat();
+  const gone = new Set(await missingCredits(db, openPairs));
+  const lostChains = [...stored.openSolutionPairs].filter(([, pairs]) => pairs.some(([f, p]) => gone.has(pairKey(f, p)))).map(([date]) => date);
   notes.push(
     `${stored.puzzles} puzzles and ${stored.plays} plays reference ${stored.refs.films.size} films and ${stored.refs.people.size} people; ` +
-      `${new Set(stored.solutionPairs.map(([f, p]) => pairKey(f, p))).size} Degrees solution credit pairs`,
+      `${new Set(stored.solutionPairs.map(([f, p]) => pairKey(f, p))).size} Degrees solution credit pairs kept as credits, ` +
+      `${new Set(openPairs.map(([f, p]) => pairKey(f, p))).size} more in ${stored.openSolutionPairs.size} days still to come`,
   );
+  if (lostChains.length) {
+    warnings.push(`${lostChains.length} unplayed Degrees day(s) after today lost a credit of their solution. Fix: npm run content:movies:degrees -- --repar-unplayed (--dry-run first)`);
+    for (const date of lostChains.sort()) {
+      const day = stored.degreesDays.find((d) => d.date === date);
+      warnings.push(`  Degrees ${date}${day ? ` ${day.start.name} → ${day.end.name} (par ${day.par})` : ""}: ${stored.openSolutionPairs.get(date)!.filter(([f, p]) => gone.has(pairKey(f, p))).map(([f, p]) => pairKey(f, p)).join(", ")} (film:person) gone`);
+    }
+  }
   if (stored.unreadable.length) notes.push(`${stored.unreadable.length} stored puzzles this checkout's game schemas can't read (refs still checked): ${stored.unreadable.slice(0, 5).join("; ")}${stored.unreadable.length > 5 ? "; …" : ""}`);
 
   const hidden = await hiddenFilms(db);
@@ -357,7 +388,6 @@ export async function runCatalogChecks(db: ContentDb, options: { baseline?: IdBa
   }
 
   const { DEGREES_MIN_PAR } = await import("@/games/degrees/schema");
-  const today = options.today ?? todayInGameTimezone();
   const stale = await findStaleDegreesDays(db, stored.degreesDays, today, DEGREES_MIN_PAR, new Set(hidden?.keys() ?? []));
   const open = stored.degreesDays.filter((day) => !day.played && day.date >= today).length;
   notes.push(`${open} unplayed Degrees days from ${today} on checked for a chain shorter than par: ${stale.length} found`);
