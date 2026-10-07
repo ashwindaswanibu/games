@@ -221,7 +221,7 @@ Import everything from `@/games/_movies/ui`. Every component is a typed client c
 | Component | Use |
 |---|---|
 | `MoviesStage` | The board's frame: an ochre title slate with the game name in film-title type, a film-leader `countdown`, and an ink "screen" lit by a cyan projector line. Props: `title`, `kicker`, `variant`, `countdown`, `devFixture`, `slateAside`, `compact` (pass `compact={playing}`: a one-line slate during play, so the puzzle and its controls fit a phone; the full title card returns when the play is over). |
-| `variant="neutral"` | **Required for color games** (`color-grade`, `color-barcode`): a neutral-gray (R = G = B) colorist's suite, so the surrounding UI doesn't bias how colors read. Kit components inside inherit the variant. |
+| `variant="neutral"` | **Required for color games** (`color-grade`, `fade-to-color`): a neutral-gray (R = G = B) colorist's suite, so the surrounding UI doesn't bias how colors read. Kit components inside inherit the variant. |
 | `PuzzleImage` | An asset by ref. Reserves the aspect ratio, shows a loading note and a retry button, and never draws over the picture. |
 | `IrisReveal` | Wrap the image in it, keyed by `revealKey={ref.id}`, to open each new image with a gun-barrel iris. It doesn't animate on first render or under reduced motion. |
 | `FilmSearch` / `PersonSearch` | Autocomplete over `/api/catalog/films` and `/api/catalog/people`: debounced, cancels stale requests, caches results, ARIA combobox with ↑ ↓ Enter Esc. `excludeIds` shows already-used items struck through and unselectable. `placement="above"` for a field low on the screen. |

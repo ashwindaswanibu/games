@@ -31,7 +31,7 @@ import {
 import { mapPool } from "./http.mjs";
 
 /**
- * Renders a film's ten Color Barcode levels from a `FrameSource` (the maths is in
+ * Renders a film's ten Fade to Color levels from a `FrameSource` (the maths is in
  * `barcode-levels.mts`; this module does the IO: asking the source for frames, decoding and
  * resizing them with sharp). The same renderer serves the real pipeline (movie-screencaps.com
  * frames, `screencaps.mts`) and the DEV FIXTURE generator (procedural frames), so fixtures

@@ -84,8 +84,10 @@ src/
   app/
     api/           Route handlers: /api/assets/[id], /api/catalog/{films,people,filmography,cast}
     (auth)/        /login, /signup, plus server actions for all auth flows
-    (app)/         Signed-in app: Today (/), /play/<id> (one route per game; shared parts in
-                   play/_shared), /leaderboard, /u/[username], /admin
+    (app)/         Signed-in app: Today (/), /play/<id> (one route per game), /leaderboard,
+                   /u/[username], /admin
+    (immersive)/   Full-screen games, outside the app's header and nav (/play/fade-to-color)
+    _play/         What every play route shares: the session, hosts, server actions
     auth/callback  OAuth code exchange
     auth/welcome   First sign-in: creates the profile from the Google identity, then Today
   proxy.ts         Session refresh; redirects signed-out visitors to /login
@@ -127,7 +129,7 @@ npm run dev                      # http://localhost:3000
 ```
 
 There is one local Supabase per machine: every checkout and git worktree shares it. Content one
-branch writes in a new format (for example the ten-level Color Barcode puzzles) breaks those days
+branch writes in a new format (for example the ten-level Fade to Color puzzles) breaks those days
 for checkouts still on the old code until that branch is merged; see
 `scripts/content/movies/README.md`. Never delete someone's plays to free a day for new content.
 

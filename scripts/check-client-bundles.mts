@@ -27,7 +27,7 @@ interface RscManifest {
   clientModules: Record<string, { chunks?: string[] }>;
 }
 
-/** Route (e.g. `/(app)/play/degrees/page`) → the client chunk files it can make the browser load. */
+/** Route (e.g. `/(app)/play/degrees/page`, `/(immersive)/play/fade-to-color/page`) → the client chunk files it can make the browser load. */
 function routeChunks(): Map<string, Set<string>> {
   const routes = new Map<string, Set<string>>();
   const walk = (dir: string) => {
@@ -73,7 +73,9 @@ function check(name: string, ok: boolean, detail?: unknown) {
 
 const routes = routeChunks();
 const testing = GAMES.filter((g) => g.availability === "testing");
-const adminOnlyRoutes = new Set(["/(app)/admin/page", ...testing.map((g) => `/(app)/play/${g.id}/page`)]);
+/** A game's play page: inside the app's chrome, or full screen in the `(immersive)` group. */
+const playRoute = (id: string) => [`/(app)/play/${id}/page`, `/(immersive)/play/${id}/page`].find((r) => routes.has(r)) ?? `/(app)/play/${id}/page`;
+const adminOnlyRoutes = new Set(["/(app)/admin/page", ...testing.map((g) => playRoute(g.id))]);
 for (const route of adminOnlyRoutes) if (!route.endsWith("/admin/page")) check(`${route} exists in the build`, routes.has(route));
 
 const publicChunks = new Set(rootFiles());
@@ -84,7 +86,7 @@ const publicSource = [...publicChunks]
 check("found the chunks non-admin pages load", publicSource.length > 0, publicSource.length);
 
 for (const game of testing) {
-  const own = [...(routes.get(`/(app)/play/${game.id}/page`) ?? [])].filter((file) => !publicChunks.has(file));
+  const own = [...(routes.get(playRoute(game.id)) ?? [])].filter((file) => !publicChunks.has(file));
   check(`${game.id} has client chunks of its own`, own.length > 0, own);
 
   // Rules with non-ASCII characters may be escaped in the output; the ASCII ones are plenty.

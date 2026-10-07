@@ -1,5 +1,5 @@
 import { ColorGradeEntry } from "@/games/color-grade/ui";
-import { playMetadata, PlayScreen } from "../_shared/play-screen";
+import { playMetadata, PlayScreen } from "@/app/_play/play-screen";
 
 const GAME_ID = "color-grade";
 

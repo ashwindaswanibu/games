@@ -207,9 +207,9 @@ TMDB images are licensed for display only. They must not be redistributed, which
 cache is git-ignored and assets are served only through the authenticated `/api/assets/[id]`
 route. Wikidata (the catalog) is CC0 and needs no attribution, though crediting it is courteous.
 
-## 4. Color Barcode levels: `content:movies:barcode-levels`
+## 4. Fade to Color levels: `content:movies:barcode-levels`
 
-One film, one day: renders the film's ten levels and stores them as that day's `color-barcode`
+One film, one day: renders the film's ten levels and stores them as that day's `fade-to-color`
 puzzle.
 
 ```bash
@@ -224,7 +224,7 @@ locked level, so it never goes in the repository.
 
 > **The local database is shared.** Every checkout and worktree on this machine (the main checkout,
 > `games-worktrees/*`) talks to the same local Supabase. Puzzles written by this script use the
-> ten-level Color Barcode format; a checkout still on the old single-barcode Color Barcode code
+> ten-level Fade to Color format; a checkout still on the old single-barcode Fade to Color code
 > can't load those days (2026-10-06 onward locally) until this branch is merged. And a day that has
 > been played is never freed by deleting plays, not even the E2E account's: pick the next unplayed
 > day instead (`--date next-free`), or ask the owner first.
@@ -306,7 +306,7 @@ caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
 | `tmdb.mts` | The TMDB client (`tmdbClient`, `fetchFilmStills`, `encodeStill`, `rankBackdrops`) |
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |
 | `film-stills.mts` | `stillsSource()`: a film's stills from the cache, else TMDB (what the image pipelines use) |
-| `barcode-levels.mts` | Pure Color Barcode level maths: mattes, squeezed columns, the edges-first schedule, dark-frame skipping, smart crop, colour data |
+| `barcode-levels.mts` | Pure Fade to Color level maths: mattes, squeezed columns, the edges-first schedule, dark-frame skipping, smart crop, colour data |
 | `barcode-render.mts` | `renderLevels(source, options)`: the ten levels from any `FrameSource` (the real pipeline and the DEV FIXTURE generator share it); tested end to end on an in-memory film |
 | `screencaps.mts` | movie-screencaps.com: directory resolver, gallery reader, and `ScreencapsSource` (polite downloads, temp cache deleted on `close()`) |
 
@@ -321,5 +321,5 @@ header.
 
 The pure parts are unit-tested with no network or database: the retry and backoff logic, Wikidata
 parsing, catalog rules, the graph and puzzle picker, TMDB ranking and re-encoding (including a
-check that metadata is stripped), the Degrees schema, the Color Barcode level maths (on synthetic
+check that metadata is stripped), the Degrees schema, the Fade to Color level maths (on synthetic
 images) and the movie-screencaps.com page and directory parsing. Run them with `npx vitest run scripts`.

@@ -21,6 +21,10 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
+  // Fade to Color was called Color Barcode while it was built.
+  async redirects() {
+    return [{ source: "/play/color-barcode", destination: "/play/fade-to-color", permanent: true }];
+  },
 };
 
 export default nextConfig;

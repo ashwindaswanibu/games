@@ -1,5 +1,5 @@
 import { DegreesEntry } from "@/games/degrees/ui";
-import { playMetadata, PlayScreen } from "../_shared/play-screen";
+import { playMetadata, PlayScreen } from "@/app/_play/play-screen";
 
 const GAME_ID = "degrees";
 

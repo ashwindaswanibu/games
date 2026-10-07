@@ -166,10 +166,15 @@ export async function waitForIdle(page: Page): Promise<void> {
   await page.waitForFunction(() => !document.querySelector('input[role="combobox"][disabled]'), { timeout: WAIT_MS });
 }
 
-/** Waits for every `<img>` on the page to finish loading; returns the srcs that failed. */
+/**
+ * Waits for every `<img>` on the page to finish loading; returns the srcs that failed. An `<img>`
+ * with no `src` yet (a slot a game fills in by hand, like Fade to Color's reel) isn't an image.
+ */
 export async function waitForImages(page: Page): Promise<string[]> {
   await page.waitForFunction(() => [...document.images].every((img) => img.complete), { timeout: WAIT_MS });
-  return page.evaluate(() => [...document.images].filter((img) => img.naturalWidth === 0).map((img) => img.getAttribute("src") ?? ""));
+  return page.evaluate(() =>
+    [...document.images].filter((img) => img.hasAttribute("src") && img.naturalWidth === 0).map((img) => img.getAttribute("src") ?? ""),
+  );
 }
 
 export async function imageSrcs(page: Page): Promise<string[]> {

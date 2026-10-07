@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { buttonClass } from "./ui";
 
-/** Uses the native share sheet on phones, clipboard elsewhere. */
-export function ShareButton({ text }: { text: string }) {
+/** Shares `text` (plus the site's address): the native share sheet on phones, clipboard elsewhere. */
+export function useShare(text: string) {
   const [copied, setCopied] = useState(false);
 
   async function share() {
@@ -22,6 +22,11 @@ export function ShareButton({ text }: { text: string }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  return { share, copied };
+}
+
+export function ShareButton({ text }: { text: string }) {
+  const { share, copied } = useShare(text);
   return (
     <button type="button" onClick={share} className={buttonClass("accent", "w-full")}>
       {copied ? "Copied!" : "Share result"}

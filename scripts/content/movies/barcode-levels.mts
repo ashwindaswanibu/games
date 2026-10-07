@@ -1,5 +1,5 @@
 /**
- * Real Color Barcode puzzles: renders a film's ten levels from movie-screencaps.com frames and
+ * Real Fade to Color puzzles: renders a film's ten levels from movie-screencaps.com frames and
  * stores them as the day's puzzle.
  *
  *   npm run content:movies:barcode-levels -- --film <catalog id> --date <YYYY-MM-DD | next-free>
@@ -29,7 +29,8 @@
  *
  * Stored as: ten `puzzle_assets` (kinds `barcode-level-1` … `barcode-level-10`); the public payload
  * holds only level 1 (plus `maxGuesses` and the film's colourfulness), the solution holds the
- * answer and all ten levels. A day that already has a puzzle is never overwritten (only an unplayed
+ * answer, all ten levels and the final pick's four films (the answer and three look-alikes from
+ * the catalog: `lib/decoys.mts`). A day that already has a puzzle is never overwritten (only an unplayed
  * DEV FIXTURE with --replace-fixtures, or an unplayed curated puzzle with --replace-unplayed), and a
  * day someone has played is never touched: not by this script, and never by deleting plays by hand.
  *
@@ -44,10 +45,11 @@ import { parseArgs } from "node:util";
 import { z } from "zod";
 import { addDays, parsePuzzleDate, today, type PuzzleDate } from "@/core/day";
 import { toFilmDetails } from "@/games/_movies/server";
-import { colorBarcode, LEVEL_COUNT, MAX_GUESSES, type LevelRef, type Puzzle, type Solution } from "@/games/color-barcode/logic";
+import { fadeToColor, LEVEL_COUNT, MAX_GUESSES, type LevelRef, type Puzzle, type Solution } from "@/games/fade-to-color/logic";
 import { createGameServices } from "@/server/game-services";
 import { encodeImage, type EncodedImage } from "../lib/images.mjs";
 import { DEFAULT_STORY_TRIM, MAX_TRIM, PACE_NAMES, PACES, type PaceName } from "./lib/barcode-levels.mjs";
+import { finalPickOptions } from "./lib/decoys.mjs";
 import { DEFAULT_LEVEL_HEIGHT, DEFAULT_LEVEL_WIDTH, renderLevels } from "./lib/barcode-render.mjs";
 import {
   deleteFixturePuzzle,
@@ -88,7 +90,7 @@ const { values: args } = parseArgs({
   strict: true,
 });
 
-const GAME_ID = colorBarcode.id;
+const GAME_ID = fadeToColor.id;
 const CREDIT_SOURCE = "movie-screencaps.com";
 /** No director may be the answer twice within this many days either side (approved selection rule). */
 const DIRECTOR_GAP_DAYS = 30;
@@ -271,13 +273,14 @@ async function main() {
     dominant: rendered.levels[i]!.dominant,
   }));
 
-  const puzzle: Puzzle = colorBarcode.puzzleSchema.parse({
+  const puzzle: Puzzle = fadeToColor.puzzleSchema.parse({
     fixture: false,
     maxGuesses: MAX_GUESSES,
     first: levels[0],
     look: { saturation: Number(rendered.look.saturation.toFixed(4)), monochrome: rendered.look.monochrome },
   });
-  const solution: Solution = colorBarcode.solutionSchema.parse({ answer: toFilmDetails(film), levels, pace, credit: { source: CREDIT_SOURCE, url: gallery.url } });
+  const options = await finalPickOptions(db, film.id, date ?? today());
+  const solution: Solution = fadeToColor.solutionSchema.parse({ answer: toFilmDetails(film), levels, pace, credit: { source: CREDIT_SOURCE, url: gallery.url }, options });
   if (puzzle.first.id !== solution.levels[0]!.id) throw new Error("Level 1 must be the puzzle's first level");
 
   const atPercent = (n: number) => `${((n / gallery.frameCount) * 100).toFixed(1)}%`;
@@ -287,6 +290,7 @@ async function main() {
     console.log(`  level ${String(level.level).padStart(2)}: ${String(level.strips).padStart(4)} ${level.level === 1 ? "frames" : "strips"}  ${kb.padStart(5)} KB  avg ${level.average}  dominant ${level.dominant}${span}`);
   });
   console.log(`  check the first and last strips for titles or credits; raise --head or --tail if any show`);
+  console.log(`  final pick: ${options.map((o) => `${o.title}${o.year ? ` (${o.year})` : ""}${o.id === film.id ? " ✓" : ""}`).join(" · ")}`);
 
   if (dryRun) {
     if (args.out) {

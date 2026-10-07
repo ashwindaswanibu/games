@@ -39,3 +39,30 @@ export interface GameUiProps<G extends AnyGame> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- type-erased registry entry
 export type AnyGameUi = ComponentType<GameUiProps<any>>;
+
+/** One player's result for a puzzle, as friends see it once they have finished it themselves. */
+export interface FriendResult {
+  profile: { id: string; username: string; display_name: string };
+  status: "not_started" | Outcome;
+  score: number | null;
+  label: string | null;
+  shareGrid: string | null;
+}
+
+/**
+ * Props for a game that owns the whole screen (no app header, nav or start card). It draws every
+ * state itself, including the one before the play has started (`view` is null until `start`).
+ */
+export interface ImmersiveGameUiProps<G extends AnyGame> extends Omit<GameUiProps<G>, "view"> {
+  view: PlayView<PuzzleOf<G>, StateOf<G>, RevealOf<G>> | null;
+  start(): Promise<{ ok: true } | { ok: false; message: string }>;
+  /** A platform-level problem to show (connection, rate limit, the day rolling over). */
+  notice: string | null;
+  date: PuzzleDate;
+  viewerId: string;
+  /** Everyone's results for this puzzle; null until the viewer has finished it (the spoiler wall). */
+  friends: readonly FriendResult[] | null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- type-erased, like AnyGameUi
+export type AnyImmersiveGameUi = ComponentType<ImmersiveGameUiProps<any>>;

@@ -1,5 +1,5 @@
 import { NumberHuntEntry } from "@/games/number-hunt/ui";
-import { playMetadata, PlayScreen } from "../_shared/play-screen";
+import { playMetadata, PlayScreen } from "@/app/_play/play-screen";
 
 const GAME_ID = "number-hunt";
 

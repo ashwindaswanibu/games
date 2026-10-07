@@ -61,7 +61,7 @@ Guess the movie from its color grading, revealed in stages:
 - **Keep it clean (Ashwin, 2026-10-06):** no clues of any kind (no year, genre or director chips). The screen shows only the barcode and the attempt number and attempts left. Remove the clue machinery from Color Barcode once the v2 engine lands.
 - **Design principle (Ashwin, 2026-10-06):** "clean" means no game data clutter (release dates, clues, stats). It does NOT mean empty. The screen must be stylistically rich, well thought out and wow-inducing. Uninspired blank space is unacceptable. The game is about color palette, so the only game element is the barcode (plus attempts), and the visual design fills the space around it.
 - **First-look prototype feedback (Ashwin, 2026-10-06):** loves the gameplay and screen (room lit by the film's colors, film-strip reel, reflection, light-sweep "unreel", 10-notch counter with look-back). To improve: the "Color Barcode" wordmark font, and the background. The color scheme adapts per film. Claude decides how to keep it nice (e.g. stop dull or dark films looking muddy) when building, not now. The lag he saw was the in-app preview only; it was fine in Arc.
-- **Idea, maybe:** at the very end, e.g. on the final attempt, offer multiple-choice options just for fun. Details to discuss.
+- **Idea, maybe:** at the very end, e.g. on the final attempt, offer multiple-choice options just for fun. Details to discuss. *(Decided 2026-10-06: see "Final pick" below.)*
 - **Film selection (Ashwin, 2026-10-06):** random daily film that is popular enough. Claude does the first pass on how to measure "popular"; Ashwin reviews.
 
 Guess the movie from its "barcode": every frame of the film reduced to its average color, lined up left to right as thin vertical stripes. The whole film's color arc reads at a glance, e.g. the warm-to-cold shift of a thriller or the green of The Matrix.
@@ -72,6 +72,20 @@ Guess the movie from its "barcode": every frame of the film reduced to its avera
   - Approximate the barcode from many stills (TMDB has dozens of images per film) plus trailer frames.
   - Hand-make barcodes for a curated set of films.
 - The share grid could be a tiny strip of the barcode itself.
+
+### Fade to Color: decisions for the built game (Ashwin, 2026-10-06)
+The barcode game, built full screen into the app.
+- **Name:** *Fade to Color* ("Fade to Black" turned around). Address `/play/fade-to-color`; the old `/play/color-barcode` redirects.
+- **Font:** Bodoni Moda stays. Wanted: more visual "oomph" around the wordmark without changing the font (treatments being explored).
+- **Start screen:** kept. A film-leader countdown ("10"), three rule lines, and "Roll film"; the first barcode unreels across the leader.
+- **Guessing:** two steps. Pick a film from the search, then Guess (or Enter again), so a misclick never costs an attempt.
+- **After a miss:** "Not <film>" (or "Skipped") whispers under the guess line for about 3 seconds. Past guesses are never listed.
+- **The ending:** the reel unreels to level 10 (the real frames), then the end card. You can still look back at any reel.
+- **End card:** kept as built. The kicker, the title cut out of the barcode, director and year, the result strip with reel and points, Share, and "How everyone did" (a side panel).
+- **Wording:** "Reel" everywhere. "Reel 3 of 10 · 8 left", "Named on reel 3", "REEL 03 ◂ 10".
+- **Scoring:** reel 1 = 100, reel 2 = 90 … reel 10 = 10; a miss is 0.
+- **Final pick:** only after a *wrong guess* on reel 10 (giving up goes straight to the answer). One pick from 4 films, the answer plus 3 look-alikes chosen automatically when the puzzle is made (same kind of film, within a few years, similar fame, different director and series). The right pick scores 5. Share grid: the 10 reel marks, then 🟨 (right) or 🟥 (wrong).
+- **Going live:** deploy once built and tested; Ashwin flags changes afterwards.
 
 ### Degrees of Separation
 *Ashwin, 2026-10-06*

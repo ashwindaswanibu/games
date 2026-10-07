@@ -51,6 +51,6 @@ next-env.d.ts
 # Supabase CLI link state (project ref, pooler URL)
 /supabase/.temp/
 
-# Rendered Color Barcode levels exported for review (barcode-levels --dry-run --out).
+# Rendered Fade to Color levels exported for review (barcode-levels --dry-run --out).
 # They reveal a puzzle's answer and every locked level, so they never go in git.
 /design/barcode-tests/*/levels/

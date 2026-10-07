@@ -1,5 +1,5 @@
 import type { AnyGame } from "@/core/game";
-import { colorBarcode } from "./color-barcode/logic";
+import { fadeToColor } from "./fade-to-color/logic";
 import { colorGrade } from "./color-grade/logic";
 import { degrees } from "./degrees/logic";
 import { frameByFrame } from "./frame-by-frame/logic";
@@ -14,7 +14,7 @@ export const GAMES: readonly AnyGame[] = [
   degrees,
   frameByFrame,
   colorGrade,
-  colorBarcode,
+  fadeToColor,
 ];
 
 const byId = new Map(GAMES.map((g) => [g.id, g]));

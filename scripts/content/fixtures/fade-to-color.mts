@@ -1,5 +1,5 @@
 /**
- * DEV FIXTURE puzzles for Color Barcode: a real catalog film as the answer, and ten levels rendered
+ * DEV FIXTURE puzzles for Fade to Color: a real catalog film as the answer, and ten levels rendered
  * by the real level renderer (`scripts/content/movies/lib/barcode-render.mts`) from a procedurally
  * generated stand-in "film": a sequence of shots (sky, horizon, sun or moon, silhouettes) in a
  * palette that suits the answer's genres, with studio cards and fades to black, night scenes, and
@@ -7,16 +7,17 @@
  * barcode and the edges-first strips, offline. Every level carries the "DEV FIXTURE" tag and the
  * puzzle sets `fixture: true`.
  *
- *   npm run content:fixtures -- --game color-barcode
+ *   npm run content:fixtures -- --game fade-to-color
  *
  * Fixture levels are 1200 × 400 (half the real size) to keep a week of fixtures quick to make.
  */
 import sharp from "sharp";
 import type { Rng } from "@/core/random";
 import { toFilmDetails } from "@/games/_movies/server";
-import { colorBarcode, MAX_GUESSES, type LevelRef, type Puzzle, type Solution } from "@/games/color-barcode/logic";
+import { fadeToColor, MAX_GUESSES, type LevelRef, type Puzzle, type Solution } from "@/games/fade-to-color/logic";
 import { createImage, PACES, type RgbImage } from "../movies/lib/barcode-levels.mjs";
 import { renderLevels, type FrameSource } from "../movies/lib/barcode-render.mjs";
+import { finalPickOptions } from "../movies/lib/decoys.mjs";
 import { selectAllPages } from "../movies/lib/pipeline.mjs";
 import { defineFixtureGenerator, type FixtureContext } from "../lib/fixtures.mjs";
 import { fixtureSvg } from "../lib/images.mjs";
@@ -228,7 +229,7 @@ class SyntheticFilm implements FrameSource {
 /** Answer ids already used by this game's puzzles on other days, so a week doesn't repeat a film. */
 async function usedAnswers(ctx: FixtureContext): Promise<Set<number>> {
   const rows = await selectAllPages((from, to) =>
-    ctx.db.from("puzzles").select("puzzle_date, solution").eq("game_id", colorBarcode.id).neq("puzzle_date", ctx.date).order("puzzle_date").range(from, to),
+    ctx.db.from("puzzles").select("puzzle_date, solution").eq("game_id", fadeToColor.id).neq("puzzle_date", ctx.date).order("puzzle_date").range(from, to),
   );
   const ids = new Set<number>();
   for (const row of rows) {
@@ -245,7 +246,7 @@ async function tagged(image: RgbImage): Promise<Buffer> {
 }
 
 export default defineFixtureGenerator({
-  game: colorBarcode,
+  game: fadeToColor,
   async generate(ctx) {
     const films = await ctx.topFilms({ limit: CANDIDATES, requireDirectors: true });
     const used = await usedAnswers(ctx);
@@ -275,7 +276,8 @@ export default defineFixtureGenerator({
       first: levels[0]!,
       look: { saturation: Number(rendered.look.saturation.toFixed(4)), monochrome: rendered.look.monochrome },
     };
-    const solution: Solution = { answer: toFilmDetails(answer), levels, pace: "normal", credit: null };
+    const options = await finalPickOptions(ctx.db, answer.id, ctx.date);
+    const solution: Solution = { answer: toFilmDetails(answer), levels, pace: "normal", credit: null, options };
     return { puzzle, solution };
   },
 });

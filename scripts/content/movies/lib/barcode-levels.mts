@@ -1,5 +1,5 @@
 /**
- * Color Barcode level maths ("G+ edges-first"). Pure: no IO, no sharp, no clocks, no randomness,
+ * Fade to Color level maths ("G+ edges-first"). Pure: no IO, no sharp, no clocks, no randomness,
  * so every rule here is unit-tested on synthetic images (`barcode-levels.test.mts`). The IO side
  * (fetching, decoding, resizing, encoding) is `barcode-render.mts`.
  *

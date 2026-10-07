@@ -1,13 +1,13 @@
 import "server-only";
 import { parsePuzzleDate, type PuzzleDate } from "@/core/day";
 import type { AnyGame } from "@/core/game";
-import type { MoveResponse, PlayView } from "@/core/view";
+import type { FriendResult, MoveResponse, PlayView } from "@/core/view";
 import { getGameServer } from "@/games/server-registry";
 import { db } from "./supabase/admin";
 import { gameServices, type GameServices } from "./game-services";
 import { advancePlay, parseMove } from "./move-pipeline";
 import { getOrCreatePuzzle, type LoadedPuzzle } from "./puzzles";
-import type { Json, PlayRow, ProfileRow } from "./database.types";
+import type { Json, PlayRow } from "./database.types";
 
 const UNIQUE_VIOLATION = "23505";
 
@@ -152,13 +152,7 @@ export async function applyMove(params: {
 // Friends' results and the spoiler wall
 // ---------------------------------------------------------------------------------------------
 
-export interface FriendResult {
-  profile: Pick<ProfileRow, "id" | "username" | "display_name">;
-  status: "not_started" | PlayRow["status"];
-  score: number | null;
-  label: string | null;
-  shareGrid: string | null;
-}
+export type { FriendResult };
 
 /**
  * Everyone's result for one game on one day — but only once the viewer has finished it

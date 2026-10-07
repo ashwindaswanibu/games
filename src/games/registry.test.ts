@@ -9,11 +9,15 @@ import { GAME_SERVERS } from "./server-registry";
 // Each game has its own play route, so the browser loads only that game's UI (see play-screen.tsx).
 // Pages import React client components; read them from source instead of importing them.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-const playDir = new URL("../app/(app)/play/", import.meta.url);
-const playRoutes = readdirSync(playDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
-  .map((entry) => entry.name);
-const pageSource = (id: string) => readFileSync(new URL(`${id}/page.tsx`, playDir), "utf8");
+// Play routes live in two route groups: inside the app's chrome, or full screen (`(immersive)`).
+const playDirs = ["../app/(app)/play/", "../app/(immersive)/play/"].map((dir) => new URL(dir, import.meta.url));
+const routesIn = (dir: URL) =>
+  readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
+    .map((entry) => entry.name);
+const playRoutes = playDirs.flatMap(routesIn);
+const pagePath = (id: string) => playDirs.map((dir) => new URL(`${id}/page.tsx`, dir)).find(existsSync);
+const pageSource = (id: string) => readFileSync(pagePath(id)!, "utf8");
 
 describe("game registry", () => {
   it("has unique, well-formed ids", () => {
@@ -22,12 +26,13 @@ describe("game registry", () => {
     for (const id of ids) expect(id).toMatch(GAME_ID_PATTERN);
   });
 
-  it("has a play route for every game and nothing extra", () => {
+  it("has one play route for every game and nothing extra", () => {
+    // Sorting keeps duplicates, so a game routed in both groups (a build error) fails here too.
     expect([...playRoutes].sort()).toEqual(GAMES.map((g) => g.id).sort());
   });
 
   it.each(GAMES.map((g) => [g.id] as const))("%s's play route renders its own UI and no other game's", (id) => {
-    expect(existsSync(new URL(`${id}/page.tsx`, playDir))).toBe(true);
+    expect(pagePath(id)).toBeDefined();
     const source = pageSource(id);
     expect(source).toContain(`const GAME_ID = "${id}";`);
     const imported = [...source.matchAll(/from "@\/games\/([a-z0-9-]+)\//g)].map((m) => m[1]);

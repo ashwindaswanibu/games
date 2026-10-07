@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, type ComponentType } from "react";
-import type { AnyGameUi, GameUiProps } from "@/core/view";
+import type { AnyGameUi, AnyImmersiveGameUi, GameUiProps, ImmersiveGameUiProps } from "@/core/view";
 
 /**
  * How a game's UI gets its props without the play page's client code knowing every game.
@@ -25,4 +25,19 @@ export function connectGameUi(Ui: AnyGameUi): ComponentType {
   }
   ConnectedGameUi.displayName = `Connected(${Ui.displayName ?? Ui.name ?? "GameUi"})`;
   return ConnectedGameUi;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- type-erased, like AnyImmersiveGameUi
+const ImmersiveGameUiContext = createContext<ImmersiveGameUiProps<any> | null>(null);
+export const ImmersiveGameUiProvider = ImmersiveGameUiContext.Provider;
+
+/** `connectGameUi` for games that own the whole screen (see `ImmersiveGameUiProps`). */
+export function connectImmersiveGameUi(Ui: AnyImmersiveGameUi): ComponentType {
+  function ConnectedImmersiveGameUi() {
+    const props = useContext(ImmersiveGameUiContext);
+    if (!props) throw new Error("A full-screen game UI must be rendered inside the immersive game host");
+    return <Ui {...props} />;
+  }
+  ConnectedImmersiveGameUi.displayName = `ConnectedImmersive(${Ui.displayName ?? Ui.name ?? "GameUi"})`;
+  return ConnectedImmersiveGameUi;
 }

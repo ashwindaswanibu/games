@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ShareButton } from "@/components/share-button";
 import { buttonClass, Card } from "@/components/ui";
 import { APP_NAME } from "@/config";
@@ -8,7 +8,7 @@ import type { PuzzleDate } from "@/core/day";
 import { shareText } from "@/core/share";
 import type { PlayView } from "@/core/view";
 import { GameUiProvider } from "@/games/game-ui-context";
-import { startGame, submitMove } from "./actions";
+import { useGameSession } from "./use-game-session";
 
 /**
  * Platform side of the play screen: owns the authoritative `view`, talks to the server, and
@@ -26,46 +26,7 @@ export function GameHost(props: {
   children: ReactNode;
 }) {
   const { gameId, gameName, emoji, rules, date } = props;
-  const [view, setView] = useState(props.initialView);
-  const [pending, setPending] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  async function start() {
-    setPending(true);
-    setNotice(null);
-    try {
-      const res = await startGame(gameId, date);
-      if (res.ok) setView(res.view);
-      else setNotice(res.message);
-    } catch {
-      setNotice("Couldn't start the game. Check your connection and try again.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function move(m: unknown): Promise<{ ok: true } | { ok: false; message: string }> {
-    if (!view) return { ok: false, message: "Start the game first." };
-    setPending(true);
-    setNotice(null);
-    try {
-      const res = await submitMove(gameId, date, view.version, m);
-      if (res.ok) {
-        setView(res.view);
-        return { ok: true };
-      }
-      if (res.view) setView(res.view);
-      // Game-level rejections are shown by the game's UI; platform-level ones by the host.
-      if (res.reason !== "invalid_move") setNotice(res.message);
-      return { ok: false, message: res.message };
-    } catch {
-      const message = "Couldn't reach the server. Try again.";
-      setNotice(message);
-      return { ok: false, message };
-    } finally {
-      setPending(false);
-    }
-  }
+  const { view, pending, notice, start, move } = useGameSession({ gameId, date, initialView: props.initialView });
 
   if (!view) {
     return (
@@ -79,7 +40,7 @@ export function GameHost(props: {
           ))}
         </ul>
         {notice && <p className="text-sm text-bad">{notice}</p>}
-        <button type="button" onClick={start} disabled={pending} className={buttonClass("accent", "w-full")}>
+        <button type="button" onClick={() => void start()} disabled={pending} className={buttonClass("accent", "w-full")}>
           {pending ? "Loading…" : "Start"}
         </button>
       </Card>
