@@ -8,6 +8,19 @@ describe("catalogSearchKey", () => {
     expect(catalogSearchKey("Emmanuelle Béart")).toBe("emmanuelle beart");
     expect(catalogSearchKey("Mission: Impossible – Fallout")).toBe("mission impossible fallout");
   });
+
+  it("rewrites what SQL's unaccent rewrites beyond accents", () => {
+    // Each expected key is what `catalog_search_key` returns in Postgres.
+    expect(catalogSearchKey("Bølgen")).toBe("bolgen");
+    expect(catalogSearchKey("Æon Flux")).toBe("aeon flux");
+    expect(catalogSearchKey("Hababam Sınıfı")).toBe("hababam sinifi");
+    expect(catalogSearchKey("Kanał")).toBe("kanal");
+    expect(catalogSearchKey("Dýrið")).toBe("dyrid");
+    expect(catalogSearchKey("À ma sœur !")).toBe("a ma soeur");
+    expect(catalogSearchKey("8½")).toBe("8 1 2");
+    expect(catalogSearchKey("The Lion King 1½")).toBe("the lion king 1 1 2");
+    expect(catalogSearchKey("Men in Black³")).toBe("men in black");
+  });
 });
 
 describe("matchTier", () => {
