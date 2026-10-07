@@ -170,6 +170,8 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
   /** A finished game whose set-in has not landed: its credit and chip wait in their pre-state. */
   const [pending, setPending] = useState<string | null>(null);
   const [announce, setAnnounce] = useState("");
+  /** The band already took the pending set-in's beat (its credit was out of view on a phone). */
+  const [bandSettled, setBandSettled] = useState(false);
   const decided = useRef<string | null>(null);
 
   // Decide once per day per mount, before the first paint (client navigations included). The
@@ -236,11 +238,14 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
     (sentence: string) => {
       setAnnounce(sentence);
       setPending(null);
+      setBandSettled(false);
       setSetIn(null);
       setSetInLive(false);
     },
     [],
   );
+
+  const onBandSettled = useCallback(() => setBandSettled(true), []);
 
   const replay = useCallback(() => {
     if (prefersReducedMotion()) return;
@@ -318,7 +323,7 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
       </div>
       <main className={styles.stage} inert={moment === "opening"} data-stage="">
         <NightSpill night={cue === "night"} className={styles.spill} />
-        <TitleColumn view={view} comp={comp} clock={clock} initialGone={initialGone} pending={pending} onZero={onZero} />
+        <TitleColumn view={view} comp={comp} clock={clock} initialGone={initialGone} pending={bandSettled ? null : pending} onZero={onZero} />
         <div className={sheetStyles.creditsCol} data-density={density} data-op="credits">
           {view.welcome && <WelcomeSlip welcome={view.welcome} cut={comp.slips.welcome} />}
           {upNext && view.primary && <UpNext primary={view.primary} game={primaryGame} cut={comp.slips.upNext} onOpen={onOpen} />}
@@ -347,6 +352,7 @@ export function Home({ view, comp, initialCue, initialNow, className, qa = null 
               freezeAt={qa?.setInAt ?? null}
               frames={qa?.frames ?? false}
               onEnd={onSetInEnd}
+              onBandSettled={onBandSettled}
             />
           )}
         </div>

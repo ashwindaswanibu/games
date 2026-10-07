@@ -339,6 +339,12 @@
   transform: scale(0.97);
 }
 
+/* All played, many games: every chip is full and the count already says so, so the chips give
+   the band's room to the primary rather than push it off the band's torn edge. */
+.band:has(.standings):has(.chips > :nth-child(8)) .chips {
+  display: none;
+}
+
 .standings:focus-visible {
   outline-color: var(--ground);
 }
@@ -469,8 +475,13 @@
     gap: 4px;
   }
 
-  /* Many chips on a phone: the chips are the tail. */
-  .band:has(.chips > :nth-child(9)) .tail {
+  /* Many chips on a phone: the chips are the tail (unless the tail is the primary). */
+  .band:has(.chips > :nth-child(9)):not(:has(.standings)) .tail {
+    display: none;
+  }
+
+  /* All played on a phone: the count and the filled "Today's standings" are the band. */
+  .band:has(.standings) .chips {
     display: none;
   }
 

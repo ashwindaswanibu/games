@@ -600,8 +600,9 @@
   white-space: nowrap;
 }
 
+/* The barrel and the italic together stay inside the card's padding (21cqi ran them to its edge). */
 .wing .tMoviesWrap {
-  font-size: min(21cqi, 64px);
+  font-size: min(19cqi, 60px);
 }
 
 .wing .tGeo {
@@ -743,6 +744,7 @@
 
   .kicker {
     white-space: normal;
+    text-wrap: balance;
     text-align: right;
     line-height: 1.4;
   }

@@ -33,6 +33,19 @@ export function setInBeats(pieces: number) {
   return { s, last, label, hold, land: hold + FLY, end: hold + 600 };
 }
 
+/** The set-in's final beat on the band: the game's chip fills (`steps(3)`, 240 ms) and the count steps as it completes. */
+function bandBeat(t: Timeline, home: HTMLElement, gameId: string, at: number): void {
+  const chip = home.querySelector(`[data-chip="${gameId}"] > b`);
+  t.show(chip, at);
+  t.key(chip, [
+    [at, { transform: "scaleY(0)", easing: steps(3) }],
+    [at + 240, { transform: "scaleY(1)" }],
+  ]);
+  home.querySelectorAll("[data-band-n] [data-n-now]").forEach((el) => t.show(el, at + 240));
+  home.querySelectorAll("[data-band-n] [data-n-before]").forEach((el) => t.visible(el, [[0, at + 240]]));
+  t.extendTo(at + 240);
+}
+
 /**
  * M2 · The set-in (spec §8.3), about 1.6 s, once per finished game: the bucket's sheet becomes the
  * result's title card for a beat. A fresh cut of the bucket's paper is laid over its sheet; the
@@ -49,6 +62,7 @@ export function SetIn({
   freezeAt,
   frames,
   onEnd,
+  onBandSettled,
 }: {
   game: HomeGame;
   bucket: BucketId;
@@ -57,11 +71,15 @@ export function SetIn({
   freezeAt: number | null;
   frames: boolean;
   onEnd: (sentence: string) => void;
+  /** The band took its final beat early (the credit is out of view on a phone): it may show the day as it is. */
+  onBandSettled: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onEndRef = useRef(onEnd);
+  const onBandSettledRef = useRef(onBandSettled);
   useLayoutEffect(() => {
     onEndRef.current = onEnd;
+    onBandSettledRef.current = onBandSettled;
   });
   const result = game.result;
   // The same seed as the credit's own mark, so the copy lands exactly on it.
@@ -80,6 +98,8 @@ export function SetIn({
     }
 
     let T: Timeline | null = null;
+    /** The band's beat, played on its own when the card has to wait for its credit (phone). */
+    let early: Timeline | null = null;
     let stopFrames: ((keep?: boolean) => void) | null = null;
     let done = false;
     const finish = () => {
@@ -91,7 +111,7 @@ export function SetIn({
       onEndRef.current(sentence);
     };
 
-    const build = () => {
+    const build = (bandDone: boolean) => {
       // The card's footprint: the column's width, at least the sheet and a little more, top-aligned
       // to the sheet and shifted up if it would pass the column's foot.
       const phone = window.matchMedia(PHONE).matches;
@@ -187,14 +207,7 @@ export function SetIn({
       credit.querySelectorAll("[data-op='mark'] [data-result], [data-op='label']").forEach((el) => t.show(el, b.land));
       t.visible(credit.querySelector("[data-op='mark'] [data-keyline]"), [[0, b.land]]);
       // Final beat: the chip fills, the count steps; the result line and "How everyone did" rise.
-      const chip = home.querySelector(`[data-chip="${game.id}"] > b`);
-      t.show(chip, b.land + 20);
-      t.key(chip, [
-        [b.land + 20, { transform: "scaleY(0)", easing: steps(3) }],
-        [b.end, { transform: "scaleY(1)" }],
-      ]);
-      home.querySelectorAll("[data-band-n] [data-n-now]").forEach((el) => t.show(el, b.end));
-      home.querySelectorAll("[data-band-n] [data-n-before]").forEach((el) => t.visible(el, [[0, b.end]]));
+      if (!bandDone) bandBeat(t, home, game.id, b.land + 20);
       [credit.querySelector("[data-op='line']"), credit.querySelector("[data-op='how']")].forEach((el, i) => {
         if (!el) return;
         const at = b.land + 20 + i * 60;
@@ -219,7 +232,9 @@ export function SetIn({
     const land = () => finish();
     window.addEventListener("pointerdown", land, { capture: true, passive: true });
 
-    // On a phone, wait until the credit is in view (≥ 60%), then play.
+    // On a phone, wait until the credit is in view (≥ 60%), then play. The band at the top can't wait
+    // for a credit below the fold (it would go on showing the day as it stood before): when the
+    // credit starts out of view, the band takes its beat now and the card plays when it is reached.
     let io: IntersectionObserver | null = null;
     if (window.matchMedia(PHONE).matches && freezeAt === null) {
       io = new IntersectionObserver(
@@ -227,16 +242,22 @@ export function SetIn({
           if (entries.some((e) => e.intersectionRatio >= 0.6)) {
             io?.disconnect();
             io = null;
-            build();
+            build(early !== null);
+          } else if (!early) {
+            const beat = new Timeline();
+            early = beat;
+            bandBeat(beat, home, game.id, 0);
+            void beat.play().then(() => onBandSettledRef.current());
           }
         },
         { threshold: [0.6] },
       );
       io.observe(credit);
-    } else build();
+    } else build(false);
 
     return () => {
       io?.disconnect();
+      early?.cancel();
       window.removeEventListener("pointerdown", land, { capture: true });
       card.style.willChange = "";
       stopFrames?.(false);
