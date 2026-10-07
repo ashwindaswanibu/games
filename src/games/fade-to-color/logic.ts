@@ -181,6 +181,16 @@ function outcomeOf(state: State) {
 
 const SHARE = { solved: "🟩", missed: "🟥", skipped: "⬛", picked: "🟨" } as const;
 
+/**
+ * A finished play in words, as the end credits and the home both say it: "Named on reel 3",
+ * "Not named in 10 reels", "Named on the final pick", "Not named, even on the final pick".
+ */
+export function resultLine(result: { reels: number; named: boolean; finalPick: boolean }): string {
+  const { reels, named, finalPick } = result;
+  if (finalPick) return named ? "Named on the final pick" : "Not named, even on the final pick";
+  return named ? `Named on reel ${reels}` : `Not named in ${reels} reels`;
+}
+
 export const fadeToColor = defineGame<Puzzle, Solution, State, Move, Reveal, ResolvedMove>({
   id: "fade-to-color",
   name: "Fade to Color",
@@ -248,6 +258,13 @@ export const fadeToColor = defineGame<Puzzle, Solution, State, Move, Reveal, Res
       ...state.turns.map((t) => (isSkip(t) ? SHARE.skipped : t.correct ? SHARE.solved : SHARE.missed)),
       ...(state.pick ? [state.pick.correct ? SHARE.picked : SHARE.missed] : []),
     ].join(""),
+
+  home: {
+    form: { kind: "frames", count: LEVEL_COUNT, aspect: "3:2", finalPick: true },
+    // One mark per reel, plus the final pick's as an eleventh when it came to that.
+    line: ({ outcome, marks }) =>
+      resultLine({ reels: Math.min(marks.length, LEVEL_COUNT), named: outcome === "won", finalPick: marks.length > LEVEL_COUNT }),
+  },
 
   reveal: ({ solution }) => ({ film: solution.answer, levels: solution.levels, credit: solution.credit }),
 });

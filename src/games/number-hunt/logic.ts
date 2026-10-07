@@ -87,6 +87,12 @@ export const numberHunt = defineGame<Puzzle, Solution, State, Move, Solution>({
 
   shareGrid: ({ state }) => state.guesses.map((g) => HINT_EMOJI[g.hint]).join(""),
 
+  home: {
+    form: { kind: "slots", count: MAX_GUESSES },
+    // One mark per guess: the arrows, then the tick on a win.
+    line: ({ outcome, marks }) => (outcome === "won" ? `Found on guess ${marks.length}` : `Not found in ${marks.length} guesses`),
+  },
+
   reveal: ({ solution }) => solution,
 });
 

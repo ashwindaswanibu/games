@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { PuzzleDate } from "./day";
+import type { MarkFormSpec, ShareMarkKind } from "./home-view";
 import type { Rng } from "./random";
 
 /**
@@ -85,6 +86,13 @@ export interface GameDefinition<Puzzle, Solution, State, Move, Reveal = never, R
   /** Spoiler-free emoji summary for the group chat, e.g. "⬇️⬆️✅". */
   shareGrid(ctx: { puzzle: Puzzle; state: State; outcome: FinishedOutcome }): string;
 
+  /**
+   * How the home draws this game: the empty form of its result mark and the line under a finished
+   * result. Optional: without it the home draws a generic row of marks and the label alone. Runs on
+   * the server only (the home's client code never imports a game).
+   */
+  readonly home?: GameHome;
+
   /** What to show the player about the solution once they've finished. */
   reveal?(ctx: { puzzle: Puzzle; solution: Solution }): Reveal;
 }
@@ -95,6 +103,25 @@ export interface GameDefinition<Puzzle, Solution, State, Move, Reveal = never, R
  */
 export const BUCKET_IDS = ["words", "movies", "geography", "chess"] as const;
 export type BucketId = (typeof BUCKET_IDS)[number];
+
+/** A game's home entry (`GameDefinition.home`). */
+export interface GameHome {
+  /** The mark's layout: one slot per attempt (`count` = the game's maximum attempts). */
+  readonly form: MarkFormSpec;
+  /** The result in words ("Found on guess 4", "Named on reel 3"), or null to show the label alone. */
+  line(result: HomeLineInput): string | null;
+}
+
+/** What a result line is written from: the viewer's finished play, as stored, plus today's puzzle facts. */
+export interface HomeLineInput {
+  outcome: FinishedOutcome;
+  /** `result_label` as stored. */
+  label: string;
+  /** The share grid as marks (`shareMarkRow`). */
+  marks: readonly ShareMarkKind[];
+  /** Today's par, for games whose puzzle has one (Degrees); null otherwise or when unknown. */
+  par: number | null;
+}
 
 export type Outcome = "in_progress" | "won" | "lost";
 export type FinishedOutcome = Exclude<Outcome, "in_progress">;

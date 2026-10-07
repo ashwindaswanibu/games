@@ -7,7 +7,7 @@ import type { PuzzleDate } from "@/core/day";
 import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
 import type { FilmDetails } from "@/games/_movies/schemas";
-import { fadeToColor, LEVEL_COUNT } from "../logic";
+import { fadeToColor, LEVEL_COUNT, resultLine } from "../logic";
 import styles from "./theater.module.css";
 import { BarcodeTitle } from "./wordmark";
 
@@ -31,8 +31,12 @@ export function ResultFrames({ grid, label }: { grid: string; label?: string }) 
 }
 
 function describeGrid(marks: readonly string[]): string {
-  if (marks.length > LEVEL_COUNT) return marks.at(-1) === "picked" ? "Named on the final pick" : "Not named, even on the final pick";
-  return marks.at(-1) === "solved" ? `Named on reel ${marks.length}` : `Not named in ${marks.length} reels`;
+  const last = marks.at(-1);
+  return resultLine({
+    reels: Math.min(marks.length, LEVEL_COUNT),
+    named: last === "solved" || last === "picked",
+    finalPick: marks.length > LEVEL_COUNT,
+  });
 }
 
 /**

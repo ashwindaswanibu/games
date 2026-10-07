@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { shareMarkRow } from "@/core/share-marks";
 import { MAX_GUESSES, numberHunt, remainingRange, type State } from "./logic";
 
 const puzzle = { min: 1, max: 100, maxGuesses: MAX_GUESSES };
@@ -44,5 +45,27 @@ describe("number hunt", () => {
 
   it("narrows the remaining range", () => {
     expect(remainingRange(puzzle, play([50, 25]))).toEqual({ low: 26, high: 49 });
+  });
+});
+
+describe("number hunt on the home", () => {
+  const finished = (guesses: number[]) => {
+    const state = play(guesses);
+    const outcome = numberHunt.outcome({ puzzle, solution, state });
+    if (outcome === "in_progress") throw new Error("not finished");
+    const { label } = numberHunt.score({ puzzle, solution, state, outcome, elapsedMs: 0 });
+    const marks = shareMarkRow(numberHunt.shareGrid({ puzzle, state, outcome }));
+    return { marks, line: numberHunt.home!.line({ outcome, label, marks, par: null }) };
+  };
+
+  it("draws one slot per guess: a lost play fills all seven", () => {
+    expect(numberHunt.home!.form).toEqual({ kind: "slots", count: MAX_GUESSES });
+    expect(finished([1, 2, 3, 4, 5, 6, 7]).marks).toHaveLength(MAX_GUESSES);
+  });
+
+  it("says on which guess it was found, or that it wasn't", () => {
+    expect(finished([50, 25, 42]).line).toBe("Found on guess 3");
+    expect(finished([42]).line).toBe("Found on guess 1");
+    expect(finished([1, 2, 3, 4, 5, 6, 7]).line).toBe("Not found in 7 guesses");
   });
 });

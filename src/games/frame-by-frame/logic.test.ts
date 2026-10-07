@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { referencedAssetIds } from "@/core/assets";
+import { shareMarkRow } from "@/core/share-marks";
 import type { FilmDetails } from "@/games/_movies/schemas";
 import {
   FRAME_COUNT,
@@ -198,5 +199,28 @@ describe("frame-by-frame reveal", () => {
     const state = play([guess(heat), skip]);
     expect(JSON.parse(JSON.stringify(puzzle))).toEqual(puzzle);
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+  });
+});
+
+describe("frame-by-frame on the home", () => {
+  const home = frameByFrame.home!;
+  const finished = (moves: ResolvedMove[]) => {
+    const state = play(moves);
+    const o = outcome(state);
+    if (o === "in_progress") throw new Error("not finished");
+    const { label, grid } = finish(state);
+    const marks = shareMarkRow(grid);
+    return { marks, line: home.line({ outcome: o, label, marks, par: null }) };
+  };
+
+  it("draws one 4:3 frame per frame of the film: a lost play uses all of them", () => {
+    expect(home.form).toEqual({ kind: "frames", count: FRAME_COUNT, aspect: "4:3", finalPick: false });
+    expect(finished(Array.from({ length: FRAME_COUNT }, () => skip)).marks).toHaveLength(FRAME_COUNT);
+  });
+
+  it("says on which frame it was named (unused frames don't count), or that it wasn't", () => {
+    expect(finished([guess(answer)]).line).toBe("Named on frame 1");
+    expect(finished([guess(heat), guess(answer)]).line).toBe("Named on frame 2");
+    expect(finished([guess(heat), skip, skip, guess(up), skip, skip]).line).toBe(`Not named in ${FRAME_COUNT} frames`);
   });
 });

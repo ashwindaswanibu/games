@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FinishedOutcome } from "@/core/game";
+import { shareMarkRow } from "@/core/share-marks";
 import {
+  chainLine,
   chainPersonIds,
   chainScore,
   currentActor,
@@ -225,5 +227,39 @@ describe("score, share grid and reveal", () => {
       expect(visible).not.toContain(step.film.title);
       expect(visible).not.toContain(step.person.name);
     }
+  });
+});
+
+describe("degrees on the home", () => {
+  const home = degrees.home!;
+  const lineFor = (state: DegreesState, outcome: FinishedOutcome, par: number | null = puzzle.par) => {
+    const { score, share } = finish(state, outcome);
+    return home.line({ outcome, label: score.label, marks: shareMarkRow(share), par });
+  };
+
+  it("draws a chain whose par the server fills in from today's puzzle", () => {
+    expect(home.form).toEqual({ kind: "chain" });
+  });
+
+  it("measures a finished chain against par, from the share grid's links", () => {
+    const atPar = play(link(1, heat, deNiro), link(2, taxiDriver, foster), link(3, lambs, hopkins));
+    expect(lineFor(atPar, "won")).toBe("Linked at par");
+    expect(lineFor(atPar, "won", 2)).toBe("One link over par");
+    expect(lineFor(atPar, "won", 4)).toBe("One link under par");
+    expect(lineFor(atPar, "won", 1)).toBe("2 links over par");
+    expect(lineFor(atPar, "won", null)).toBeNull();
+  });
+
+  it("says Gave up for a lost chain, with or without links", () => {
+    expect(lineFor(play(link(1, heat, deNiro), { type: "give-up" }), "lost")).toBe("Gave up");
+    expect(lineFor(play({ type: "give-up" }), "lost")).toBe("Gave up");
+  });
+
+  it("chainLine spells one link, numbers the rest", () => {
+    expect(chainLine(3, 3)).toBe("Linked at par");
+    expect(chainLine(4, 3)).toBe("One link over par");
+    expect(chainLine(6, 3)).toBe("3 links over par");
+    expect(chainLine(2, 3)).toBe("One link under par");
+    expect(chainLine(1, 3)).toBe("2 links under par");
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { referencedAssetIds } from "@/core/assets";
 import { attemptsScore } from "@/core/scoring";
+import { shareMarkRow } from "@/core/share-marks";
 import type { FilmDetails, FilmRef } from "@/games/_movies/schemas";
 import {
   fadeToColor,
@@ -11,6 +12,7 @@ import {
   levelsInView,
   MAX_GUESSES,
   awaitingPick,
+  resultLine,
   type LevelRef,
   type Puzzle,
   type ResolvedMove,
@@ -272,5 +274,39 @@ describe("fade-to-color reveal", () => {
     const state = play([guess(heat), skip]);
     expect(JSON.parse(JSON.stringify(puzzle))).toEqual(puzzle);
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+  });
+});
+
+describe("fade-to-color on the home", () => {
+  const home = fadeToColor.home!;
+  const finished = (moves: ResolvedMove[]) => {
+    const state = play(moves);
+    const o = outcome(state);
+    if (o === "in_progress") throw new Error("not finished");
+    const { label, grid } = finish(state);
+    const marks = shareMarkRow(grid);
+    return { marks, line: home.line({ outcome: o, label, marks, par: null }) };
+  };
+  const skips = (n: number) => Array.from({ length: n }, () => skip);
+
+  it("draws one 3:2 frame per reel and a final-pick disc", () => {
+    expect(home.form).toEqual({ kind: "frames", count: LEVEL_COUNT, aspect: "3:2", finalPick: true });
+    expect(finished(skips(LEVEL_COUNT)).marks).toHaveLength(LEVEL_COUNT);
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(answer)]).marks).toHaveLength(LEVEL_COUNT + 1);
+  });
+
+  it("speaks the end credits' lines", () => {
+    expect(finished([guess(heat), skip, guess(answer)]).line).toBe("Named on reel 3");
+    expect(finished([guess(answer)]).line).toBe("Named on reel 1");
+    expect(finished(skips(LEVEL_COUNT)).line).toBe("Not named in 10 reels");
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(answer)]).line).toBe("Named on the final pick");
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(drive)]).line).toBe("Not named, even on the final pick");
+  });
+
+  it("resultLine covers every ending", () => {
+    expect(resultLine({ reels: 4, named: true, finalPick: false })).toBe("Named on reel 4");
+    expect(resultLine({ reels: 10, named: false, finalPick: false })).toBe("Not named in 10 reels");
+    expect(resultLine({ reels: 10, named: true, finalPick: true })).toBe("Named on the final pick");
+    expect(resultLine({ reels: 10, named: false, finalPick: true })).toBe("Not named, even on the final pick");
   });
 });

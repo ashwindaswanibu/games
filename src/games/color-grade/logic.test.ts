@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { referencedAssetIds } from "@/core/assets";
+import { shareMarkRow } from "@/core/share-marks";
 import type { FilmDetails } from "@/games/_movies/schemas";
 import {
   colorGrade,
@@ -208,5 +209,18 @@ describe("outcome, score and share grid", () => {
   it("round-trips its state through JSON", () => {
     const state = play([guess(COLLATERAL), SKIP]);
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+  });
+});
+
+describe("color grade on the home", () => {
+  it("draws one 4:3 frame per try: a lost play uses all of them", () => {
+    expect(colorGrade.home!.form).toEqual({ kind: "frames", count: MAX_TRIES, aspect: "4:3", finalPick: false });
+    const { grid } = finish(play(Array.from({ length: MAX_TRIES }, () => SKIP)));
+    expect(shareMarkRow(grid)).toHaveLength(MAX_TRIES);
+  });
+
+  it("has no result line of its own (the label says it)", () => {
+    const { grid, score } = finish(play([SKIP, guess(HEAT)]));
+    expect(colorGrade.home!.line({ outcome: "won", label: score.label, marks: shareMarkRow(grid), par: null })).toBeNull();
   });
 });

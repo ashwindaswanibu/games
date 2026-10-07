@@ -17,6 +17,12 @@ export const GAMES: readonly AnyGame[] = [
   fadeToColor,
 ];
 
+/**
+ * Games whose play route is full screen (`src/app/(immersive)/play/<id>/`), outside the app's
+ * header and nav. The home cuts to black for these. A registry test keeps this equal to the routes.
+ */
+export const FULL_SCREEN_IDS: ReadonlySet<string> = new Set(["fade-to-color"]);
+
 const byId = new Map(GAMES.map((g) => [g.id, g]));
 
 export function getGame(id: string): AnyGame | undefined {

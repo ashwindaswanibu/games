@@ -161,5 +161,14 @@ export const frameByFrame = defineGame<Puzzle, Solution, State, Move, Reveal, Re
     return cells.join("");
   },
 
+  home: {
+    form: { kind: "frames", count: FRAME_COUNT, aspect: "4:3", finalPick: false },
+    // One mark per frame used, padded with unused frames: the frames seen are the marks before the padding.
+    line: ({ outcome, marks }) => {
+      const frames = marks.filter((m) => m !== "unused").length;
+      return outcome === "won" ? `Named on frame ${frames}` : `Not named in ${frames} frames`;
+    },
+  },
+
   reveal: ({ puzzle, solution }) => ({ film: solution.answer, frames: [puzzle.first, ...solution.later] }),
 });

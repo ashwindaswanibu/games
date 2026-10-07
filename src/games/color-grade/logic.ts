@@ -207,6 +207,12 @@ export const colorGrade = defineGame<Puzzle, Solution, State, Move, Reveal, Reso
     return cells.join("");
   },
 
+  home: {
+    form: { kind: "frames", count: MAX_TRIES, aspect: "4:3", finalPick: false },
+    // No line of its own on the home: the label says it.
+    line: () => null,
+  },
+
   reveal: ({ solution }) => ({
     answer: solution.answer,
     neutral: solution.neutral,

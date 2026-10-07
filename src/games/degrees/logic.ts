@@ -86,6 +86,14 @@ export function chainScore(links: number, par: number): number {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** A finished chain against par, in words: "Linked at par", "One link over par", "2 links under par". */
+export function chainLine(links: number, par: number): string {
+  const over = links - par;
+  if (over === 0) return "Linked at par";
+  const n = Math.abs(over);
+  return `${n === 1 ? "One link" : `${n} links`} ${over > 0 ? "over" : "under"} par`;
+}
+
 export const degrees = defineGame<DegreesPuzzle, DegreesSolution, DegreesState, DegreesMove, DegreesReveal, DegreesResolvedMove>({
   id: "degrees",
   name: "Degrees of Separation",
@@ -157,6 +165,15 @@ export const degrees = defineGame<DegreesPuzzle, DegreesSolution, DegreesState, 
   shareGrid({ state, outcome }) {
     const reel = "🎞".repeat(state.links.length);
     return outcome === "won" ? `${reel}⭐` : `${reel}🏳️`;
+  },
+
+  home: {
+    // The chain's length is par plus the player's detours; the server fills in today's par.
+    form: { kind: "chain" },
+    line: ({ outcome, marks, par }) => {
+      if (outcome === "lost") return "Gave up";
+      return par === null ? null : chainLine(marks.filter((m) => m === "link").length, par);
+    },
   },
 
   reveal: ({ solution }) => solution,
