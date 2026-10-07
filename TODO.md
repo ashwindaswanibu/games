@@ -15,10 +15,12 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [ ] **Add MovieNet as a second frame source** (about 1,100 complete films, pre-2019). Needs a free OpenDataLab account (Ashwin). First download only the 10 KB Movie List and measure how many *new* popular films it adds before committing to the ~250 GB download (process in the cloud).
 
 ## Home page and overall UI
-- [ ] **Redesign the home page with the same precision as the barcode game:** pin down the intent, quick visual experiments, Ashwin picks, refine, then build. The live site still has the old basic home page.
+- [ ] **Home page overhaul** (Ashwin, 2026-10-06): build it from the themes already discussed (the "Title Sequence" direction: B's look with A's motion), with everything learned from his taste while making Fade to Color, and the same control over every element. Claude does a full pass overnight; Ashwin reviews it the next day (recording, stills and a list of every decision made). Games already played today must show their result on the home screen.
 - [ ] Bring the same level of design to every screen and game (laptop first, phone good too).
 
 ## Content and data
+- [ ] **A much bigger film catalog for guessing** (Ashwin, 2026-10-06). Today's has 4,986 films, too few for the guess dropdown and weak on Indian cinema. Every known film is freely available. Wikidata has about 350,000 films (31,000 Indian; CC0). IMDb's datasets have every title, its cast and vote counts; they're free for personal, non-commercial use and refreshed daily. Plan: import them, rank search results by how well-known a film is (IMDb votes, Wikipedia editions), and include original and English titles, so the dropdown finds anything without burying the films people mean.
+- [ ] **Use the same catalog for Degrees of Separation**, with cast for every film. IMDb's cast list covers all films; Wikidata has cast for about 22,700 of its 31,000 Indian films. That fixes the missing Indian films.
 - [ ] **TMDB API key** (Ashwin) for better popularity data (vote counts) and stills.
 - [ ] **Weekly catalog refresh** from Wikidata, with a lower bar for films from the last 2 years.
 - [ ] Optional genre caps per month for film selection.
