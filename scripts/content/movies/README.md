@@ -24,20 +24,20 @@ Per-game real pipelines (each documents its flags in its header):
 
 ```bash
 npm run content:movies:frame-by-frame    # needs cached stills or TMDB_API_KEY
-npm run content:movies:color-grade       # needs cached stills or TMDB_API_KEY, and content/neutral/*.jpg
-npm run content:movies:barcode-levels -- --film <id> --date <YYYY-MM-DD|next-free>   # frames from movie-screencaps.com (section 4)
+npm run content:movies:barcode-levels -- --film <id|auto> --date <YYYY-MM-DD|next-free>   # frames from movie-screencaps.com (section 4)
+npm run content:movies:plan-barcode -- --from <YYYY-MM-DD> --days 60 --dry-run   # which film each Fade to Color day gets (section 5)
 ```
 
-Run them in this order. Degrees and stills read the catalog; Frame by Frame and Color Grade read
-the stills cache first and only go to TMDB for films that aren't cached. Each script can be rerun
+Run them in this order. Degrees and stills read the catalog; Frame by Frame reads
+the stills cache first and only goes to TMDB for films that aren't cached. Each script can be rerun
 at any time. A day someone has played is never replaced by anything. Otherwise, per script:
 
 | Script | A day that already has a puzzle |
 |---|---|
 | `degrees`, `frame-by-frame` | Skipped. With `--replace-fixtures`, a DEV FIXTURE puzzle nobody has played is replaced; a curated one never is |
 | `degrees --repar-unplayed` | A curated day nobody has played whose par the catalog made stale is fixed in place (section 2); DEV FIXTURE days are left alone |
-| `color-grade` | Skipped. With `--replace`, any puzzle nobody has played is regenerated (DEV FIXTURE or curated: use it to redo a bad pick) |
 | `barcode-levels` | Refused. With `--replace-fixtures`, a DEV FIXTURE nobody has played is replaced; a curated one never is |
+| `plan-barcode` | Kept as it is (whatever it holds) and counted for the selection rules |
 | `content:fixtures` (DEV FIXTURES) | Skipped. With `--replace`, only a DEV FIXTURE nobody has played is regenerated; a curated puzzle is never touched |
 | `stills`, `catalog` | Write no puzzles |
 
@@ -338,7 +338,7 @@ npm run content:movies:stills -- --top 100 --per-film 10 --refresh
 - **Output.** Files go to `content/movies/stills/tmdb-<id>/` as `01.webp, 02.webp, …` (best first),
   with a `manifest.json` (film identity, sizes, TMDB paths). The folder is git-ignored. Films that
   are already cached are skipped unless you pass `--refresh`.
-- **Using the cache.** `frame-by-frame.mts` and `color-grade.mts` get stills through
+- **Using the cache.** `frame-by-frame.mts` gets stills through
   `stillsSource()` in `lib/film-stills.mts`: the cache first (no network, the same stills every
   run), then TMDB for films that aren't cached. Without `TMDB_API_KEY` they use cached films only.
   Each image can go straight to `newAsset(kind, image)` and `insertPuzzleIfAbsent(...)`, both in
@@ -436,16 +436,36 @@ all ten levels, the pace and the frame credit. A date that has a puzzle is refus
 has played it and you pass `--replace-fixtures` (a DEV FIXTURE) or `--replace-unplayed` (a curated
 puzzle); a played date is never touched (the database refuses the delete).
 
-**Selection rules** (approved, `design/barcode-film-selection.md`), each refused unless overridden:
-a film that is already another day's answer (`--allow-repeat`); a director who has another answer
-within 30 days either side (`--allow-same-director`; checked before any download); a black-and-white
-film (`--allow-monochrome`; checked on the thumbnails, before the full-quality frames). Franchises
-can't be checked yet: the catalog has no franchise data. A gallery of a single page or under 1,000
-caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
+**Selection rules** (approved, `design/barcode-film-selection.md`), each refused unless overridden.
+They are the film picker's rules (section 5), checked by the same code (`clashes` in
+`src/games/fade-to-color/picker.ts`), so a hand-picked film obeys them too:
+
+- a film that is another day's answer within 365 days either side (`--allow-repeat`);
+- a director who has another answer within 30 days either side (`--allow-same-director`);
+- a film that looks like the same series as an answer within 30 days either side
+  (`--allow-same-series`). The catalog has no franchise data, so this is `sameSeries` from
+  `src/games/fade-to-color/decoys.ts`, a generous title match: "Dune" and "Dune: Part Two",
+  "Spider-Man: No Way Home" and "The Amazing Spider-Man 2", but also "Star Wars" and "Star Trek"
+  (same first word). Sequels that share no words with their series ("The Empire Strikes Back")
+  slip through;
+- a black-and-white film (`--allow-monochrome`; checked on the thumbnails, before the full-quality
+  frames);
+- a gallery of a single page or under 1,000 caps, not a whole film (`--allow-few-caps`).
+
+The first three are checked before anything is downloaded; dry runs only warn about them. What the
+frames show (black and white, colour, too few caps) is recorded in the gallery verdicts (section 5)
+so the picker never chooses that film again.
+
+`--film auto` lets the film picker choose the day's film (section 5) and renders it; it needs
+`--date` and takes no `--url` or `--allow-*` flags. A film refused on its frames is recorded and the
+day is picked again.
+
+The film's gallery comes from the cached copy of the site's directory (section 5), fetched at most
+once a day.
 
 | Flag | Default | |
 |---|---|---|
-| `--film` | (required) | Catalog id (`movie_films.id`) |
+| `--film` | (required) | Catalog id (`movie_films.id`), or `auto` for the film picker's choice |
 | `--date` | (required unless `--dry-run`) | `YYYY-MM-DD`, or `next-free`: the first day from today (New York) without a puzzle |
 | `--url` | from the directory | The film's gallery URL |
 | `--pace` | `normal` | `normal`, `slower` or `faster` |
@@ -456,11 +476,106 @@ caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
 | `--head`, `--tail` | 0.05, 0.015 | Fractions of the film strips never come from (titles and credits) |
 | `--replace-fixtures` | | Take a day that holds an unplayed DEV FIXTURE |
 | `--replace-unplayed` | | Take a day whose curated puzzle nobody has played (to re-render it) |
-| `--allow-repeat` | | Allow a film that is already another day's answer |
+| `--allow-repeat` | | Allow a film that is another day's answer within 365 days |
 | `--allow-same-director` | | Allow a director with another answer within 30 days |
+| `--allow-same-series` | | Allow a film that looks like the same series as an answer within 30 days |
 | `--allow-monochrome` | | Allow a black-and-white film |
 | `--allow-few-caps` | | Allow a one-page or under-1,000-cap gallery (a short film) |
 | `--dry-run` | | Render and validate, write nothing; with `--out <dir>`, save `level-01.webp` … and `levels.json` for review |
+| `--cache-dir` | `content/movies/cache` | Where the directory copy and the gallery verdicts live |
+| `--refresh-directory` | | Fetch the site's directory even if the copy is less than a day old |
+| `--percentiles` | `pool` | With `--film auto`: what fame percentiles are computed over (section 5) |
+
+## 5. Choosing the film: `content:movies:plan-barcode`
+
+Which film each Fade to Color day gets, by the approved logic (`design/barcode-film-selection.md`,
+approved 2026-10-06). The logic is pure and lives with the game, `src/games/fade-to-color/picker.ts`;
+its inputs are loaded at run time by `lib/film-picker.mts`; days are rendered through the same code
+as `barcode-levels` (`lib/barcode-day.mts`).
+
+```bash
+npm run content:movies:plan-barcode -- --from 2026-10-11 --days 60 --dry-run   # print the plan, write nothing
+npm run content:movies:plan-barcode -- --days 7                                # plan and render today + 6 days
+npm run content:movies:barcode-levels -- --film auto --date next-free         # one day, the picker's film
+```
+
+**The pool.** Catalog films (`movie_films`, read when the script runs, so a bigger catalog counts at
+once) that have a movie-screencaps.com gallery: same normalised title, a year within one, as
+`findGallery` matches them (`matchGalleries`). If two films claim one gallery, the exact year wins,
+then the better-known film. Films without a year are left out.
+
+**Fame score (0–100).** Popularity is the film's Wikipedia language editions
+(`movie_films.popularity`). Each film gets two percentiles, the share of films at or below its
+popularity: overall, and within its era (films released within 2 years either side). Score =
+the higher of overall and 0.9 × era, rounded to a whole number, so recent hits that haven't built up
+editions yet aren't buried. By default the percentiles are computed **over the pool**
+(`--percentiles pool`), which reproduces the approved numbers (Barbie and Avatar: The Way of Water
+90, The Batman 85). `--percentiles catalog` computes them over every catalog film with a year
+instead; that puts most films with frames in the top tier (Liar Liar becomes Iconic) and drifts as
+the catalog grows. Scores depend only on the catalog and the directory.
+
+**Tiers and the mix.** Iconic (85+) on 25% of days, Well-known (60–84) on 55%, Known (45–59) on 20%;
+below 45 never. Each day draws its tier by those weights, then a film within it.
+
+**Rules.** A film is skipped on a day when it is another day's answer within 365 days either side,
+a director of it directed another answer within 30 days either side, it looks like the same series
+as another answer within 30 days either side (section 4), or it is known to be black and white.
+"Another day's answer" means every stored Fade to Color puzzle (DEV FIXTURES included, as the
+renderer counts them) plus the days planned earlier in the same run. Because "used" is always read
+from the stored puzzles. The launch reset (testing-phase films return to the pool) isn't built
+yet: played puzzles are never deleted, so it will need a launch-date cutoff where the stored
+answers are loaded (`loadDayAnswers`). A film may come back exactly 365 days later; a director or
+series needs more than 30 days.
+
+**Fallback.** If no film in the drawn tier is eligible, the nearest tier with one is used, the more
+popular one first when two are equally near (Iconic → Well-known → Known; Well-known → Iconic →
+Known; Known → Well-known → Iconic). The plan's `why` says so. If no tier has an eligible film, the
+day gets no film and the plan says so: the rules are never relaxed silently. With today's pool a
+whole year of days needs no fallback.
+
+**Deterministic.** The tier comes from the day's seeded rng (`PUZZLE_SEED_SECRET`, the game and the
+date, its own seed domain apart from the final pick's); within the tier every eligible film gets a
+key from the day's seed and its id, and the lowest key wins. Rerunning gives the same plan for the
+same database, directory and verdicts, whatever order they come in, and planning a later stretch
+after storing an earlier one gives the same days as planning both at once. Days not stored yet can
+change when the catalog or the gallery list changes (scores are relative, and one changed day moves
+later ones through the rules); a stored day never changes.
+
+**Black-and-white films and short galleries** can only be told from the frames. The renderer
+measures colour on the thumbnails and refuses a grey film; it also refuses a gallery under 1,000
+caps. Either way it records a **gallery verdict** (`screencaps-verdicts.json` in the cache folder,
+keyed by gallery URL), the planner picks the day again without that film, and every later plan skips
+it. A dry run can't know yet, so until a film has been rendered its colour is unchecked: the
+summary says how many planned films that is, and those days can change when rendered (later days
+may move too). A gallery that shows only one page is not recorded: that may be the site's markup
+changing, so the run stops for a human to look.
+
+**The directory** is one request, cached in the cache folder (`screencaps-directory.html`) and reused
+for 24 hours; a page that lists no films is refused rather than cached.
+
+**Rendering** (without `--dry-run`): days are rendered and stored one at a time in date order, each
+picked against everything stored so far, so the stored days follow the rules even when a film was
+refused. Any failure other than a refusal stops the run; the days stored so far stay, and rerunning
+carries on. A stored day is never replaced.
+
+**A pre-rendered library** (the planned overnight job) changes only where candidates come from: the
+rendered films, with their measured colour, instead of the directory. `pickFilm`/`planDays` take
+candidates from either.
+
+The plan prints one line per day (date, film, year, tier, score, why) and a summary: the pool, the
+eligible films per tier, how many planned films are unchecked for colour, the tier shares against
+the targets, fallbacks, and the closest same-director, same-series and repeated pairs across stored
+and planned days.
+
+| Flag | Default | |
+|---|---|---|
+| `--from` | today (America/New_York) | First date, `YYYY-MM-DD` |
+| `--days` | 30 | Number of dates (at most 366) |
+| `--dry-run` | | Print the plan; download and write nothing |
+| `--percentiles` | `pool` | `pool` or `catalog`: what fame percentiles are computed over |
+| `--cache-dir` | `content/movies/cache` | Where the directory copy and the gallery verdicts live (git-ignored) |
+| `--refresh-directory` | | Fetch the site's directory even if the copy is less than a day old |
+| `--pace`, `--concurrency` | `normal`, 6 | Passed to the renderer |
 
 ## Shared utilities (`lib/`)
 
@@ -482,13 +597,17 @@ caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
 | `film-stills.mts` | `stillsSource()`: a film's stills from the cache, else TMDB (what the image pipelines use) |
 | `barcode-levels.mts` | Pure Fade to Color level maths: mattes, squeezed columns, the edges-first schedule, dark-frame skipping, smart crop, colour data |
 | `barcode-render.mts` | `renderLevels(source, options)`: the ten levels from any `FrameSource` (the real pipeline and the DEV FIXTURE generator share it); tested end to end on an in-memory film |
-| `screencaps.mts` | movie-screencaps.com: directory resolver, gallery reader, and `ScreencapsSource` (polite downloads, temp cache deleted on `close()`) |
+| `screencaps.mts` | movie-screencaps.com: directory resolver (`findGallery`, `matchGalleries` for a whole catalog), gallery reader, and `ScreencapsSource` (polite downloads, temp cache deleted on `close()`) |
+| `screencaps-cache.mts` | The cache folder: the directory copy (`loadDirectory`, one request a day) and the gallery verdicts (`GalleryVerdicts`) |
+| `film-picker.mts` | The film picker's inputs, loaded at run time: the pool, fame scores, candidates, stored answers (`loadPickerInputs`, `buildPickerInputs`), and the day's seed (`pickSeed`) |
+| `barcode-day.mts` | `renderBarcodeDay`: one Fade to Color day end to end (rules, render, store); `barcode-levels` and the planner both use it |
+| `barcode-plan.mts` | `pickAndRenderDay` (pick, render, pick again after a refusal) and the plan's printout |
 
 Image encoding is shared with the fixture tooling in `scripts/content/lib/images.mts`
 (`encodeImage`: sharp, sRGB, metadata stripped, 4 MB cap).
 
 The other scripts in this folder belong to the image games and build on these utilities:
-`frame-by-frame.mts`, `color-grade.mts` and `barcode-levels.mts`. Each one documents its usage in its
+`frame-by-frame.mts` and `barcode-levels.mts`. Each one documents its usage in its
 header.
 
 ## Tests
@@ -499,6 +618,10 @@ billing, who counts as an actor), the write planner (including a randomized test
 never change), the id checks and the stale-par check, the read-only database guard, the graph,
 puzzle picker and stale-par decisions, TMDB ranking and re-encoding (including a
 check that metadata is stripped), the Degrees schema, the Fade to Color level maths (on synthetic
-images) and the movie-screencaps.com page and directory parsing. Run them with `npx vitest run scripts`.
+images), the movie-screencaps.com page and directory parsing and gallery matching, the cache folder,
+and the film picker's inputs and its pick-again-after-a-refusal loop. Run them with
+`npx vitest run scripts`. The film picker itself is tested in `src/games/fade-to-color/picker.test.ts`
+(every rule and its boundary, the fallback, determinism, the tier mix and evenness over thousands of
+days, a year-long plan checked against every rule).
 The catalog's database side (search tiers, no-spaces keys, names, fame, the id guard,
 `replace_unplayed_puzzle`) is covered by `npm run test:db`.

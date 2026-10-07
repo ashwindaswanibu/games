@@ -33,7 +33,7 @@ async function loadPlayScreen(gameId: string) {
   const date = today();
   const view = await getPlayView(profile.id, game, date);
   const finished = view !== null && view.status !== "in_progress";
-  const friends = finished ? await getFriendsResults(profile.id, game.id, date) : null;
+  const friends = finished ? await getFriendsResults(profile.id, game, date) : null;
   return { profile, game, date, view, friends };
 }
 

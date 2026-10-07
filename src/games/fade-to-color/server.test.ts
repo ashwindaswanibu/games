@@ -122,7 +122,7 @@ describe("the full move pipeline", () => {
     expect((step.state as State).unlocked).toEqual([levels[1]]);
   });
 
-  it("finishes a skip on the last level as lost, for no points", async () => {
+  it("refuses a skip on the last level: guess or take the four", async () => {
     const nineSkips: State = {
       turns: Array.from({ length: MAX_GUESSES - 1 }, () => ({ skipped: true as const })),
       unlocked: levels.slice(1),
@@ -135,11 +135,7 @@ describe("the full move pipeline", () => {
       state: nineSkips,
       move: { type: "skip" },
     });
-    expect(step).toMatchObject({
-      ok: true,
-      outcome: "lost",
-      result: { score: 0, label: "X/10", shareGrid: "⬛".repeat(10) },
-    });
+    expect(step).toMatchObject({ ok: false, error: "On the last reel, guess or take the four." });
   });
 
   it("opens the final pick on a wrong last guess, then scores a right pick", async () => {
@@ -155,7 +151,7 @@ describe("the full move pipeline", () => {
     expect(missed.outcome).toBe("in_progress");
     expect((missed.state as State).options).toEqual(solution.options);
     const picked = await advancePlay({ ...base, services, state: missed.state, move: { type: "pick", filmId: 2 } });
-    expect(picked).toMatchObject({ ok: true, outcome: "won", result: { score: 5, label: "Final pick", shareGrid: `${"⬛".repeat(9)}🟥🟨` } });
+    expect(picked).toMatchObject({ ok: true, outcome: "won", result: { score: 5, label: "Pick 10/10", shareGrid: `${"⬛".repeat(9)}🟥🟡` } });
   });
 
   it("finishes and scores a correct guess", async () => {
