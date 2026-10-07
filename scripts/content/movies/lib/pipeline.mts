@@ -62,6 +62,24 @@ export async function selectAllPages<T>(
   }
 }
 
+/**
+ * Every row of a table with an integer `id`, read in id order by keyset (`id > last`), so each page
+ * costs the same however deep it is (an offset over 150,000 rows re-reads everything before it).
+ */
+export async function selectAllById<T extends { id: number }>(
+  fetchPage: (afterId: number, limit: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 1000,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let after = 0; ; ) {
+    const { data, error } = await fetchPage(after, pageSize);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) return rows;
+    after = data[data.length - 1]!.id;
+  }
+}
+
 /** Puzzle dates that already have a puzzle for `gameId` within [first, last]. */
 export async function existingPuzzleDates(db: ContentDb, gameId: string, dates: readonly PuzzleDate[]): Promise<Set<string>> {
   if (dates.length === 0) return new Set();

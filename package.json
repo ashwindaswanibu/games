@@ -21,6 +21,7 @@
     "test:e2e:accounts": "tsx --conditions=react-server --env-file=.env.local scripts/e2e/accounts.mts",
     "content:fixtures": "tsx --conditions=react-server --env-file=.env.local scripts/content/fixtures.mts",
     "content:movies:catalog": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/catalog.mts",
+    "content:movies:catalog-check": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/catalog-check.mts",
     "content:movies:degrees": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/degrees.mts",
     "content:movies:stills": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/stills.mts",
     "content:movies:frame-by-frame": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/frame-by-frame.mts",

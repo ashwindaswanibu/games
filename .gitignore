@@ -41,6 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Movie catalog build cache (content:movies:catalog): IMDb's datasets (personal, non-commercial use
+# only), Wikidata query results, snapshots and id baselines. Large and regenerable; never commit.
+/content/movies/catalog-cache/
+
 # TMDB stills cache (content:movies:stills). Copyrighted images licensed for display only; never commit.
 /content/movies/stills/
 
