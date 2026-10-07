@@ -44,6 +44,9 @@ next-env.d.ts
 # TMDB stills cache (content:movies:stills). Copyrighted images licensed for display only; never commit.
 /content/movies/stills/
 
+# Fade to Color pipeline cache: the movie-screencaps.com directory copy and gallery verdicts (regenerable).
+/content/movies/cache/
+
 # Intermediate review screenshots/frames from design iterations (regenerable; keep the repo lean)
 /design/home/shots/
 /design/home/frames/
