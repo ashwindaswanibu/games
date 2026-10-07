@@ -33,7 +33,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { addDays, startOfDay, today, type PuzzleDate } from "@/core/day";
+import { addDays, startOfDay, today, wallClockAt, type PuzzleDate } from "@/core/day";
 import type { AnyGame } from "@/core/game";
 import { createRng, type Rng } from "@/core/random";
 import { getGame, visibleGames } from "@/games/registry";
@@ -384,13 +384,6 @@ function minutesOf(hhmm: string): number {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
-/** The instant of New York wall-clock `minutes` on `date` (DST moves the clock at 2 AM). */
-function wallClock(date: PuzzleDate, minutes: number): Date {
-  const start = startOfDay(date).getTime();
-  const shift = startOfDay(addDays(date, 1)).getTime() - start - 24 * 60 * MINUTE;
-  return new Date(start + minutes * MINUTE + (minutes >= 180 ? shift : 0));
-}
-
 /** Never before the game day began, never after it ended. */
 function clampToDay(instant: number, date: PuzzleDate): Date {
   const start = startOfDay(date).getTime();
@@ -536,8 +529,8 @@ async function seed(name: string): Promise<void> {
   if (!scenario) throw new Error(`--scenario must be one of ${Object.keys(SCENARIOS).join(", ")}`);
   const now = new Date();
   const date = today(now);
-  const scenarioAt = wallClock(date, minutesOf(scenario.at));
-  const at = args.at === undefined ? scenarioAt : args.at === "now" ? now : wallClock(date, minutesOf(args.at));
+  const scenarioAt = wallClockAt(date, minutesOf(scenario.at));
+  const at = args.at === undefined ? scenarioAt : args.at === "now" ? now : wallClockAt(date, minutesOf(args.at));
   const shift = at.getTime() - scenarioAt.getTime();
 
   await assertNamesFree();
@@ -556,7 +549,7 @@ async function seed(name: string): Promise<void> {
       if (guesses === null || !numberHunt) continue;
       const day = addDays(date, -back);
       const rng = createRng(seedOf(`${player.username}:${day}`));
-      const lastMoveAt = wallClock(day, 7 * 60 + rng.int(0, 15 * 60));
+      const lastMoveAt = wallClockAt(day, 7 * 60 + rng.int(0, 15 * 60));
       const row = await planAndPlay({ userId, gameId: NUMBER_HUNT, date: day, steps: String(guesses), lastMoveAt, seed: `${player.username}:${day}` });
       if (row) rows.push(row);
     }
@@ -564,7 +557,7 @@ async function seed(name: string): Promise<void> {
   for (const play of scenario.plays) {
     const userId = ids.get(play.player);
     if (!userId) throw new Error(`Unknown demo player ${play.player}`);
-    const lastMoveAt = clampToDay(wallClock(date, minutesOf(play.at)).getTime() + shift, date);
+    const lastMoveAt = clampToDay(wallClockAt(date, minutesOf(play.at)).getTime() + shift, date);
     const row = await planAndPlay({ userId, gameId: play.gameId, date, steps: play.steps, lastMoveAt, seed: `${play.player}:${play.gameId}:${date}` });
     if (row) rows.push(row);
   }

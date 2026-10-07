@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, daysBetween, isPuzzleDate, nextRollover, parsePuzzleDate, startOfDay, today, weekStart } from "./day";
+import { addDays, daysBetween, isPuzzleDate, nextRollover, parsePuzzleDate, startOfDay, today, wallClockAt, weekStart } from "./day";
 
 const d = parsePuzzleDate;
 
@@ -31,6 +31,25 @@ describe("startOfDay", () => {
       expect(today(start)).toBe(date);
       expect(today(new Date(start.getTime() - 1))).toBe(addDays(date, -1));
     }
+  });
+});
+
+describe("wallClockAt", () => {
+  const ny = (at: Date) =>
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" }).format(at);
+
+  it("reads New York's wall clock on ordinary days", () => {
+    expect(ny(wallClockAt(d("2026-10-07"), 13 * 60 + 40))).toBe("13:40 EDT");
+    expect(ny(wallClockAt(d("2026-01-15"), 0))).toBe("00:00 EST");
+  });
+
+  it("carries the shift on the 23- and 25-hour days", () => {
+    expect(ny(wallClockAt(d("2026-03-08"), 60 + 30))).toBe("01:30 EST");
+    expect(ny(wallClockAt(d("2026-03-08"), 3 * 60))).toBe("03:00 EDT");
+    expect(ny(wallClockAt(d("2026-03-08"), 22 * 60 + 50))).toBe("22:50 EDT");
+    expect(ny(wallClockAt(d("2026-11-01"), 60 + 30))).toBe("01:30 EDT");
+    expect(ny(wallClockAt(d("2026-11-01"), 2 * 60))).toBe("02:00 EST");
+    expect(ny(wallClockAt(d("2026-11-01"), 22 * 60 + 50))).toBe("22:50 EST");
   });
 });
 

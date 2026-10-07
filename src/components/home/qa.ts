@@ -1,5 +1,21 @@
-import type { HomeClock, HomeCue } from "@/core/home-view";
+import { wallClockAt, type PuzzleDate } from "@/core/day";
+import type { HomeCue } from "@/core/home-view";
 import type { HomeQa } from "./home";
+
+type QaParams = Record<string, string | string[] | undefined>;
+
+/**
+ * `?qa_t=HH:MM[:SS]` as an instant on `date`'s New York wall clock (DST-safe), or null when absent
+ * or in a production build. The real home builds its view at this instant, so presence windows and
+ * the set-in gate agree with the page's pretended clock.
+ */
+export function qaInstant(params: QaParams, date: PuzzleDate): number | null {
+  if (process.env.NODE_ENV === "production") return null;
+  const raw = params.qa_t;
+  const t = typeof raw === "string" ? raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/) : null;
+  if (!t || Number(t[1]) > 23 || Number(t[2]) > 59 || Number(t[3] ?? 0) > 59) return null;
+  return wallClockAt(date, Number(t[1]) * 60 + Number(t[2])).getTime() + Number(t[3] ?? 0) * 1000;
+}
 
 /**
  * The home's review hooks (spec §13.2), parsed from the page's search params. Development only:
@@ -13,7 +29,7 @@ import type { HomeQa } from "./home";
  *   ?qa_frames=1          log frame deltas while a moment plays
  *   ?qa_cue_change=1      crossfade to the next cue 1.5 s after load
  */
-export function parseQa(params: Record<string, string | string[] | undefined>, clock: Pick<HomeClock, "dayStartsAt">, realNow: number): HomeQa | null {
+export function parseQa(params: QaParams, date: PuzzleDate, realNow: number): HomeQa | null {
   if (process.env.NODE_ENV === "production") return null;
   const one = (k: string) => {
     const v = params[k];
@@ -22,12 +38,8 @@ export function parseQa(params: Record<string, string | string[] | undefined>, c
   const keys = Object.keys(params).filter((k) => k.startsWith("qa_"));
   if (keys.length === 0) return null;
 
-  let offsetMs = 0;
-  const t = one("qa_t")?.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (t) {
-    const at = Date.parse(clock.dayStartsAt) + ((Number(t[1]) * 60 + Number(t[2])) * 60 + Number(t[3] ?? 0)) * 1000;
-    offsetMs = at - realNow;
-  }
+  const at = qaInstant(params, date);
+  const offsetMs = at === null ? 0 : at - realNow;
   const cue = one("qa_cue");
   const opening = one("qa_opening");
   const st = one("qa_st");

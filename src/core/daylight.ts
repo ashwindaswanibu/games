@@ -1,4 +1,4 @@
-import { addDays, puzzleDateAt, startOfDay, type PuzzleDate } from "./day";
+import { addDays, puzzleDateAt, startOfDay, wallClockAt, type PuzzleDate } from "./day";
 import type { HomeClock, HomeCue } from "./home-view";
 
 /**
@@ -112,11 +112,9 @@ export function sunTimes(date: PuzzleDate, place: Place = NEW_YORK): SunTimes {
   };
 }
 
-/** 12:00 on New York's wall clock. DST changes happen at 2 AM, so noon sits 12 h after midnight ± the day's shift. */
+/** 12:00 on New York's wall clock (DST changes happen at 2 AM, so noon carries the day's shift). */
 export function wallClockNoon(date: PuzzleDate): Date {
-  const start = startOfDay(date).getTime();
-  const dayLength = startOfDay(addDays(date, 1)).getTime() - start; // 23, 24 or 25 hours
-  return new Date(start + 12 * HOUR_MS + (dayLength - DAY_MS));
+  return wallClockAt(date, 12 * 60);
 }
 
 /** The three cue boundaries for `date`: civil dawn, noon, civil dusk. */

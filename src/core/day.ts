@@ -89,6 +89,17 @@ export function startOfDay(date: PuzzleDate): Date {
   return new Date(utcMidnight - zoneOffsetMs(new Date(firstGuess)));
 }
 
+/**
+ * The instant it is `minutes` past midnight on the game timezone's wall clock on `date`. DST-safe:
+ * the clocks change at 2 AM, so from 2:00 on the day's shift applies (a 23- or 25-hour day). On the
+ * spring-forward day, 2:00–2:59 doesn't exist and lands an hour early.
+ */
+export function wallClockAt(date: PuzzleDate, minutes: number): Date {
+  const start = startOfDay(date).getTime();
+  const shift = startOfDay(addDays(date, 1)).getTime() - start - DAY_MS;
+  return new Date(start + minutes * 60_000 + (minutes >= 120 ? shift : 0));
+}
+
 /** The instant the next puzzle unlocks. */
 export function nextRollover(now: Date = new Date()): Date {
   return startOfDay(addDays(today(now), 1));

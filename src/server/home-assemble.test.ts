@@ -440,6 +440,11 @@ describe("selectPresence", () => {
     expect(out).toEqual([{ kind: "playing", playerId: "marco", firstName: "Marco", gameId: "movies-live", gameName: "Degrees", at: ago(2) }]);
   });
 
+  it("leaves out activity stamped after the view's instant (beyond a minute's allowance)", () => {
+    const out = select([playing("marco", "words-a", -30), done("sam", "words-a", -0.5), done("jess", "words-a", 10)]);
+    expect(out.map((i) => i.firstName)).toEqual(["Sam", "Jess"]);
+  });
+
   it("never carries a score, label or grid", () => {
     const [item] = select([done("sam", "words-a", 5)]);
     expect(Object.keys(item).sort()).toEqual(["at", "firstName", "gameId", "gameName", "kind", "playerId"]);

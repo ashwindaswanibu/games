@@ -25,7 +25,7 @@ export function homeProps(
   params: Record<string, string | string[] | undefined>,
   opts: { realNow: number; sceneAt?: number },
 ): Omit<HomeProps, "className"> {
-  const qa = parseQa(params, view.clock, opts.realNow);
+  const qa = parseQa(params, view.day.date, opts.realNow);
   // A fixture is set at a scene time; `qa_t` moves any page to another.
   const offsetMs = qa && qa.offsetMs !== 0 ? qa.offsetMs : opts.sceneAt !== undefined ? opts.sceneAt - opts.realNow : 0;
   const initialNow = opts.realNow + offsetMs;

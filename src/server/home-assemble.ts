@@ -38,6 +38,12 @@ import type { PuzzleReadiness } from "./puzzles";
 export const PRESENCE_PLAYING_WINDOW_MS = 15 * 60 * 1000;
 /** A finished play counts as "finished" for this long. */
 export const PRESENCE_FINISHED_WINDOW_MS = 60 * 60 * 1000;
+/**
+ * Activity stamped after `now` by more than this is not mentioned: it hasn't happened at the instant
+ * the view describes (a view built for another time of day in development). The allowance covers
+ * plays that move while the view is being read.
+ */
+export const PRESENCE_FUTURE_ALLOWANCE_MS = 60 * 1000;
 /** The opening's "present" card names at most this many players; above it the card is left out. */
 export const CAST_MAX = 8;
 
@@ -279,6 +285,7 @@ export function selectPresence(
   const { viewerId, gameNames, now, names } = params;
   const playingSince = now.getTime() - PRESENCE_PLAYING_WINDOW_MS;
   const finishedSince = now.getTime() - PRESENCE_FINISHED_WINDOW_MS;
+  const until = now.getTime() + PRESENCE_FUTURE_ALLOWANCE_MS;
 
   const newestByPlayer = new Map<string, PresenceItem>();
   for (const row of rows) {
@@ -294,7 +301,7 @@ export function selectPresence(
     } else if (row.finished_at !== null && Date.parse(row.finished_at) >= finishedSince) {
       item = { kind: "finished", ...base, at: iso(row.finished_at) };
     }
-    if (!item) continue;
+    if (!item || Date.parse(item.at) > until) continue;
 
     const current = newestByPlayer.get(row.user_id);
     if (!current || Date.parse(item.at) > Date.parse(current.at)) newestByPlayer.set(row.user_id, item);
