@@ -37,6 +37,8 @@ export interface FilmRecord {
   tmdbId: number | null;
   imdbId: string | null;
   wikidataId: string | null;
+  /** IMDb lists it as adult: search never shows it, so no game may use it either. */
+  isAdult: boolean;
 }
 
 export interface PersonRecord {
@@ -69,10 +71,10 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-const FILM_COLUMNS = "id, title, year, genres, directors, popularity, tmdb_id, imdb_id, wikidata_id";
+const FILM_COLUMNS = "id, title, year, genres, directors, popularity, tmdb_id, imdb_id, wikidata_id, is_adult";
 const PERSON_COLUMNS = "id, name, popularity, wikidata_id";
 
-type FilmColumns = Pick<MovieFilmRow, "id" | "title" | "year" | "genres" | "directors" | "popularity" | "tmdb_id" | "imdb_id" | "wikidata_id">;
+type FilmColumns = Pick<MovieFilmRow, "id" | "title" | "year" | "genres" | "directors" | "popularity" | "tmdb_id" | "imdb_id" | "wikidata_id" | "is_adult">;
 type PersonColumns = Pick<MoviePersonRow, "id" | "name" | "popularity" | "wikidata_id">;
 
 export function toFilmRecord(row: FilmColumns): FilmRecord {
@@ -86,6 +88,7 @@ export function toFilmRecord(row: FilmColumns): FilmRecord {
     tmdbId: row.tmdb_id,
     imdbId: row.imdb_id,
     wikidataId: row.wikidata_id,
+    isAdult: row.is_adult,
   };
 }
 

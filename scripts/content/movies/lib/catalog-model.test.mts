@@ -8,20 +8,25 @@ import {
   imdbGenreNames,
   isActor,
   isLatinText,
+  isSeries,
   keepStoredOrder,
   lowestVoteBar,
   MAX_CAST,
   MAX_OTHER_NAMES,
+  MAX_SERIES,
   mergeCast,
+  NOT_A_SERIES,
   orderGenresBySpecificity,
   parseImdbId,
   parseTmdbId,
   searchableNames,
   selectionReason,
+  seriesOfFilm,
   stripWikipediaQualifier,
   wikidataGenreNames,
   type SelectionInput,
   type SelectionRules,
+  type SeriesValue,
 } from "./catalog-model.mjs";
 
 const rules: SelectionRules = { ...DEFAULT_RULES, currentYear: 2026 };
@@ -106,12 +111,57 @@ describe("display titles", () => {
     expect(displayTitle({ label: "Some Translation", enwiki: null, imdbPrimary: "Pathaan", imdbOriginal: "Pathaan" })).toBe("Pathaan");
   });
 
+  it("counts an apostrophe in another place as another name (search ignores it, the title doesn't)", () => {
+    expect(displayTitle({ label: "Mother's Instinct", enwiki: "Mothers' Instinct", imdbPrimary: "Mothers' Instinct", imdbOriginal: "Mothers' Instinct" })).toBe("Mothers' Instinct");
+    expect(displayTitle({ label: "Girl's Love", enwiki: null, imdbPrimary: "Girls Love", imdbOriginal: "Girls Love" })).toBe("Girls Love");
+    // Which apostrophe it is doesn't matter.
+    expect(displayTitle({ label: "Don’t Look Up", enwiki: "Don't Look Up", imdbPrimary: "Don't Look Up", imdbOriginal: "Don't Look Up" })).toBe("Don’t Look Up");
+  });
+
   it("falls back when there is no label", () => {
     expect(displayTitle({ label: null, enwiki: "Drishyam (2015 film)", imdbPrimary: "Drishyam", imdbOriginal: "Drishyam" })).toBe("Drishyam");
     expect(displayTitle({ label: null, enwiki: null, imdbPrimary: "Jawan", imdbOriginal: "Jawan" })).toBe("Jawan");
     expect(displayTitle({ label: "  ", enwiki: null, imdbPrimary: null, imdbOriginal: null })).toBeNull();
     // With nothing to compare against, the label stands.
     expect(displayTitle({ label: "Only a label", enwiki: null, imdbPrimary: null, imdbOriginal: null })).toBe("Only a label");
+  });
+});
+
+describe("series", () => {
+  const value = (qid: string, overrides: Partial<SeriesValue> = {}): SeriesValue => ({ qid, creative: true, universe: false, brand: false, list: false, ...overrides });
+
+  it("counts a series of creative works: film series, trilogies, TV series, media franchises", () => {
+    expect(isSeries(value("Q1576873"))).toBe(true); // Fast & Furious
+    expect(isSeries(value("Q22092344"))).toBe(true); // Star Wars
+  });
+
+  it("leaves out universes, their phases and sagas, lists and what isn't a series at all", () => {
+    expect(isSeries(value("Q642878", { universe: true }))).toBe(false); // Marvel Cinematic Universe
+    expect(isSeries(value("Q63405798", { brand: true }))).toBe(false); // The Infinity Saga
+    expect(isSeries(value("Q2732470", { creative: false, list: true }))).toBe(false); // list of Pixar films
+    expect(isSeries(value("Q2532722", { list: true }))).toBe(false); // list of Barbie films (also typed animated film series)
+    expect(isSeries(value("Q26705935", { creative: false }))).toBe(false); // BBC's 100 Greatest Films of the 21st Century
+  });
+
+  it("leaves out studio catalogues Wikidata types as film series", () => {
+    expect(NOT_A_SERIES.has("Q56070713")).toBe(true); // Walt Disney Animation Studios feature film
+    for (const qid of NOT_A_SERIES.keys()) expect(isSeries(value(qid))).toBe(false);
+  });
+
+  it("gives a film its series once each, in Wikidata id order, at most MAX_SERIES", () => {
+    // The Avengers (2012): Avengers counts; the MCU, Phase One and The Infinity Saga don't.
+    expect(
+      seriesOfFilm([
+        value("Q642878", { universe: true }),
+        value("Q63405798", { brand: true }),
+        value("Q51963292", { brand: true }),
+        value("Q20021634"),
+      ]),
+    ).toEqual(["Q20021634"]);
+    // The Empire Strikes Back: the Star Wars films and the original trilogy.
+    expect(seriesOfFilm([value("Q25540859"), value("Q22092344"), value("Q22092344")])).toEqual(["Q22092344", "Q25540859"]);
+    expect(seriesOfFilm([])).toEqual([]);
+    expect(seriesOfFilm(Array.from({ length: MAX_SERIES + 5 }, (_, i) => value(`Q${i + 1}`)))).toHaveLength(MAX_SERIES);
   });
 });
 

@@ -14,9 +14,10 @@
  * - **Candidates:** pool films scoring at least `MIN_SCORE`, minus galleries too short to be a whole
  *   film; a gallery found to be black and white is marked so the picker skips it.
  * - **Answers:** every stored Fade to Color puzzle's answer, DEV FIXTURES included (the renderer
- *   counts them too). "Used" is always read from the stored puzzles; the launch reset of the
- *   testing period will need a launch-date cutoff in `loadDayAnswers` (played puzzles are never
- *   deleted), not any state kept here.
+ *   counts them too), with its Wikidata series read from the catalog. "Used" is always read from
+ *   the stored puzzles; the launch reset of the testing period will need a launch-date cutoff in
+ *   `loadDayAnswers` (played puzzles are never deleted), not any state kept here.
+ * - **Adult films** (`is_adult`) are never in the catalog the picker sees.
  *
  * For a pre-rendered library, the candidates would be the rendered films (with their measured
  * colour) instead of the directory's; `pickFilm`/`planDays` take candidates from either.
@@ -26,6 +27,7 @@ import type { RngSeed } from "@/core/random";
 import { fadeToColor } from "@/games/fade-to-color/logic";
 import { MIN_SCORE, scoreFilms, type DayAnswer, type FilmScore, type PickCandidate } from "@/games/fade-to-color/picker";
 import { z } from "zod";
+import { chunk } from "./http.mjs";
 import { contentSeed, selectAllPages, type ContentDb } from "./pipeline.mjs";
 import { GalleryVerdicts, loadDirectory, type GalleryVerdict } from "./screencaps-cache.mjs";
 import { DEFAULT_CACHE_DIR } from "./screencaps-cache.mjs";
@@ -44,6 +46,8 @@ export interface CatalogFilm {
   year: number | null;
   directors: string[];
   popularity: number;
+  /** Wikidata ids of the film series it is part of. */
+  series_qids: string[];
   /** Its Wikidata id, used to ask whether it's black and white before any frames are fetched. */
   wikidata_id?: string | null;
 }
@@ -53,22 +57,44 @@ export function pickSeed(date: PuzzleDate): RngSeed {
   return contentSeed(`${GAME_ID}:film`, date);
 }
 
-/** Every catalog film with a year (a film without one can't be scored by era). */
+/** Every catalog film with a year (a film without one can't be scored by era), adult films left out. */
 export async function loadCatalogFilms(db: ContentDb): Promise<CatalogFilm[]> {
   return selectAllPages((from, to) =>
-    db.from("movie_films").select("id, title, year, directors, popularity, wikidata_id").not("year", "is", null).order("id").range(from, to),
+    db
+      .from("movie_films")
+      .select("id, title, year, directors, popularity, series_qids, wikidata_id")
+      .not("year", "is", null)
+      .eq("is_adult", false)
+      .order("id")
+      .range(from, to),
   );
 }
 
 const storedAnswerSchema = z.object({ answer: z.object({ id: z.number(), title: z.string(), directors: z.array(z.string()) }) });
 
-/** The answer of every stored Fade to Color puzzle, any date (puzzles without a readable answer are skipped). */
+/**
+ * The answer of every stored Fade to Color puzzle, any date (puzzles without a readable answer are
+ * skipped), with the answer film's Wikidata series as the catalog has it now.
+ */
 export async function loadDayAnswers(db: ContentDb): Promise<DayAnswer[]> {
   const rows = await selectAllPages((from, to) => db.from("puzzles").select("puzzle_date, solution").eq("game_id", GAME_ID).order("puzzle_date").range(from, to));
-  return rows.flatMap((row) => {
+  const answers = rows.flatMap((row) => {
     const answer = storedAnswerSchema.safeParse(row.solution).data?.answer;
     return answer ? [{ date: row.puzzle_date as PuzzleDate, filmId: answer.id, title: answer.title, directors: answer.directors }] : [];
   });
+  const series = await seriesOf(db, answers.map((a) => a.filmId));
+  return answers.map((answer) => ({ ...answer, series: series.get(answer.filmId) ?? [] }));
+}
+
+/** The Wikidata series of each of `filmIds` that is in the catalog. */
+export async function seriesOf(db: ContentDb, filmIds: readonly number[]): Promise<Map<number, string[]>> {
+  const out = new Map<number, string[]>();
+  for (const part of chunk([...new Set(filmIds)], 200)) {
+    const { data, error } = await db.from("movie_films").select("id, series_qids").in("id", part);
+    if (error) throw new Error(`Couldn't read the answers' series: ${error.message}`);
+    for (const row of data) out.set(row.id, row.series_qids);
+  }
+  return out;
 }
 
 export interface PoolFilm {
@@ -122,7 +148,7 @@ export function buildPickerInputs(
     }
     const monochrome = verdict !== undefined ? verdict.verdict === "black-and-white" : greyIds.has(film.id) ? true : null;
     if (verdict === undefined && greyIds.has(film.id)) knownGrey++;
-    candidates.push({ id: film.id, title: film.title, year: film.year, directors: film.directors, score: score.score, monochrome });
+    candidates.push({ id: film.id, title: film.title, year: film.year, directors: film.directors, series: film.series_qids, score: score.score, monochrome });
   }
   return { candidates, pool, reference, referenceSize: scores.size, tooShort, knownGrey };
 }

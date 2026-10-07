@@ -1,6 +1,6 @@
 import type { PuzzleDate } from "@/core/day";
 import { createRng, type RngSeed } from "@/core/random";
-import { sameSeriesProfile, seriesProfile, type SeriesProfile } from "./decoys";
+import { sameSeriesProfile, seriesProfile, shareSeries, type SeriesProfile } from "./decoys";
 
 /**
  * Which film is each day's Fade to Color answer: the approved selection logic
@@ -22,8 +22,9 @@ import { sameSeriesProfile, seriesProfile, type SeriesProfile } from "./decoys";
  * **Rules** (each makes a film ineligible for the day):
  * - the film is another day's answer within 365 days either side (`REPEAT_GAP_DAYS`);
  * - a director of the film directed another day's answer within 30 days either side;
- * - the film looks like the same series as another day's answer within 30 days either side
- *   (`sameSeries`, a generous title match: the catalog has no franchise data);
+ * - the film is of the same series as another day's answer within 30 days either side: Wikidata
+ *   says so (a shared "part of the series", `series`: Fast Five and Furious 7) or the titles look
+ *   like it (`sameSeries`, a generous title match, for films Wikidata doesn't link);
  * - the film is known to be black and white (checked on its frames; unknown films are allowed and
  *   the renderer refuses them if they turn out to be).
  *
@@ -187,6 +188,8 @@ export interface PickCandidate {
   title: string;
   year: number | null;
   directors: readonly string[];
+  /** Wikidata ids of the film series it is part of (`movie_films.series_qids`). */
+  series: readonly string[];
   /** From `scoreFilms`. */
   score: number;
   /**
@@ -202,6 +205,8 @@ export interface DayAnswer {
   filmId: number;
   title: string;
   directors: readonly string[];
+  /** The answer's Wikidata series, from the catalog (empty when unknown). */
+  series: readonly string[];
 }
 
 export type Clash =
@@ -215,12 +220,13 @@ const nameKey = (name: string) => name.trim().toLowerCase();
 const DAY_MS = 86_400_000;
 const dayNumber = (date: PuzzleDate) => Math.round(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
 
-type FilmIdentity = { id: number; title: string; directors: readonly string[] };
+type FilmIdentity = { id: number; title: string; directors: readonly string[]; series: readonly string[] };
 
-/** What the rules compare about a film: its normalised directors and series profile. */
+/** What the rules compare about a film: its normalised directors, its title's series profile and its Wikidata series. */
 interface FilmTraits {
   directors: string[];
-  series: SeriesProfile;
+  titleSeries: SeriesProfile;
+  series: readonly string[];
 }
 
 /**
@@ -228,10 +234,10 @@ interface FilmTraits {
  * are worked out once. Keyed by object, so an edited copy of a film is never confused with it.
  */
 const traitsMemo = new WeakMap<object, FilmTraits>();
-function traitsOf(film: { title: string; directors: readonly string[] }): FilmTraits {
+function traitsOf(film: { title: string; directors: readonly string[]; series: readonly string[] }): FilmTraits {
   let traits = traitsMemo.get(film);
   if (!traits) {
-    traits = { directors: film.directors.map(nameKey).filter(Boolean), series: seriesProfile(film.title) };
+    traits = { directors: film.directors.map(nameKey).filter(Boolean), titleSeries: seriesProfile(film.title), series: film.series };
     traitsMemo.set(film, traits);
   }
   return traits;
@@ -276,7 +282,7 @@ function rulesAround(date: PuzzleDate, answers: readonly DayAnswer[], repeatGapD
         const shared = answer.directors.filter((d) => mine.directors.includes(nameKey(d)));
         if (found({ rule: "director", date: answer.date, title: answer.title, directors: shared }, gap)) return;
       }
-      if (gap <= SERIES_GAP_DAYS && sameSeriesProfile(mine.series, traits.series)) {
+      if (gap <= SERIES_GAP_DAYS && (shareSeries(mine.series, traits.series) || sameSeriesProfile(mine.titleSeries, traits.titleSeries))) {
         if (found({ rule: "series", date: answer.date, title: answer.title }, gap)) return;
       }
     }
@@ -419,7 +425,7 @@ export function planDays(dates: readonly PuzzleDate[], candidates: readonly Pick
     if (answer) return { date, kind: "stored", answer };
     const pick = pickFilm(date, candidates, known, seedFor(date));
     if (!pick.film || !pick.tier) return { date, kind: "none", pick };
-    known.push({ date, filmId: pick.film.id, title: pick.film.title, directors: pick.film.directors });
+    known.push({ date, filmId: pick.film.id, title: pick.film.title, directors: pick.film.directors, series: pick.film.series });
     return { date, kind: "picked", pick: { ...pick, film: pick.film, tier: pick.tier } };
   });
 }

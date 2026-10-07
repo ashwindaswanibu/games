@@ -151,6 +151,25 @@ SELECT DISTINCT ?person WHERE {
   ?person wdt:P31 wd:Q5 .
 }`,
   },
+  series: {
+    name: "series",
+    columns: ["item", "series", "en", "creative", "universe", "brand", "list"],
+    // Every "part of the series" (P179) value of every film, with what Wikidata says the value is
+    // (`seriesOfFilm` decides which count): a series of creative works (Q7725310: film series,
+    // TV series, trilogy, media franchise…), a fictional or shared universe (Q559618, Q3275581:
+    // the MCU), a brand (Q431289: the MCU's phases and sagas) or a list article (Q13406463:
+    // "list of Pixar films", "BBC's 100 Greatest Films of the 21st Century"). ~15,000 rows.
+    sparql: `${PREFIXES}
+SELECT DISTINCT ?item ?series ?en ?creative ?universe ?brand ?list WHERE {
+  ${FILM}
+  ?item wdt:P179 ?series .
+  ${label("?series", "en", "en")}
+  BIND(EXISTS { ?series wdt:P31/wdt:P279* wd:Q7725310 } AS ?creative)
+  BIND(EXISTS { ?series wdt:P31/wdt:P279* wd:Q559618 } || EXISTS { ?series wdt:P31/wdt:P279* wd:Q3275581 } AS ?universe)
+  BIND(EXISTS { ?series wdt:P31/wdt:P279* wd:Q431289 } AS ?brand)
+  BIND(EXISTS { ?series wdt:P31/wdt:P279* wd:Q13406463 } AS ?list)
+}`,
+  },
   imdbPeople: {
     name: "imdb-people",
     columns: ["person", "nm", "en", "mul", "links"],
@@ -311,6 +330,11 @@ const ENTITY = /^http:\/\/www\.wikidata\.org\/entity\/(Q[1-9][0-9]*)$/;
 /** Entity URI → QID; blank nodes ("unknown value") and anything else → null. */
 export function qidOf(uri: string): string | null {
   return ENTITY.exec(uri)?.[1] ?? null;
+}
+
+/** A boolean cell ("true" or "false", as QLever writes xsd:boolean), or null when it is neither. */
+export function boolCell(value: string | undefined): boolean | null {
+  return value === "true" ? true : value === "false" ? false : null;
 }
 
 /** A non-negative integer cell, or null when empty or malformed. */

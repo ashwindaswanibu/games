@@ -149,3 +149,52 @@ Locally this took the catalog's indexes from 163 MB to 134 MB. Check the total a
   so no later command in it reaches the hosted database.
 - Later refreshes are the same steps 3–7 (step 6 against that run's baseline; step 8 only after a
   large import).
+
+## Series, adult films and apostrophes (branch `catalog-quality`, built 2026-10-07, not live)
+
+Three catalog fixes on top of the rollout above (`scripts/content/movies/README.md`, section 1):
+Wikidata's series (`movie_films.series_qids`) for Fade to Color's four and the film picker, adult
+films hidden (`movie_films.is_adult`), and an apostrophe kept inside its word in search keys, with
+a second key that still finds the word after it ("hara" → the O'Haras). Same ground rules as above:
+the owner runs it, from `main` with the branch merged, in a terminal with `.env.hosted` loaded. In
+this order:
+
+1. **Schema and key recompute:** `npx supabase migration list`, then `npx supabase db push`. Four
+   migrations: `20261014000000_catalog_search_apostrophes` replaces `catalog_search_key` and
+   rewrites every stored key that changes (locally 2,429 films, 976 people and 4,356 of 102,427
+   searchable names, 49 of which merge into another name of the same film; seconds);
+   `20261014000100_catalog_series_and_adult` adds `series_qids` (empty) and `is_adult` (false) and
+   replaces `search_films` / `search_people` (same signatures);
+   `20261014000200_catalog_search_split_key` adds the split key (`split_key`, apostrophes as
+   spaces) to `movie_film_titles` and `movie_people` and replaces the two search functions again.
+   Adding a stored generated column rewrites both tables and rebuilds their indexes: about 6 s
+   locally (titles 26 → 28 MB, people unchanged at 54 MB), during which searches wait. Search uses
+   the new keys from here on ("don" lists Don first, "hara" Catherine O'Hara). No reindex needed:
+   the rewritten tables get fresh indexes, and the first migration rewrites only a few thousand
+   rows. `20261014000300_catalog_split_key_stats` then analyzes the new `split_key` columns:
+   without statistics the planner walks people by popularity and filters every row (~40 ms for
+   "sam" instead of ~13 ms) until autoanalyze catches up.
+2. **Deploy the app.** It reads `movie_films.is_adult`, so it must not go out before step 1; the
+   old app keeps working after step 1.
+3. **Build against hosted** (read-only): `npm run content:movies:catalog -- --build-only
+   --allow-remote-read`. Check the summary: `adult` 3, `withSeries` about 2,250 and `series` about
+   660 (local: 2,256 and 658), and `largestSeries` (Batman in film, Doraemon, Detective Conan,
+   James Bond…): a studio catalogue or a universe in that list belongs in `NOT_A_SERIES`
+   (`lib/catalog-model.mts`); add it and build again.
+4. **Dry run:** `npm run content:movies:catalog -- --apply-only --dry-run --allow-remote-read`.
+   Expect about 2,260 films updated for series and the adult flag, plus IMDb's vote changes since
+   the last import (locally 16,828 updated in all, 1 retitled, unrelated to this branch).
+5. **Apply:** `npm run content:movies:catalog -- --apply-only --allow-remote`; write down the first
+   baseline path. Until this step the three adult films still show in search (the flag is false).
+6. **Check:** `npm run content:movies:catalog-check -- --allow-remote-read --baseline <first
+   baseline>`. It must end with ✓, and its notes say *3 films hidden as adult; 0 referenced by a
+   stored puzzle or play* (a warning names any day that references one: look at it by hand).
+7. **Re-check the stored fours:** `npm run content:movies:recheck-fours -- --dry-run
+   --allow-remote-read`, then `npm run content:movies:recheck-fours -- --allow-remote` if it lists
+   days: unplayed Fade to Color days from tomorrow on whose four now breaks the rules (two films of
+   one Wikidata series, a hidden film) get a new four. Played days and today are never touched.
+8. **Degrees,** as after every apply: `npm run content:movies:degrees -- --repar-unplayed --dry-run
+   --allow-remote-read`, then with `--allow-remote` if it lists days.
+
+Afterwards search the app for "don" (Don, 2006, first), "dont look up", "oceans eleven", "deep
+throat" (not listed), and people for "hara" (Catherine O'Hara first; in Degrees, Home Alone's cast).

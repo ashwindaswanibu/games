@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOG_QUERIES, CsvParser, csvRows, intCell, parseCsv, qidOf } from "./qlever.mjs";
+import { boolCell, CATALOG_QUERIES, CsvParser, csvRows, intCell, parseCsv, qidOf } from "./qlever.mjs";
 
 describe("CSV", () => {
   it("parses quoted fields with commas, quotes and newlines, LF or CRLF", () => {
@@ -50,6 +50,15 @@ describe("values", () => {
     expect(intCell("")).toBeNull();
     expect(intCell("1.5")).toBeNull();
     expect(intCell(undefined)).toBeNull();
+  });
+
+  it("reads booleans as QLever writes them, and nothing else", () => {
+    expect(boolCell("true")).toBe(true);
+    expect(boolCell("false")).toBe(false);
+    expect(boolCell("1")).toBeNull();
+    expect(boolCell("TRUE")).toBeNull();
+    expect(boolCell("")).toBeNull();
+    expect(boolCell(undefined)).toBeNull();
   });
 
   it("selects exactly the columns each query declares", () => {

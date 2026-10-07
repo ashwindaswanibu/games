@@ -92,10 +92,12 @@ async function loadCatalog(db: ContentDb): Promise<Catalog> {
   if (error) throw new Error(`Couldn't read the catalog: ${error.message}`);
   if (!count) await seedCatalog(db);
 
-  const credits = await loadPages("credits", (from, to) =>
-    db.from("movie_credits").select("film_id, person_id").order("film_id").order("person_id").range(from, to),
-  );
-  const films = await loadPages("films", (from, to) => db.from("movie_films").select("id, popularity").order("id").range(from, to));
+  const films = await loadPages("films", (from, to) => db.from("movie_films").select("id, popularity, is_adult").order("id").range(from, to));
+  // Players can't find an adult film in search, so no chain goes through one.
+  const hidden = new Set(films.filter((f) => f.is_adult).map((f) => f.id));
+  const credits = (
+    await loadPages("credits", (from, to) => db.from("movie_credits").select("film_id, person_id").order("film_id").order("person_id").range(from, to))
+  ).filter((c) => !hidden.has(c.film_id));
   const filmPopularity = new Map(films.map((f) => [f.id, f.popularity]));
   const credited = new Set(credits.map((c) => c.person_id));
   const people = (await loadPages("people", (from, to) => db.from("movie_people").select("id, popularity").order("id").range(from, to)))

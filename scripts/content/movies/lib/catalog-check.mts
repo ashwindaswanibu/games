@@ -19,9 +19,12 @@ const ID_CHUNK = 200;
  *  2. Every catalog id any stored puzzle, solution or play references still exists.
  *  3. Every link of a stored Degrees solution is still a credit pair, so the chain replays.
  *
- * And one warning (not a failure: the import is right, the puzzles need catching up): unplayed
- * Degrees days from today on whose start and end now have a chain shorter than their par. More
- * credits make shorter chains; `degrees --repar-unplayed` fixes those days.
+ * And two warnings (not failures: the import is right, the puzzles need catching up): unplayed
+ * Degrees days from today on whose start and end now have a chain shorter than their par (more
+ * credits make shorter chains; `degrees --repar-unplayed` fixes those days), and stored puzzles or
+ * plays that reference a film now hidden as adult (search can't find it, so a Degrees chain through
+ * it can't be played and a Fade to Color four shouldn't show it: look at those days by hand).
+ * Chains never go through a hidden film, as in `degrees`.
  */
 
 export interface FilmIds {
@@ -224,7 +227,7 @@ export function staleDegreesDays(days: readonly StoredDegreesDay[], graph: CastG
  * take every film of everyone reached, with its whole cast. (For par 3, a shorter chain has at most
  * 2 links: the films of the start and the end, and their casts.)
  */
-export async function chainNeighbourhood(db: ContentDb, people: Iterable<number>, maxLinks: number): Promise<Credit[]> {
+export async function chainNeighbourhood(db: ContentDb, people: Iterable<number>, maxLinks: number, hiddenFilms: ReadonlySet<number> = new Set()): Promise<Credit[]> {
   const credits: Credit[] = [];
   let frontier = [...new Set(people)];
   const seenPeople = new Set(frontier);
@@ -237,7 +240,7 @@ export async function chainNeighbourhood(db: ContentDb, people: Iterable<number>
         db.from("movie_credits").select("film_id, person_id").in("person_id", part).order("person_id").order("film_id").range(from, to),
       );
       for (const row of rows) {
-        if (seenFilms.has(row.film_id)) continue;
+        if (seenFilms.has(row.film_id) || hiddenFilms.has(row.film_id)) continue;
         seenFilms.add(row.film_id);
         films.push(row.film_id);
       }
@@ -259,12 +262,31 @@ export async function chainNeighbourhood(db: ContentDb, people: Iterable<number>
 }
 
 /** Unplayed Degrees days from `today` on with a stale par, read from the database (read-only). */
-export async function findStaleDegreesDays(db: ContentDb, days: readonly StoredDegreesDay[], today: string, minPar: number): Promise<StaleDegreesDay[]> {
+export async function findStaleDegreesDays(
+  db: ContentDb,
+  days: readonly StoredDegreesDay[],
+  today: string,
+  minPar: number,
+  hiddenFilms: ReadonlySet<number> = new Set(),
+): Promise<StaleDegreesDay[]> {
   const open = days.filter((day) => !day.played && day.date >= today && day.par > 1);
   if (open.length === 0) return [];
   const maxLinks = Math.max(...open.map((day) => day.par)) - 1;
-  const graph = buildGraph(await chainNeighbourhood(db, open.flatMap((day) => [day.start.id, day.end.id]), maxLinks));
+  const graph = buildGraph(await chainNeighbourhood(db, open.flatMap((day) => [day.start.id, day.end.id]), maxLinks, hiddenFilms));
   return staleDegreesDays(open, graph, today, minPar);
+}
+
+/**
+ * Films hidden from players (`movie_films.is_adult`), by id and title; null when the target hasn't
+ * had the migration that adds the flag yet (its catalog can't hide anything then).
+ */
+export async function hiddenFilms(db: ContentDb): Promise<Map<number, string> | null> {
+  const { data, error } = await db.from("movie_films").select("id, title").eq("is_adult", true).order("id");
+  if (error) {
+    if (/is_adult/.test(error.message)) return null;
+    throw new Error(`Reading hidden films failed: ${error.message}`);
+  }
+  return new Map(data.map((row) => [row.id, row.title]));
 }
 
 /** Ids among `ids` that `table` doesn't have. */
@@ -325,9 +347,18 @@ export async function runCatalogChecks(db: ContentDb, options: { baseline?: IdBa
   );
   if (stored.unreadable.length) notes.push(`${stored.unreadable.length} stored puzzles this checkout's game schemas can't read (refs still checked): ${stored.unreadable.slice(0, 5).join("; ")}${stored.unreadable.length > 5 ? "; …" : ""}`);
 
+  const hidden = await hiddenFilms(db);
+  if (hidden === null) {
+    notes.push("movie_films.is_adult isn't there yet (a migration is pending): hidden films not checked");
+  } else {
+    const referenced = [...stored.refs.films].filter((id) => hidden.has(id)).sort((a, b) => a - b);
+    notes.push(`${hidden.size} films hidden as adult; ${referenced.length} referenced by a stored puzzle or play`);
+    for (const id of referenced) warnings.push(`film ${id} (${hidden.get(id)}) is hidden as adult but a stored puzzle or play references it: look at that day by hand`);
+  }
+
   const { DEGREES_MIN_PAR } = await import("@/games/degrees/schema");
   const today = options.today ?? todayInGameTimezone();
-  const stale = await findStaleDegreesDays(db, stored.degreesDays, today, DEGREES_MIN_PAR);
+  const stale = await findStaleDegreesDays(db, stored.degreesDays, today, DEGREES_MIN_PAR, new Set(hidden?.keys() ?? []));
   const open = stored.degreesDays.filter((day) => !day.played && day.date >= today).length;
   notes.push(`${open} unplayed Degrees days from ${today} on checked for a chain shorter than par: ${stale.length} found`);
   if (stale.length) {

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { catalogSearchKey, matchClass, parseScopedSearchParams, rankByQuery } from "./scoped-search";
+import { catalogSearchKey, catalogSplitKey, matchClass, nameMatchClass, parseScopedSearchParams, rankByQuery, searchKeys } from "./scoped-search";
 
 describe("catalogSearchKey", () => {
   it("lowercases, strips accents and collapses punctuation like the SQL key", () => {
     expect(catalogSearchKey("  Léon: The Professional ")).toBe("leon the professional");
-    expect(catalogSearchKey("Ocean's Eleven")).toBe("ocean s eleven");
+    expect(catalogSearchKey("Ocean's Eleven")).toBe("oceans eleven");
     expect(catalogSearchKey("Emmanuelle Béart")).toBe("emmanuelle beart");
     expect(catalogSearchKey("Mission: Impossible – Fallout")).toBe("mission impossible fallout");
   });
@@ -21,6 +21,39 @@ describe("catalogSearchKey", () => {
     expect(catalogSearchKey("The Lion King 1½")).toBe("the lion king 1 1 2");
     expect(catalogSearchKey("Men in Black³")).toBe("men in black");
   });
+
+  it("keeps an apostrophe's word whole, whichever apostrophe it is", () => {
+    // "don" must find Don as an exact title, and Don't Look Up only as a longer word's start.
+    expect(catalogSearchKey("Don't Look Up")).toBe("dont look up");
+    expect(catalogSearchKey("Don’t Look Up")).toBe("dont look up");
+    expect(catalogSearchKey("dont look up")).toBe("dont look up");
+    expect(catalogSearchKey("Schindler's List")).toBe("schindlers list");
+    expect(catalogSearchKey("Peter O'Toole")).toBe("peter otoole");
+    expect(catalogSearchKey("Lupita Nyong‘o")).toBe("lupita nyongo");
+    // Leading, trailing and quoting apostrophes vanish without joining words.
+    expect(catalogSearchKey("'Round Midnight")).toBe("round midnight");
+    expect(catalogSearchKey("Singin' in the Rain")).toBe("singin in the rain");
+    expect(catalogSearchKey("Rock 'n' Roll High School")).toBe("rock n roll high school");
+    // Everything SQL's unaccent turns into an apostrophe: ‛ ′ ＇ and the modifier letters ʹ ʻ ʼ ʽ ˈ, and ŉ ("'n").
+    expect(catalogSearchKey("Hawaiʻi Five‛O ′ʹʼʽˈ＇x")).toBe("hawaii fiveo x");
+    expect(catalogSearchKey("Rock ŉ Roll")).toBe("rock n roll");
+  });
+});
+
+describe("catalogSplitKey", () => {
+  it("is the search key with apostrophes as spaces, whichever apostrophe it is", () => {
+    // Each expected key is what `catalog_split_key` returns in Postgres.
+    expect(catalogSplitKey("Don't Look Up")).toBe("don t look up");
+    expect(catalogSplitKey("Don’t Look Up")).toBe("don t look up");
+    expect(catalogSplitKey("Peter O'Toole")).toBe("peter o toole");
+    expect(catalogSplitKey("L'Avventura")).toBe("l avventura");
+    expect(catalogSplitKey("Hawaiʻi Five‛O ′ʹʼʽˈ＇x")).toBe("hawai i five o x");
+    expect(catalogSplitKey("Rock ŉ Roll")).toBe("rock n roll");
+    // Without an apostrophe inside a word, both keys are the same.
+    expect(catalogSplitKey("'Round Midnight")).toBe(catalogSearchKey("'Round Midnight"));
+    expect(catalogSplitKey("  Léon: The Professional ")).toBe("leon the professional");
+    expect(catalogSplitKey("Bølgen")).toBe("bolgen");
+  });
 });
 
 describe("matchClass", () => {
@@ -30,7 +63,7 @@ describe("matchClass", () => {
     expect(matchClass("stree", "street kings")).toBe(2);
     expect(matchClass("godf", "godfather")).toBe(2);
     expect(matchClass("the", "the godfather")).toBe(1);
-    expect(matchClass("guide", "the hitchhiker s guide to the galaxy")).toBe(3);
+    expect(matchClass("guide", "the hitchhikers guide to the galaxy")).toBe(3);
     expect(matchClass("stree", "the wolf of wall street")).toBe(4);
     expect(matchClass("father", "the godfather")).toBe(5);
     expect(matchClass("alien", "the godfather")).toBeNull();
@@ -57,7 +90,7 @@ describe("matchClass", () => {
     expect(matchClass("it", "i t")).toBe(0);
     // Two characters only match the spaced key, so "it" doesn't find "I, Tonya".
     expect(matchClass("it", "i tonya")).toBeNull();
-    expect(matchClass("it", "it s a wonderful life")).toBe(1);
+    expect(matchClass("it", "its a wonderful life")).toBe(2);
     expect(matchClass("ito", "i tonya")).toBe(2);
   });
 
@@ -66,6 +99,47 @@ describe("matchClass", () => {
     expect(matchClass("han", "tom hanks")).toBe(4);
     expect(matchClass("hanks", "tom hanks")).toBe(3);
     expect(matchClass("ank", "tom hanks")).toBe(5);
+  });
+});
+
+describe("nameMatchClass", () => {
+  const match = (query: string, name: string) => nameMatchClass(searchKeys(query), searchKeys(name));
+
+  it("finds a word after an apostrophe as a later word, by the split key", () => {
+    expect(match("hara", "Maureen O'Hara")).toBe(3);
+    expect(match("toole", "Peter O'Toole")).toBe(3);
+    expect(match("souza", "Genelia D'Souza")).toBe(3);
+    expect(match("avventura", "L'Avventura")).toBe(3);
+    expect(match("conn", "Jerry O'Connell")).toBe(4);
+    // The query's own split key: "o hara", or "o'hara" against a name written "O Hara".
+    expect(match("o hara", "Maureen O'Hara")).toBe(3);
+    expect(match("o'hara", "Maureen O Hara")).toBe(3);
+    // The search key still matches the joined word.
+    expect(match("ohara", "Maureen O'Hara")).toBe(3);
+    expect(match("o'neal", "Ryan O'Neal")).toBe(3);
+    expect(match("ara", "Maureen O'Hara")).toBe(5);
+  });
+
+  it("never makes a start whole at an apostrophe: the search key's word is longer", () => {
+    expect(match("don", "Don't Look Up")).toBe(2);
+    expect(match("ocean", "Ocean's Eleven")).toBe(2);
+    expect(match("it", "It's a Wonderful Life")).toBe(2);
+    expect(match("don t", "Don't Look Up")).toBe(1);
+    expect(match("dont look up", "Don't Look Up")).toBe(0);
+    expect(match("don t look up", "Don't Look Up")).toBe(0);
+    expect(match("don’t look up", "Don't Look Up")).toBe(0);
+  });
+
+  it("lets a later word end at an apostrophe, as a later whole word", () => {
+    expect(match("cuckoo", "One Flew Over the Cuckoo's Nest")).toBe(3);
+    expect(match("cuckoos", "One Flew Over the Cuckoo's Nest")).toBe(3);
+    expect(match("don", "Boys Don't Cry")).toBe(3);
+  });
+
+  it("is matchClass for names and queries without an apostrophe", () => {
+    expect(match("stree", "Stree 2")).toBe(1);
+    expect(match("stree", "The Wolf of Wall Street")).toBe(4);
+    expect(match("alien", "The Godfather")).toBeNull();
   });
 });
 
@@ -129,6 +203,28 @@ describe("rankByQuery", () => {
 
   it("keeps later whole words below the exact name, and partial later words after them", () => {
     expect(rankPeople("khan")).toEqual([6, 4, 5, 7]);
+  });
+
+  it("finds a name by either key: an exact title first, a surname after O' as a later word", () => {
+    const names = [
+      { id: 1, name: "Don", popularity: 40 },
+      { id: 2, name: "Don't Look Up", popularity: 600 },
+      { id: 3, name: "Setsuko Hara", popularity: 30 },
+      { id: 4, name: "Maureen O'Hara", popularity: 59 },
+      { id: 5, name: "Catherine O’Hara", popularity: 72 },
+      { id: 6, name: "Pat O Hara", popularity: 1 },
+    ];
+    const rankNames = (query: string) =>
+      rankByQuery(names, query, { text: (n) => n.name, popularity: (n) => n.popularity, limit: 8 }).map((n) => n.id);
+    // ln(41) + ln 30 > ln(601): Don't Look Up starts with the longer word "dont". As a whole-word
+    // start ("don t") it would have ln(601) + ln 3 and come first.
+    expect(rankNames("don")).toEqual([1, 2]);
+    expect(rankNames("don't look up")).toEqual([2]);
+    expect(rankNames("hara")).toEqual([5, 4, 3, 6]);
+    expect(rankNames("o'hara")).toEqual([5, 4, 6]);
+    // As typed, "o hara" is also a substring of "setsuko hara" (both keys alike, as before).
+    expect(rankNames("o hara")).toEqual([5, 4, 6, 3]);
+    expect(rankNames("ohara")).toEqual([5, 4]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { catalogSearchKey } from "@/games/_movies/search-key";
+import { catalogSearchKey, catalogSplitKey } from "@/games/_movies/search-key";
 
 /**
  * Pure catalog rules: which films are in, what a film is called and which of its names are
@@ -132,7 +132,10 @@ export interface FilmNames {
  * name; then the English Wikipedia title (without its "(… film)" qualifier), else IMDb's main
  * title. Labels are sometimes literal translations nobody uses ("Sometimes Happiness Sometimes
  * Sadness..." for Kabhi Khushi Kabhie Gham) or vandalized; IMDb's main title is sometimes the US
- * release title ("Like Stars on Earth" for Taare Zameen Par). Names compare by search key.
+ * release title ("Like Stars on Earth" for Taare Zameen Par). Names compare by split key, where
+ * an apostrophe still separates words: the search key drops apostrophes ("Mothers' Instinct" and
+ * "Mother's Instinct" search alike), but a label with the apostrophe in another place isn't the
+ * name the film goes by.
  */
 export function displayTitle(names: FilmNames): string | null {
   const label = usableName(names.label);
@@ -140,9 +143,9 @@ export function displayTitle(names: FilmNames): string | null {
   const primary = usableName(names.imdbPrimary);
   const original = usableName(names.imdbOriginal);
   if (label) {
-    const key = catalogSearchKey(label);
+    const key = catalogSplitKey(label);
     const witnesses = [wiki, primary, original].filter((name): name is string => name !== null);
-    if (witnesses.length === 0 || witnesses.some((name) => catalogSearchKey(name) === key)) return label;
+    if (witnesses.length === 0 || witnesses.some((name) => catalogSplitKey(name) === key)) return label;
   }
   return wiki ?? primary ?? label ?? original;
 }
@@ -263,6 +266,60 @@ export function keepStoredOrder(stored: readonly string[], incoming: readonly st
   const kept = stored.filter((name) => wanted.has(name));
   const keptSet = new Set(kept);
   return [...kept, ...incoming.filter((name) => !keptSet.has(name))].slice(0, max);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Series
+// ---------------------------------------------------------------------------------------------
+
+/** Most series a film keeps (the database's limit); a film is rarely in more than three. */
+export const MAX_SERIES = 20;
+
+/** A film's "part of the series" (Wikidata P179) value, and what Wikidata says it is. */
+export interface SeriesValue {
+  qid: string;
+  /** An instance of "series of creative works" (Q7725310) or a subclass: film series, TV series, trilogy, media franchise… */
+  creative: boolean;
+  /** An instance of fictional universe (Q559618) or shared universe (Q3275581), or a subclass: the Marvel Cinematic Universe. */
+  universe: boolean;
+  /** An instance of brand (Q431289): the MCU's phases and sagas (Phase Three, The Infinity Saga). */
+  brand: boolean;
+  /** A Wikimedia list article (Q13406463): "list of Pixar films", "BBC's 100 Greatest Films of the 21st Century". */
+  list: boolean;
+}
+
+/**
+ * P179 values Wikidata types as film series that are a studio's catalogue, a label or a shared
+ * universe in all but type, not a series of sequels: Tangled and Frozen, or Wonder Woman and
+ * Aquaman, are fine look-alikes for each other. Reviewed on the 2026-10-07 data (every counted
+ * value with 8+ catalog films); the build summary lists the largest series so a new one stands out.
+ */
+export const NOT_A_SERIES: ReadonlyMap<string, string> = new Map([
+  ["Q56070713", "Walt Disney Animation Studios feature film"],
+  ["Q26196748", "DreamWorks Animation feature films"],
+  ["Q104830727", "Studio Ghibli Feature Films"],
+  ["Q2405799", "DC Universe Animated Original Movies"],
+  ["Q18281265", "DC Extended Universe"],
+  ["Q5325474", "Ealing comedies"],
+  ["Q104848477", "Welcome to the Blumhouse"],
+  ["Q906232", "Disney Renaissance"],
+]);
+
+/**
+ * Whether a P179 value is a series in the sense the games use it (films a player would take for
+ * one another: sequels, prequels, remakes in one line): Wikidata types it as a series of creative
+ * works, and it isn't a universe (the MCU's films are many series, not one; pending the owner's
+ * confirmation, see TODO.md), a universe's phase or saga (typed as brands), a list, or a studio
+ * catalogue.
+ */
+export function isSeries(value: SeriesValue): boolean {
+  return value.creative && !value.universe && !value.brand && !value.list && !NOT_A_SERIES.has(value.qid);
+}
+
+/** The series a film is part of: its direct P179 values that `isSeries`, by Wikidata id, each once, at most `MAX_SERIES`. */
+export function seriesOfFilm(values: readonly SeriesValue[]): string[] {
+  const qids = new Set(values.filter(isSeries).map((v) => v.qid));
+  return [...qids].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))).slice(0, MAX_SERIES);
 }
 
 // ---------------------------------------------------------------------------------------------
