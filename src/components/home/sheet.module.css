@@ -81,18 +81,27 @@
   font-weight: 400;
 }
 
-.kicker {
+/* The title keeps its size; the kicker gives way beside it, in two lines if it must. */
+.head > :first-child {
   flex: none;
+}
+
+.kicker {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 46%;
+  margin-left: auto;
   padding-bottom: 6px;
-  font: 500 10px/1 var(--f-mono);
+  font: 500 10px/1.4 var(--f-mono);
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--fink);
-  white-space: nowrap;
+  text-align: right;
+  text-wrap: balance;
 }
 
 .tWords {
-  height: clamp(48px, 8vh, 84px);
+  height: min(clamp(48px, 8vh, 84px), 17cqi);
   display: flex;
   align-items: flex-end;
   min-width: 0;
@@ -107,12 +116,13 @@
   margin-left: -6px;
 }
 
+/* Head titles are sized by the height budget and capped by the sheet's width (a narrow laptop). */
 .tMoviesWrap {
   display: flex;
   align-items: center;
   gap: 0.32em;
   min-width: 0;
-  font-size: clamp(40px, 7.4vh, 70px);
+  font-size: min(clamp(40px, 7.4vh, 70px), 12cqi);
   padding-bottom: 0.04em;
 }
 
@@ -131,7 +141,7 @@
 }
 
 .tGeo {
-  font: 400 clamp(26px, 4.6vh, 44px) / 1 var(--f-display);
+  font: 400 min(clamp(26px, 4.6vh, 44px), 7.5cqi) / 1 var(--f-display);
   letter-spacing: 0.3em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -141,7 +151,7 @@
 }
 
 .tChess {
-  font: 400 clamp(30px, 5.8vh, 56px) / 0.9 var(--f-display);
+  font: 400 min(clamp(30px, 5.8vh, 56px), 10cqi) / 0.9 var(--f-display);
   letter-spacing: 0.34em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -172,11 +182,21 @@
   height: 100%;
 }
 
+/* Movies' field barrel: a band's gesture only (see the band forms below). */
+.barrelBox {
+  display: none;
+  position: absolute;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+}
+
 /* ---------------------------------------------------------------------------------------------
  * Credits
  * ------------------------------------------------------------------------------------------- */
 
 .credits {
+  /* A mark never runs off its sheet: the widest one fits the sheet's width at most. */
+  --mark-cap: calc(100cqi / var(--mark-col, 9));
   margin-top: clamp(6px, 1.2vh, 12px);
   border-top: 1.5px solid var(--fink);
 }
@@ -521,10 +541,38 @@
     display: contents;
   }
 
+  /* Higher than the narrow sheet's rules (a 1024 laptop), which are for two-line rows: the mark
+     keeps its column, the name one shrinkable line, the result its own width. */
   .creditsCol[data-density="dense"] .markSlot {
     order: -1;
     align-self: center;
-    min-width: calc(var(--mark-u) * var(--mark-col, 9));
+    flex-basis: auto;
+    min-width: calc(min(var(--mark-u), var(--mark-cap)) * var(--mark-col, 9));
+  }
+
+  .creditsCol[data-density="dense"] .name {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .creditsCol[data-density="dense"] .value,
+  .creditsCol[data-density="dense"] .pill,
+  .creditsCol[data-density="dense"] .quiet {
+    flex: none;
+  }
+
+  .creditsCol[data-density="dense"] .leader {
+    align-self: baseline;
+  }
+
+  /* A narrow sheet: a smaller mark column, so a ten-frame mark leaves the name its room. */
+  @container (max-width: 640px) {
+    .creditsCol[data-density="dense"] .credit {
+      --mark-u: 14px;
+    }
   }
 
   .creditsCol[data-density="dense"] .voice,
@@ -593,11 +641,12 @@
   overflow: hidden;
 }
 
+/* Two lines in a narrow card rather than lose its end. */
 .wingVoice {
   margin: 0;
   font: italic 400 clamp(14px, 1.9vh, 16px) / 1.2 var(--f-voice);
   color: var(--fink-2);
-  white-space: nowrap;
+  text-wrap: balance;
 }
 
 /* The barrel and the italic together stay inside the card's padding (21cqi ran them to its edge). */
@@ -619,6 +668,13 @@
   height: min(26cqi, 90px);
 }
 
+/* A narrow card (three side by side on a narrow laptop): the barrel and "Movies" still fit. */
+@container (max-width: 180px) {
+  .wing .tMoviesWrap {
+    font-size: 15cqi;
+  }
+}
+
 .wing .nxnw {
   height: 100%;
 }
@@ -631,14 +687,22 @@
 }
 
 /* Band form: the row is short. Each card becomes a band: title left at half its height,
-   "In production." right, the gesture cropped to the right third. */
+   "In production." right, the gesture cropped to the right third. When the title and the line
+   don't both fit clear of the gesture, the line goes under the title (the band wraps). */
 @container (max-height: 119px) {
   .wingBody {
     flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    align-content: center;
+    justify-content: flex-start;
+    gap: 2px 12px;
     padding: 0 clamp(12px, 1.2vw, 18px);
+  }
+
+  /* The title takes the line's spare room: the line sits at its end, or starts its own line. */
+  .wingBody > :first-child {
+    flex: 1 0 auto;
   }
 
   .wing .tMoviesWrap,
@@ -659,21 +723,64 @@
   }
 
   .wingVoice {
-    align-self: flex-end;
-    margin-left: auto;
-    margin-right: 30cqi;
-    padding-bottom: 14px;
     font-size: 14px;
+    white-space: nowrap;
   }
 
-  .wing .spiralBox {
+  /* Clear of a gesture at the right, whatever the band's size: the spiral's rings start about .9
+     of its radius left of its centre (86% across, 170cqh wide), the barrel's disc no further. */
+  .wing:has(.spiralBox, .barrelBox) .wingVoice {
+    margin-right: calc(14cqi + 77cqh + 8px - clamp(12px, 1.2vw, 18px));
+  }
+
+  .wing .spiralBox,
+  .wing .barrelBox {
+    display: block;
     left: 86%;
     top: 50%;
     width: 170cqh;
   }
 
+  .wing .barrelBox {
+    width: 150cqh;
+  }
+
+  /* The barrel is the band's gesture, cropped at its right: one barrel, not two. */
   .wing .barrel {
     display: none;
+  }
+
+  /* A narrow band (two or three side by side on a narrow laptop): a smaller title, and the
+     gesture further right, so the line under the title never meets it. */
+  @container (max-width: 280px) {
+    .wing .tMoviesWrap,
+    .wing .tChess,
+    .wing .tGeo {
+      font-size: min(34cqh, 12cqi);
+    }
+
+    .wing .tWords {
+      height: 36cqh;
+    }
+
+    .wingVoice {
+      font-size: 13px;
+    }
+
+    /* Rings from about 50cqh left of 94% across: the line ends before them, or goes under the title. */
+    .wing:has(.spiralBox, .barrelBox) .wingVoice {
+      margin-right: calc(6cqi + 50cqh + 8px - clamp(12px, 1.2vw, 18px));
+    }
+
+    .wing .spiralBox,
+    .wing .barrelBox {
+      left: 94%;
+      width: 110cqh;
+    }
+
+    .wing .barrelBox {
+      width: 96cqh;
+    }
   }
 }
 
@@ -713,16 +820,7 @@
     min-height: var(--head-h);
   }
 
-  .head > :first-child {
-    flex: none;
-  }
-
-  /* Beside the title, in two lines if it must. */
   .kicker {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 46%;
-    margin-left: auto;
     letter-spacing: 0.14em;
   }
 
@@ -740,13 +838,6 @@
 
   .tGeo {
     font-size: 28px;
-  }
-
-  .kicker {
-    white-space: normal;
-    text-wrap: balance;
-    text-align: right;
-    line-height: 1.4;
   }
 
   .name,
@@ -826,8 +917,16 @@
 
   .wingBody {
     flex-direction: row;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: baseline;
+    align-content: center;
+    justify-content: flex-start;
+    gap: 2px 12px;
     padding: 0 16px;
+  }
+
+  .wingBody > :first-child {
+    flex: 1 0 auto;
   }
 
   .wing .tMoviesWrap,
@@ -852,15 +951,25 @@
   }
 
   .wingVoice {
-    margin-left: auto;
-    margin-right: 24cqi;
     font-size: 14px;
+    white-space: nowrap;
   }
 
-  .wing .spiralBox {
+  /* Clear of a gesture at the right: its rings start about 63px left of its centre (88% across, 140px wide). */
+  .wing:has(.spiralBox, .barrelBox) .wingVoice {
+    margin-right: calc(12cqi + 55px);
+  }
+
+  .wing .spiralBox,
+  .wing .barrelBox {
+    display: block;
     left: 88%;
     top: 50%;
     width: 140px;
+  }
+
+  .wing .barrelBox {
+    width: 124px;
   }
 }
 

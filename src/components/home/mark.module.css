@@ -5,10 +5,12 @@
  * read as earned.
  */
 
+/* `--mark-cap` (a sheet's credits set it) keeps the widest mark on its sheet. */
 .mark {
+  --u: min(var(--mark-u), var(--mark-cap, 1000px));
   display: block;
-  width: calc(var(--mark-u) * var(--mw));
-  height: calc(var(--mark-u) * var(--mh));
+  width: calc(var(--u) * var(--mw));
+  height: calc(var(--u) * var(--mh));
   overflow: visible;
   flex: none;
 }

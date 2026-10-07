@@ -108,7 +108,8 @@
   text-decoration: none;
 }
 
-.home :focus-visible {
+/* Zero specificity too: a component's own ring colour (on its sheet, slip or band) always wins. */
+:where(.home) :focus-visible {
   outline: 1px solid var(--ink);
   outline-offset: 4px;
 }

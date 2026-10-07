@@ -47,13 +47,23 @@ export function BucketTitle({ id, name, words, headingId }: { id: BucketId; name
   }
 }
 
-/** The art laid across a head or card, clipped by its sheet (Geography's lines, Chess's spiral). */
+/**
+ * The art laid across a head or card, clipped by its sheet: Geography's lines, Chess's spiral, and
+ * Movies' barrel, which only an In production band shows (cropped at its right, like the others;
+ * everywhere else the barrel stands beside the title).
+ */
 export function BucketField({ id, vanishX }: { id: BucketId; vanishX: number }) {
   if (id === "geography") return <ConvergingLines className={styles.nxnw} vanishX={vanishX} />;
   if (id === "chess")
     return (
       <span className={styles.spiralBox} aria-hidden="true">
         <Spiral className={styles.spiral} />
+      </span>
+    );
+  if (id === "movies")
+    return (
+      <span className={styles.barrelBox} aria-hidden="true">
+        <Barrel className={styles.spiral} />
       </span>
     );
   return null;

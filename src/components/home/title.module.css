@@ -170,6 +170,7 @@
 .heroStrip {
   position: absolute;
   z-index: 1;
+  left: var(--strip-left);
   top: calc(clamp(4px, 1.2vh, 14px) + clamp(26px, 4.4vh, 46px) + clamp(6px, 2vh, 20px));
   width: clamp(64px, 7vw, 104px);
   height: 86%;
@@ -260,7 +261,10 @@
   visibility: hidden;
 }
 
+/* Many games on a narrow band: the chips narrow (never below a sliver), so the tail is never cut. */
 .chips {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   gap: 5px;
   align-items: center;
@@ -269,7 +273,9 @@
 .chip {
   position: relative;
   display: block;
+  flex: 0 1 auto;
   width: 13px;
+  min-width: 6px;
   height: 18px;
   box-shadow: inset 0 0 0 1.5px var(--c);
 }
@@ -295,6 +301,7 @@
 }
 
 .chipSep {
+  flex: none;
   width: 1px;
   height: 22px;
   margin: 0 4px;
@@ -303,6 +310,7 @@
 }
 
 .tail {
+  flex: none;
   margin-left: auto;
   justify-items: end;
 }
@@ -458,6 +466,18 @@
 
   .lbl {
     letter-spacing: 0.18em;
+  }
+
+  /* "MIDNIGHT · NEW YORK" stays inside the clock group's width … */
+  .city {
+    letter-spacing: 0.12em;
+  }
+
+  /* … and the strip clears it whatever the day's seed: it leans right at least ~50px by the
+     countdown's line (13° or more over the clock group's height), so standing no further left than
+     40px short of the clock group's width keeps its teal off the city line. */
+  .heroStrip {
+    left: max(var(--strip-left), calc(var(--side-w) - 40px));
   }
 
   .band {

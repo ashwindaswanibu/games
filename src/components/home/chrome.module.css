@@ -24,13 +24,19 @@
   min-width: 0;
 }
 
+/* Only the name gives up width (a 20-letter first word on a phone): the ticks and "12 DAYS" stay whole. */
 .name {
+  flex: 0 1 auto;
+  min-width: 0;
   font: 600 15px/1 var(--f-ui);
   letter-spacing: 0.01em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ticks {
+  flex: none;
   display: inline-flex;
   align-items: flex-end;
   gap: 3px;
@@ -49,6 +55,7 @@
 }
 
 .streak {
+  flex: none;
   font: 500 10.5px/1 var(--f-mono);
   letter-spacing: 0.22em;
   text-transform: uppercase;

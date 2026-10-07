@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 import type { HomeView } from "@/core/home-view";
 import { Band } from "./band";
 import type { HomeComposition } from "./composition";
@@ -13,7 +13,7 @@ import styles from "./title.module.css";
  * numeral fitted to what is left, the clock beside it; then the band and the presence line.
  * Sticky on a laptop: the credits roll on beside it.
  */
-export function TitleColumn({
+export const TitleColumn = memo(function TitleColumn({
   view,
   comp,
   clock,
@@ -39,7 +39,7 @@ export function TitleColumn({
 
   return (
     <div className={styles.title} style={typeVars} data-op="title" data-comes-up="">
-      <div className={styles.heroStrip} style={{ left: comp.strip.left, rotate: comp.strip.rotate, "--cut": comp.strip.clip } as CSSProperties} aria-hidden="true" data-op="hero-strip">
+      <div className={styles.heroStrip} style={{ "--strip-left": comp.strip.left, rotate: comp.strip.rotate, "--cut": comp.strip.clip } as CSSProperties} aria-hidden="true" data-op="hero-strip">
         <i />
         <i />
       </div>
@@ -47,9 +47,11 @@ export function TitleColumn({
         <span className={styles.wk} data-op="weekday">
           {day.weekday}
         </span>{" "}
+        {/* One letter per span for the opening's paste-up; read as the word. */}
         <span className={styles.mo} data-op="month">
+          <span className={styles.srOnly}>{day.month}</span>
           {[...day.month].map((ch, i) => (
-            <span key={i} data-op="month-letter">
+            <span key={i} data-op="month-letter" aria-hidden="true">
               {ch}
             </span>
           ))}
@@ -79,4 +81,4 @@ export function TitleColumn({
       {view.presence && <PresenceLine presence={view.presence} />}
     </div>
   );
-}
+});
