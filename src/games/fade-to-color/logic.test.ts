@@ -303,3 +303,29 @@ describe("fade-to-color reveal", () => {
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
   });
 });
+
+describe("fade-to-color friendDetail (what friends see of a finished play)", () => {
+  const detail = (state: State) => fadeToColor.friendDetail!(state);
+
+  it("is the film picked from the four, right or wrong", () => {
+    expect(detail(play([skip, stop, pick(answer)]))).toStrictEqual({ pickId: answer.id });
+    expect(detail(play([stop, pick(thief)]))).toStrictEqual({ pickId: thief.id });
+    expect(detail(play([...NINE_SKIPS_AND_A_MISS, pick(drive)]))).toStrictEqual({ pickId: drive.id });
+  });
+
+  it("is no pick when the film was named, or got away without one", () => {
+    expect(detail(play([guess(heat), guess(answer)]))).toStrictEqual({ pickId: null });
+    // From before skipping the last reel was refused: giving up ended the play.
+    const gaveUp = play(skips(MAX_GUESSES - 1));
+    expect(detail({ ...gaveUp, turns: [...gaveUp.turns, { skipped: true }] })).toStrictEqual({ pickId: null });
+  });
+
+  it("carries only the pick, never the films a player typed (even among the four)", () => {
+    expect(detail(play([guess(drive), guess(heat), stop, pick(answer)]))).toStrictEqual({ pickId: answer.id });
+  });
+
+  it("is JSON-safe, as it travels to the browser as is", () => {
+    const value = detail(play([stop, pick(answer)]));
+    expect(JSON.parse(JSON.stringify(value))).toStrictEqual(value);
+  });
+});

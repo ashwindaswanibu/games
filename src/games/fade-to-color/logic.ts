@@ -155,6 +155,9 @@ export type GuessTurn = z.infer<typeof guessTurnSchema>;
 export type State = z.infer<typeof stateSchema>;
 export type Pick = z.infer<typeof pickSchema>;
 
+/** What friends see of a finished play (its `friendDetail`): the film picked from the four, if any. */
+export type FriendPick = { pickId: number | null };
+
 export interface Reveal {
   /** The four, in their shown order (for everyone's picks after the play). */
   options: FilmRef[];
@@ -293,4 +296,7 @@ export const fadeToColor = defineGame<Puzzle, Solution, State, Move, Reveal, Res
     ].join(""),
 
   reveal: ({ solution }) => ({ film: solution.answer, levels: solution.levels, credit: solution.credit, options: solution.options }),
+
+  /** Friends see which of the four a player picked, for everyone's picks; never the films they typed. */
+  friendDetail: (state): FriendPick => ({ pickId: state.pick?.film.id ?? null }),
 });

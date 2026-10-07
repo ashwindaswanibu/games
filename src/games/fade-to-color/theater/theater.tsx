@@ -502,7 +502,7 @@ export function FadeToColorTheater(props: Props) {
           {ending && reveal && view?.result && state && status && (
             // Inert until the last reel has unreeled and the card has come up.
             <div className={styles.creditsWrap} data-show={creditsReady || undefined} inert={!creditsReady}>
-              <Credits film={reveal.film} state={state} status={status} result={view.result} fill={firstArt?.bands || null} date={date} friends={friends} viewerId={viewerId} />
+              <Credits film={reveal.film} options={reveal.options} state={state} status={status} result={view.result} fill={firstArt?.bands || null} date={date} friends={friends} viewerId={viewerId} />
             </div>
           )}
 

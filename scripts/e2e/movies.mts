@@ -697,6 +697,23 @@ function pageTextHas(page: Page, text: string): Promise<boolean> {
 }
 
 /**
+ * The friends panel's "The four", read with each card's words for screen readers ("The film.",
+ * "Picked by you."), plus its tally line. Opens the panel and leaves it open.
+ */
+async function everyonesFour(page: Page): Promise<{ tally: string; cards: string[] }> {
+  await clickButton(page, "How everyone did");
+  await page.waitForSelector('[role="dialog"] section[aria-labelledby="everyone-four"] li');
+  // (No named helpers inside: the page can't see the bundler's `__name`.)
+  return page.evaluate(() => {
+    const panel = document.querySelector('[role="dialog"]')!;
+    return {
+      tally: (panel.querySelector(":scope > p")?.textContent ?? "").replace(/\s+/g, " ").trim(),
+      cards: [...panel.querySelectorAll('section[aria-labelledby="everyone-four"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim()),
+    };
+  });
+}
+
+/**
  * Stop the film on reel 1 and pick right: half of naming it there. On the way, backing out of the
  * confirm sends nothing, and the four's titles stay secret until the stop.
  */
@@ -766,6 +783,19 @@ async function playFadeToColorStopRight(ctx: Ctx): Promise<void> {
   await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the pick");
   await checkNoSidewaysScroll(ctx, "stopped and picked");
   await shot(ctx, "fade-to-color-stop-right");
+
+  // --- Everyone's picks, in the friends panel. ---
+  const everyone = await everyonesFour(page);
+  report.check("the friends panel tallies the picks", /\d+ picked it/.test(everyone.tally), everyone.tally);
+  report.check(
+    "…and shows the four in their shared order",
+    everyone.cards.length === OPTION_COUNT && everyone.cards.every((card, i) => card.startsWith(fourTitles[i]!)),
+    everyone.cards,
+  );
+  const answerCard = everyone.cards[solution.options.findIndex((o) => o.id === answer.id)] ?? "";
+  report.check("…with my pick under the film", answerCard.includes("The film.") && /Picked by .*\byou\b/.test(answerCard), answerCard);
+  await shot(ctx, "fade-to-color-everyone");
+  await page.keyboard.press("Escape");
 }
 
 /**
@@ -818,6 +848,15 @@ async function playFadeToColorStopWrong(ctx: Ctx): Promise<void> {
   await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the wrong pick");
   await checkNoSidewaysScroll(ctx, "wrong pick, finished");
   await shot(ctx, "fade-to-color-stop-wrong");
+
+  // --- Everyone's picks: mine under the film I picked, never under the one I typed. ---
+  const everyone = await everyonesFour(page);
+  const card = (film: { id: number }) => everyone.cards[solution.options.findIndex((o) => o.id === film.id)] ?? "";
+  const mine = (text: string) => /Picked by .*\byou\b/.test(text);
+  report.check("the friends panel puts my pick under the film I picked", mine(card(picked!)), everyone.cards);
+  report.check("…and never lists the film I typed as mine", !mine(card(guessed!)), everyone.cards);
+  report.check("…and counts my wrong pick as one that didn't", /\d+ didn't/.test(everyone.tally), everyone.tally);
+  await page.keyboard.press("Escape");
 }
 
 /** Nine skips and a wrong guess on the last reel: the four come up anyway (the run-out), worth 5. */

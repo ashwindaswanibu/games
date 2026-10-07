@@ -154,18 +154,35 @@ export async function applyMove(params: {
 
 export type { FriendResult };
 
+/** One player's play of a puzzle, as the friends' results load it. Its `state` stays on the server. */
+export type FriendPlay = Pick<PlayRow, "user_id" | "status" | "score" | "result_label" | "share_grid" | "state">;
+
 /**
  * Everyone's result for one game on one day — but only once the viewer has finished it
  * themselves (returns null until then). Finished players first, best score first.
  */
-export async function getFriendsResults(viewerId: string, gameId: string, date: PuzzleDate): Promise<FriendResult[] | null> {
+export async function getFriendsResults(viewerId: string, game: AnyGame, date: PuzzleDate): Promise<FriendResult[] | null> {
   const [{ data: plays, error: playsError }, { data: profiles, error: profilesError }] = await Promise.all([
-    db().from("plays").select("user_id, status, score, result_label, share_grid").eq("game_id", gameId).eq("puzzle_date", date),
+    db().from("plays").select("user_id, status, score, result_label, share_grid, state").eq("game_id", game.id).eq("puzzle_date", date),
     db().from("profiles").select("id, username, display_name"),
   ]);
   if (playsError) throw new Error(`Failed to load results: ${playsError.message}`);
   if (profilesError) throw new Error(`Failed to load profiles: ${profilesError.message}`);
+  return friendsResultsFrom({ game, viewerId, plays, profiles });
+}
 
+/**
+ * The spoiler wall and what it guards (pure, for tests): null unless the viewer has finished the
+ * puzzle; then everyone's result, with the game's `friendDetail` of each finished play. Nothing
+ * else of a play's state is passed on.
+ */
+export function friendsResultsFrom(params: {
+  game: Pick<AnyGame, "friendDetail">;
+  viewerId: string;
+  plays: readonly FriendPlay[];
+  profiles: readonly FriendResult["profile"][];
+}): FriendResult[] | null {
+  const { game, viewerId, plays, profiles } = params;
   const byUser = new Map(plays.map((p) => [p.user_id, p]));
   const viewerPlay = byUser.get(viewerId);
   if (!viewerPlay || viewerPlay.status === "in_progress") return null;
@@ -174,12 +191,14 @@ export async function getFriendsResults(viewerId: string, gameId: string, date: 
   return profiles
     .map((profile): FriendResult => {
       const play = byUser.get(profile.id);
+      const detail = play && play.status !== "in_progress" ? game.friendDetail?.(play.state) : undefined;
       return {
         profile,
         status: play?.status ?? "not_started",
         score: play?.score ?? null,
         label: play?.result_label ?? null,
         shareGrid: play?.share_grid ?? null,
+        ...(detail !== undefined && { detail }),
       };
     })
     .sort(
