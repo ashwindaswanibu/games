@@ -494,16 +494,37 @@ async function catalogChecks(player: SupabaseClient) {
   const hit = (people as { name: string; known_for: string | null }[] | null)?.[0];
   check("people search finds a person with their best-known film", hit?.name === `Ana ${W}` && hit.known_for === `${W} Returns`, people);
 
-  // People rank by popularity: an exact name leads unless another has ten times the editions.
+  // People rank by their films' votes (billing-weighted), not Wikipedia editions: an exact name
+  // leads unless a name that starts with it as a whole word has ten times the fame.
   const { data: namesakes } = await admin
     .from("movie_people")
     .insert([
       { name: `Dee${tag}`, popularity: 0 },
       { name: `Dee${tag} Padu`, popularity: 89 },
       { name: `Shah${tag} Rukh`, popularity: 50 },
+      { name: `Salx${tag} Khan`, popularity: 104 },
+      { name: `Salx${tag} Rushdie`, popularity: 129 },
     ])
-    .select("id");
+    .select("id, name");
   personIds.push(...(namesakes ?? []).map((p) => p.id));
+  const personId = (name: string) => namesakes?.find((p) => p.name === name)?.id;
+  const { data: castFilms } = await admin
+    .from("movie_films")
+    .insert([
+      { title: `Big Hit ${tag}`, imdb_votes: 1_000_000 },
+      { title: `Small Hit ${tag}`, imdb_votes: 1_000 },
+      { title: `Cameo Hit ${tag}`, imdb_votes: 300_000 },
+    ])
+    .select("id, title");
+  filmIds.push(...(castFilms ?? []).map((f) => f.id));
+  const castFilm = (title: string) => castFilms?.find((f) => f.title === title)?.id;
+  const { error: namesakeCreditError } = await admin.from("movie_credits").insert([
+    { film_id: castFilm(`Big Hit ${tag}`)!, person_id: personId(`Dee${tag} Padu`)!, billing: 0 },
+    { film_id: castFilm(`Small Hit ${tag}`)!, person_id: personId(`Dee${tag}`)!, billing: 0 },
+    { film_id: castFilm(`Big Hit ${tag}`)!, person_id: personId(`Salx${tag} Khan`)!, billing: 1 },
+    { film_id: castFilm(`Cameo Hit ${tag}`)!, person_id: personId(`Salx${tag} Rushdie`)!, billing: 12 },
+  ]);
+  check("server can credit the namesakes", !namesakeCreditError, namesakeCreditError);
   const searchPeople = async (q: string) => {
     const { data, error } = await admin.rpc("search_people", { p_query: q, p_limit: 5 });
     if (error) throw new Error(`search_people failed: ${error.message}`);
@@ -512,6 +533,12 @@ async function catalogChecks(player: SupabaseClient) {
   const dee = await searchPeople(`dee${tag}`);
   check("people search ranks a far better-known name above an exact one", dee[0] === `Dee${tag} Padu` && dee[1] === `Dee${tag}`, dee);
   check("people search ignores spaces", (await searchPeople(`shah${tag}rukh`))[0] === `Shah${tag} Rukh`);
+  const salx = await searchPeople(`salx${tag}`);
+  check(
+    "people rank by the films they're billed in, not Wikipedia editions",
+    salx[0] === `Salx${tag} Khan` && salx[1] === `Salx${tag} Rushdie`,
+    salx,
+  );
 
   // Every name a film is known by is searchable; fame (IMDb votes, else Wikipedia editions) ranks.
   const { error: aliasError } = await admin.from("movie_film_titles").insert([
@@ -568,6 +595,30 @@ async function catalogChecks(player: SupabaseClient) {
   );
   await admin.from("movie_films").update({ imdb_votes: 1_000_000 }).eq("id", moreId(`Bench${tag} - State Vs A Nobody`)!);
   check("…unless that film has ten times the votes", (await searchHits(`bench${tag}`))[0]?.title === `Bench${tag} - State Vs A Nobody`);
+
+  // Whole words, leading articles, partial later words and sequel numbers.
+  const third = [
+    { title: `Strx${tag}`, imdb_votes: 50_000 },
+    { title: `Strx${tag} 2`, imdb_votes: 45_000 },
+    { title: `Strx${tag}et Kings`, imdb_votes: 100_000 },
+    { title: `The Wolf of Wall Strx${tag}et`, imdb_votes: 2_000_000 },
+    { title: `Drk${tag}`, imdb_votes: 5_000 },
+    { title: `The Drk${tag} Knight`, imdb_votes: 2_500_000 },
+    { title: `The Gfr${tag}`, imdb_votes: 2_200_000 },
+    { title: `The Gfr${tag} Part II`, imdb_votes: 1_500_000 },
+  ];
+  const { data: thirdRows } = await admin.from("movie_films").insert(third).select("id, title");
+  filmIds.push(...(thirdRows ?? []).map((f) => f.id));
+  // (Typo matches for the random tag may follow; they always sort last.)
+  const strx = (await searchHits(`strx${tag}`)).map((r) => r.title).slice(0, 4);
+  check(
+    "a whole-word start outranks a mid-word start with under three times the votes; a partial later word comes after every start",
+    JSON.stringify(strx) === JSON.stringify([`Strx${tag}`, `Strx${tag} 2`, `Strx${tag}et Kings`, `The Wolf of Wall Strx${tag}et`]),
+    strx,
+  );
+  check("a match right after a leading article starts the name", (await searchHits(`drk${tag}`))[0]?.title === `The Drk${tag} Knight`);
+  check("a sequel number finds the sequel (2 = Part II)", (await searchHits(`gfr${tag} 2`))[0]?.title === `The Gfr${tag} Part II`);
+  check("…written either way", (await searchHits(`gfr${tag} part 2`))[0]?.title === `The Gfr${tag} Part II`);
   const { data: renamed } = await admin.from("movie_films").update({ title: `${W} Forever` }).eq("id", idOf(`The ${W} Story`)!).select("id");
   const formerHits = await searchHits(`the ${W} story`);
   check(

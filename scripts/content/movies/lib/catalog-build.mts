@@ -325,6 +325,12 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     const qid = qidOf(row.person!);
     if (qid && wdPeople.has(qid)) wdActors.add(qid);
   });
+  // Who is a person (Wikidata: instance of human), for the same endpoints: not a group, not an animal.
+  const wdHumans = new Set<string>();
+  await csv(CATALOG_QUERIES.humans, (row) => {
+    const qid = qidOf(row.person!);
+    if (qid && wdPeople.has(qid)) wdHumans.add(qid);
+  });
   // An IMDb person id → the best-known Wikidata person carrying it.
   const qidOfPerson = new Map<number, string>();
   for (const person of wdPeople.values()) {
@@ -389,6 +395,7 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
       name,
       popularity: person.links,
       isActor: isActor([], wdActors.has(qid)) || [...person.nconsts].some((n) => imdbActors.has(n)),
+      isHuman: wdHumans.has(qid),
     });
     return qid;
   };
@@ -404,7 +411,7 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     if (qid && imdbIdOfQid.get(qid) === nconst) return null; // carried by a Wikidata person nobody can name
     const name = validName(imdbNames.get(nconst));
     if (!name) return null;
-    people.set(key, { key, wikidataId: null, imdbId: key, name, popularity: 0, isActor: imdbActors.has(nconst) });
+    people.set(key, { key, wikidataId: null, imdbId: key, name, popularity: 0, isActor: imdbActors.has(nconst), isHuman: null });
     return key;
   };
   const directorName = (nconst: number): string | null => {
@@ -499,6 +506,7 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     people: snapshotPeople.length,
     imdbOnlyPeople: snapshotPeople.filter((p) => p.wikidataId === null).length,
     actors: snapshotPeople.filter((p) => p.isActor).length,
+    notHuman: snapshotPeople.filter((p) => p.isHuman === false).length,
     creditsBeforeCap: credits,
     tmdbIdsDropped: tmdbDropped,
     buildSeconds: Math.round((Date.now() - started) / 1000),

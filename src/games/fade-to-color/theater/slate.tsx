@@ -68,7 +68,7 @@ export function Slate(props: {
     );
   }
 
-  const { results, status, open, active, excluded, listRef, listId, optionId } = search;
+  const { results, status, open, active, excluded, popupRef, listId, optionId } = search;
   return (
     <div className={styles.slate}>
       <div className={styles.field}>
@@ -93,51 +93,56 @@ export function Slate(props: {
           }}
         />
         {picked && <span className={styles.chosen}>{byline(picked)}</span>}
-        <ul ref={listRef} id={listId} role="listbox" aria-label="Films" hidden={!open} className={styles.list}>
-          {status === "ready" &&
-            results.map((hit, index) => {
-              const isExcluded = excluded.has(hit.id);
-              return (
-                <li
-                  key={hit.id}
-                  id={optionId(index)}
-                  role="option"
-                  aria-selected={index === active}
-                  aria-disabled={isExcluded || undefined}
-                  className={styles.option}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseMove={() => {
-                    if (!isExcluded && index !== active) search.setActive(index);
-                  }}
-                  onClick={() => search.choose(index)}
-                >
-                  <span className={styles.optionTitle}>{hit.title}</span>
-                  <span className={styles.optionMeta}>{isExcluded ? `Already guessed · ${optionMeta(hit)}` : optionMeta(hit)}</span>
-                </li>
-              );
-            })}
+        {/* The hits scroll; IMDb's credit sits under them, outside the scrolling list, so it
+            shows whatever the list's height or scroll position. */}
+        <div ref={popupRef} hidden={!open} className={styles.hits}>
+          <ul id={listId} role="listbox" aria-label="Films" className={styles.list}>
+            {status === "ready" &&
+              results.map((hit, index) => {
+                const isExcluded = excluded.has(hit.id);
+                return (
+                  <li
+                    key={hit.id}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={index === active}
+                    aria-disabled={isExcluded || undefined}
+                    className={styles.option}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseMove={() => {
+                      if (!isExcluded && index !== active) search.setActive(index);
+                    }}
+                    onClick={() => search.choose(index)}
+                  >
+                    <span className={styles.optionTitle}>{hit.title}</span>
+                    <span className={styles.optionMeta}>{isExcluded ? `Already guessed · ${optionMeta(hit)}` : optionMeta(hit)}</span>
+                  </li>
+                );
+              })}
+            {status === "ready" && results.length === 0 && (
+              <li role="presentation" className={styles.listNote}>
+                No films match &ldquo;{search.query.trim()}&rdquo;.
+              </li>
+            )}
+            {status === "loading" && (
+              <li role="presentation" className={styles.listNote}>
+                Searching…
+              </li>
+            )}
+            {status === "error" && (
+              <li role="presentation" className={styles.listNote}>
+                {search.error}
+              </li>
+            )}
+          </ul>
           {status === "ready" && results.length > 0 && (
-            // IMDb's required credit wherever its data is shown (the end card repeats it for everyone).
-            <li role="presentation" aria-hidden className={styles.listCredit} onMouseDown={(event) => event.preventDefault()}>
+            // IMDb's required credit wherever its data is shown (the end card repeats it for
+            // everyone). A press on it keeps focus in the field, so the list stays open.
+            <p aria-hidden className={styles.listCredit} onMouseDown={(event) => event.preventDefault()}>
               {IMDB_ATTRIBUTION}
-            </li>
+            </p>
           )}
-          {status === "ready" && results.length === 0 && (
-            <li role="presentation" className={styles.listNote}>
-              No films match &ldquo;{search.query.trim()}&rdquo;.
-            </li>
-          )}
-          {status === "loading" && (
-            <li role="presentation" className={styles.listNote}>
-              Searching…
-            </li>
-          )}
-          {status === "error" && (
-            <li role="presentation" className={styles.listNote}>
-              {search.error}
-            </li>
-          )}
-        </ul>
+        </div>
         <p className={styles.srOnly} role="status" aria-live="polite">
           {open ? search.announcement : ""}
         </p>

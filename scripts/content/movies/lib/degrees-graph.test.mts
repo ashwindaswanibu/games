@@ -11,6 +11,7 @@ import {
   type Credit,
   type FilmInfo,
   type PersonInfo,
+  isNonFictionFilm,
 } from "./degrees-graph.mjs";
 
 /**
@@ -38,10 +39,10 @@ const credits: Credit[] = [
 ];
 const graph = buildGraph(credits);
 const films = new Map<number, FilmInfo>(
-  [100, 101, 102, 103, 104, 105].map((id) => [id, { id, title: `Film ${id}`, year: 2000, popularity: id >= 103 ? 2 : 80 }]),
+  [100, 101, 102, 103, 104, 105].map((id) => [id, { id, title: `Film ${id}`, year: 2000, popularity: id >= 103 ? 2 : 80, nonFiction: false }]),
 );
 const people = new Map<number, PersonInfo>(
-  [1, 2, 3, 4, 5, 6, 7].map((id) => [id, { id, name: `Person ${id}`, popularity: id === 5 ? 1 : 60, isActor: true }]),
+  [1, 2, 3, 4, 5, 6, 7].map((id) => [id, { id, name: `Person ${id}`, popularity: id === 5 ? 1 : 60, isActor: true, isHuman: true }]),
 );
 const score = popularityLinkScore(graph, films, people);
 
@@ -80,18 +81,63 @@ describe("bestShortestPath", () => {
 });
 
 describe("actorPool", () => {
+  const options = { size: 10, minFilms: 2, minLeads: 1, leadBilling: 5 };
+
   it("keeps popular people with enough (leading) credits, most popular first, capped", () => {
-    expect(actorPool(graph, people, { size: 10, minFilms: 2, minLeads: 1, leadBilling: 5 })).toEqual([1, 2, 3, 5]);
+    expect(actorPool(graph, people, films, options)).toEqual([1, 2, 3, 5]);
     // Person 5 is barely known: cut first when the pool shrinks.
-    expect(actorPool(graph, people, { size: 3, minFilms: 2, minLeads: 1, leadBilling: 5 })).toEqual([1, 2, 3]);
-    expect(actorPool(graph, people, { size: 10, minFilms: 2, minLeads: 2, leadBilling: 5 })).toEqual([2, 3, 5]);
+    expect(actorPool(graph, people, films, { ...options, size: 3 })).toEqual([1, 2, 3]);
+    expect(actorPool(graph, people, films, { ...options, minLeads: 2 })).toEqual([2, 3, 5]);
   });
 
   it("leaves out people who aren't actors (they stay in the graph as links)", () => {
     const withSinger = new Map(people);
     withSinger.set(2, { ...people.get(2)!, popularity: 300, isActor: false });
-    expect(actorPool(graph, withSinger, { size: 10, minFilms: 2, minLeads: 1, leadBilling: 5 })).toEqual([1, 3, 5]);
+    expect(actorPool(graph, withSinger, films, options)).toEqual([1, 3, 5]);
     expect(bestShortestPath(graph, 1, 3, 3, popularityLinkScore(graph, films, withSinger))?.[0]?.personId).toBe(2);
+  });
+
+  it("leaves out groups and animals (not humans on Wikidata), but not people without a Wikidata item", () => {
+    const withGroup = new Map(people);
+    withGroup.set(2, { ...people.get(2)!, isHuman: false });
+    withGroup.set(3, { ...people.get(3)!, isHuman: null });
+    expect(actorPool(graph, withGroup, films, options)).toEqual([1, 3, 5]);
+  });
+
+  it("doesn't count documentary or concert-film credits towards the minimums", () => {
+    // Person 3: films 101, 102 and 104. With 102 a concert film, two films are left (still enough);
+    // with 101 a documentary too, one is left (and person 2, in 100 and 101, drops as well).
+    const concert = new Map(films);
+    concert.set(102, { ...films.get(102)!, nonFiction: true });
+    expect(actorPool(graph, people, concert, options)).toEqual([1, 2, 3, 5]);
+    concert.set(101, { ...films.get(101)!, nonFiction: true });
+    expect(actorPool(graph, people, concert, options)).toEqual([1, 5]);
+    // A documentary 103 leaves person 5 (103, 104) and person 1 (100, 103) one film each.
+    const documentary = new Map(films);
+    documentary.set(103, { ...films.get(103)!, nonFiction: true });
+    expect(actorPool(graph, people, documentary, options)).toEqual([2, 3]);
+    // A credit in a non-fiction film is still a link.
+    expect(linkDistances(graph, 1, 1).get(5)).toBe(1);
+  });
+});
+
+describe("isNonFictionFilm", () => {
+  it("recognises documentaries and concert films by genre", () => {
+    expect(isNonFictionFilm(["Documentary"])).toBe(true);
+    expect(isNonFictionFilm(["Drama", "Music documentary"])).toBe(true);
+    expect(isNonFictionFilm(["Nature documentary"])).toBe(true);
+    expect(isNonFictionFilm(["Documentary television"])).toBe(true);
+    expect(isNonFictionFilm(["Concert"])).toBe(true);
+    expect(isNonFictionFilm(["concert"])).toBe(true);
+  });
+
+  it("leaves fiction alone, including fiction in documentary form", () => {
+    expect(isNonFictionFilm([])).toBe(false);
+    expect(isNonFictionFilm(["Drama", "Musical"])).toBe(false);
+    expect(isNonFictionFilm(["Mockumentary"])).toBe(false);
+    expect(isNonFictionFilm(["Pseudo-documentary"])).toBe(false);
+    expect(isNonFictionFilm(["Docudrama", "Docufiction"])).toBe(false);
+    expect(isNonFictionFilm(["Music"])).toBe(false);
   });
 });
 

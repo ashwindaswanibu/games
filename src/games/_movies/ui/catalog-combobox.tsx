@@ -34,7 +34,7 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
   const { emptyNote, describe, noun, label, placeholder, disabled = false, excludedNote = "Already guessed", placement = "below", autoFocus = false } = config;
   const variant = useMoviesVariant(config.variant);
   const search = useCatalogSearch(config);
-  const { query, results, status, error, open: expanded, active, excluded, inputRef, listRef, listId, optionId } = search;
+  const { query, results, status, error, open: expanded, active, excluded, inputRef, popupRef, listId, optionId } = search;
 
   return (
     <div data-variant={variant} className={`${MOVIES_FONT_VARS} ${styles.root} ${styles.search}`}>
@@ -67,57 +67,62 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
         )}
       </div>
 
-      <ul ref={listRef} id={listId} role="listbox" aria-label={label} hidden={!expanded} data-placement={placement} className={styles.listbox}>
-        {status === "ready" &&
-          results.map((hit, index) => {
-            const { primary, secondary, note } = describe(hit);
-            const isExcluded = excluded.has(hit.id);
-            return (
-              <li
-                key={hit.id}
-                id={optionId(index)}
-                role="option"
-                aria-selected={index === active}
-                aria-disabled={isExcluded || undefined}
-                className={styles.option}
-                // Keep focus in the input so the list doesn't close before the click lands.
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseMove={() => {
-                  if (!isExcluded && index !== active) search.setActive(index);
-                }}
-                onClick={() => search.choose(index)}
-              >
-                <span className={styles.optionPrimary}>{primary}</span>
-                {note && <span className={styles.optionNote}>{note}</span>}
-                {(secondary || isExcluded) && (
-                  <span className={styles.optionSecondary}>{isExcluded ? `${excludedNote}${secondary ? ` · ${secondary}` : ""}` : secondary}</span>
-                )}
-              </li>
-            );
-          })}
+      {/* The hits scroll; IMDb's credit sits under them, outside the scrolling list, so it shows
+          whatever the list's height or scroll position. */}
+      <div ref={popupRef} hidden={!expanded} data-placement={placement} className={styles.dropdown}>
+        <ul id={listId} role="listbox" aria-label={label} className={styles.listbox}>
+          {status === "ready" &&
+            results.map((hit, index) => {
+              const { primary, secondary, note } = describe(hit);
+              const isExcluded = excluded.has(hit.id);
+              return (
+                <li
+                  key={hit.id}
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={index === active}
+                  aria-disabled={isExcluded || undefined}
+                  className={styles.option}
+                  // Keep focus in the input so the list doesn't close before the click lands.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseMove={() => {
+                    if (!isExcluded && index !== active) search.setActive(index);
+                  }}
+                  onClick={() => search.choose(index)}
+                >
+                  <span className={styles.optionPrimary}>{primary}</span>
+                  {note && <span className={styles.optionNote}>{note}</span>}
+                  {(secondary || isExcluded) && (
+                    <span className={styles.optionSecondary}>{isExcluded ? `${excludedNote}${secondary ? ` · ${secondary}` : ""}` : secondary}</span>
+                  )}
+                </li>
+              );
+            })}
+          {status === "ready" && results.length === 0 && (
+            <li role="presentation" className={styles.listNote}>
+              {emptyNote ? emptyNote(query.trim()) : <>No {noun.many} match &ldquo;{query.trim()}&rdquo;.</>}
+            </li>
+          )}
+          {status === "loading" && (
+            <li role="presentation" className={styles.listNote}>
+              Searching…
+            </li>
+          )}
+          {status === "error" && (
+            <li role="presentation" className={styles.listNote}>
+              {error}
+            </li>
+          )}
+        </ul>
         {status === "ready" && results.length > 0 && (
           // IMDb's required credit wherever its data is shown. Hidden from assistive tech here (it
-          // isn't an option); the board's foot carries the same line for everyone.
-          <li role="presentation" aria-hidden className={styles.listCredit} onMouseDown={(event) => event.preventDefault()}>
+          // isn't part of the list); the board's foot carries the same line for everyone. A press on
+          // it keeps focus in the field, so the list stays open.
+          <p aria-hidden className={styles.listCredit} onMouseDown={(event) => event.preventDefault()}>
             {IMDB_ATTRIBUTION}
-          </li>
+          </p>
         )}
-        {status === "ready" && results.length === 0 && (
-          <li role="presentation" className={styles.listNote}>
-            {emptyNote ? emptyNote(query.trim()) : <>No {noun.many} match &ldquo;{query.trim()}&rdquo;.</>}
-          </li>
-        )}
-        {status === "loading" && (
-          <li role="presentation" className={styles.listNote}>
-            Searching…
-          </li>
-        )}
-        {status === "error" && (
-          <li role="presentation" className={styles.listNote}>
-            {error}
-          </li>
-        )}
-      </ul>
+      </div>
 
       <p className={styles.srOnly} role="status" aria-live="polite">
         {expanded ? search.announcement : ""}

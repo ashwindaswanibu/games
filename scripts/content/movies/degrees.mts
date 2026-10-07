@@ -47,6 +47,7 @@ import {
   actorPool,
   bestShortestPath,
   buildGraph,
+  isNonFictionFilm,
   linkDistances,
   pickPuzzle,
   popularityLinkScore,
@@ -96,17 +97,26 @@ async function loadCatalog(db: ContentDb) {
     selectAllPages<{ film_id: number; person_id: number; billing: number | null }>((from, to) =>
       db.from("movie_credits").select("film_id, person_id, billing").order("film_id").order("person_id").range(from, to),
     ),
-    selectAllPages<{ id: number; title: string; year: number | null; popularity: number }>((from, to) =>
-      db.from("movie_films").select("id, title, year, popularity").order("id").range(from, to),
+    selectAllPages<{ id: number; title: string; year: number | null; popularity: number; genres: string[] }>((from, to) =>
+      db.from("movie_films").select("id, title, year, popularity, genres").order("id").range(from, to),
     ),
-    selectAllPages<{ id: number; name: string; popularity: number; is_actor: boolean }>((from, to) =>
-      db.from("movie_people").select("id, name, popularity, is_actor").order("id").range(from, to),
+    selectAllPages<{ id: number; name: string; popularity: number; is_actor: boolean; is_human: boolean | null }>((from, to) =>
+      db.from("movie_people").select("id, name, popularity, is_actor, is_human").order("id").range(from, to),
     ),
   ]);
   if (creditRows.length === 0) throw new Error("The movie catalog has no credits. Run `npm run content:movies:catalog` first.");
   const credits: Credit[] = creditRows.map((r) => ({ filmId: r.film_id, personId: r.person_id, billing: r.billing }));
-  const films = new Map<number, FilmInfo>(filmRows.map((f) => [f.id, f]));
-  const people = new Map<number, PersonInfo>(personRows.map((p) => [p.id, { id: p.id, name: p.name, popularity: p.popularity, isActor: p.is_actor }]));
+  const films = new Map<number, FilmInfo>(
+    filmRows.map((f) => [f.id, { id: f.id, title: f.title, year: f.year, popularity: f.popularity, nonFiction: isNonFictionFilm(f.genres) }]),
+  );
+  const people = new Map<number, PersonInfo>(
+    personRows.map((p) => [p.id, { id: p.id, name: p.name, popularity: p.popularity, isActor: p.is_actor, isHuman: p.is_human }]),
+  );
+  // is_human comes from the catalog import; a database that hasn't had one since it was added
+  // can't tell groups from people yet (nobody is excluded then).
+  if (personRows.every((p) => p.is_human === null)) {
+    console.warn("  ! No person has movie_people.is_human set: groups (the Marx Brothers) can still start or end a puzzle. Run content:movies:catalog.");
+  }
   return { graph: buildGraph(credits), films, people, creditCount: credits.length };
 }
 
@@ -358,7 +368,7 @@ async function main() {
   const db = pipelineDb({ allowRemote: args["allow-remote"], allowRemoteRead: args["allow-remote-read"] });
 
   const { graph, films, people, creditCount } = await loadCatalog(db);
-  const pool = actorPool(graph, people, { size: poolSize, minFilms: 6, minLeads: 3, leadBilling: 5 });
+  const pool = actorPool(graph, people, films, { size: poolSize, minFilms: 6, minLeads: 3, leadBilling: 5 });
   console.log(`Graph: ${graph.filmsOf.size} people, ${graph.castOf.size} films, ${creditCount} credits. Actor pool: ${pool.length}.`);
   if (pool.length < 20) throw new Error("Too few well-known actors in the catalog to make puzzles. Import a larger catalog.");
 

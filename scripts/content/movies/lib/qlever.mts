@@ -137,6 +137,20 @@ SELECT DISTINCT ?person WHERE {
   ?person wdt:P106 ?occupation . VALUES ?occupation { wd:Q33999 wd:Q10800557 wd:Q2405480 }
 }`,
   },
+  humans: {
+    name: "humans",
+    columns: ["person"],
+    // Which of the people the catalog can carry (anyone with an IMDb person id, anyone in a film's
+    // cast) are instances of human (Q5): Degrees starts and ends only at people, never at a group
+    // (the Marx Brothers, the Beatles) or an animal. ~610,000 rows.
+    sparql: `${PREFIXES}
+SELECT DISTINCT ?person WHERE {
+  { ?person wdt:P345 ?nm . FILTER(STRSTARTS(?nm, "nm")) }
+  UNION
+  { ${FILM} ?item wdt:P161 ?person . }
+  ?person wdt:P31 wd:Q5 .
+}`,
+  },
   imdbPeople: {
     name: "imdb-people",
     columns: ["person", "nm", "en", "mul", "links"],

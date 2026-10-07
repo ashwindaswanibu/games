@@ -697,22 +697,36 @@
   color: var(--ink-3);
 }
 
-/* Hits open upward: the guess line sits low on the screen. */
-.list {
+/* Hits open upward: the guess line sits low on the screen. They scroll inside the panel; IMDb's
+   credit stays at its foot. */
+.hits {
   position: absolute;
   left: -14px;
   right: -14px;
   bottom: calc(100% + 16px);
   z-index: 5;
+  display: flex;
+  flex-direction: column;
   max-height: min(360px, 46dvh);
-  margin: 0;
   padding: 6px;
-  overflow: auto;
-  list-style: none;
   border: 1px solid var(--hair);
   border-radius: 10px;
   background: rgb(13 13 14 / 0.97);
   box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.85);
+}
+
+/* `display: flex` would otherwise override the hidden attribute. */
+.hits[hidden] {
+  display: none;
+}
+
+.list {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
 }
 
 .option {
@@ -749,9 +763,11 @@
   padding: 10px 12px;
 }
 
-/* The data credit under the hits: fine print, not uppercase (it quotes a URL). */
+/* The data credit under the hits, outside the scrolling list (always in view): fine print, not
+   uppercase (it quotes a URL). */
 .listCredit {
-  margin-top: 4px;
+  flex: none;
+  margin: 4px 0 0;
   padding: 8px 12px 4px;
   border-top: 1px solid var(--hair);
   font: 500 9.5px/1.4 var(--mono);

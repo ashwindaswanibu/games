@@ -94,7 +94,9 @@ where films stop being something a friend would guess; 500 would give ~76,000 fi
   IMDb lists actor or actress among their primary professions, or Wikidata gives them the
   occupation actor, film actor or voice actor (`isActor` in `lib/catalog-model.mts`). Degrees
   starts and ends only at actors. 161,000 of the 168,000 people qualify: nearly everyone credited
-  in a cast list has acted.
+  in a cast list has acted. And **`is_human`**: Wikidata says they are an instance of human (Q5);
+  false for the 577 cast "members" that are groups (the Marx Brothers, the Beatles), animals
+  (Lassie) or mis-linked items, null for IMDb-only people. Degrees never starts or ends at false.
 - **`popularity`: Wikipedia editions** (Wikidata sitelinks; 0 without a Wikidata item). Its
   meaning hasn't changed: Degrees, Fade to Color decoys, stills and the fixtures rank by it.
 - **`imdb_votes`** and the generated **`fame`** = ln(1 + IMDb votes), or ln(1 + 437 × popularity)
@@ -115,7 +117,7 @@ without a database:
 
 1. **Build** (`lib/catalog-build.mts`, no writes). Downloads IMDb's files into `--cache-dir` (only
    when IMDb has a newer file than the cached one: ~1.4 GB, under a minute on a fast line), runs
-   nine QLever queries (~45 s, ~280 MB of CSV, cached), then reads IMDb's files as streams,
+   eleven QLever queries (~50 s, ~310 MB of CSV, cached), then reads IMDb's files as streams,
    keeping only what the selected films need (IMDb's principals alone are ~100 million lines). It
    writes a **snapshot** (`<cache-dir>/snapshot/`: films and people as NDJSON plus `meta.json`
    with the counts) and prints its summary. About 3.5 minutes; peaks at ~850 MB of memory. If
@@ -149,28 +151,51 @@ snapshot writes nothing.
   source was probably incomplete); `--allow-mass-removal` overrides.
 
 **Search** (`search_films` / `search_people`, latest in
-`supabase/migrations/20261012000000_catalog_search_tiers.sql`). A film matches by any of its names.
-Tiers: exact; the name starts with the query; a later word starts with it (3+ characters);
-substring (3+ characters); typos (4+ characters: trigram similarity, or one or two edits at the
-start of a name for short titles like "sholey"), the last only when the others found fewer
-results than asked for. Spaces and punctuation don't matter for exact and starts-with matches
-(a generated no-spaces key, `compact_key`, on titles and people's names): "xmen" finds X-Men,
-"walle" WALL-E, "raone" Ra.One, "shahrukh" Shah Rukh Khan (prefix matches only from 3
-characters, so "it" doesn't find "I, Tonya"). The first three tiers rank together, by fame:
+`supabase/migrations/20261013000000_catalog_search_word_starts.sql`). A film matches by any of its
+names. How a name matches the query (`catalog_match_class`, one definition for films,
+filmographies and people; `matchClass` in `src/games/_movies/scoped-search.ts` mirrors it):
 
-- an exact title gets a bonus of ln 10, so a name that *starts with* the query outranks it only
-  with ten times the votes ("the dark" → The Dark Knight, not the little-known The Dark);
-- a name where only a *later word* starts with the query never outranks an exact title ("stree" →
-  Stree, not The Wolf of Wall Street; "guide" → Guide; "earth" → Earth);
+0. exact;
+1. the name starts with the query as whole words ("stree" → Stree 2), also right after a leading
+   "the", "a" or "an" ("dark" → The Dark Knight);
+2. the name starts with the query, ending mid-word ("stree" → Street Kings), also after an article;
+3. a later word starts with the query, ending at a word end ("guide" → The Hitchhiker's Guide to
+   the Galaxy; 3+ characters);
+4. a later word starts with the query, ending mid-word ("stree" → The Wolf of Wall Street; 3+);
+5. substring (3+ characters);
+6. typos (4+ characters: trigram similarity, or one or two edits at the start of a name for short
+   titles like "sholey"), only when the others found fewer results than asked for.
+
+Spaces and punctuation don't matter for exact matches and starts (a generated no-spaces key,
+`compact_key`, on titles and people's names): "xmen" finds X-Men, "walle" WALL-E, "raone" Ra.One,
+"shahrukh" Shah Rukh Khan (a start ignores spaces only from 3 characters of query, so "it"
+doesn't find "I, Tonya").
+Sequel numbers match either way: names and queries are also compared with "part", "chapter",
+"vol.", "volume" and "episode" before a number dropped and roman numerals written as digits
+(`number_key`, `catalog_number_key`): "godfather 2" → The Godfather Part II, "dune 2" → Dune: Part
+Two, "kill bill 2" → Kill Bill: Volume 2, "rocky 2" → Rocky II.
+
+Classes 0–3 rank together, by fame plus a bonus; then class 4, then 5, then typos, each by fame:
+
+- an exact title gets ln 30 and a whole-word start ln 3, so a name that starts with the query
+  outranks an exact title only with ten times the votes ("dark" → The Dark Knight, 3.2 million
+  votes, over Dark), and a mid-word start outranks a whole-word start only with three times
+  ("stree" → Stree 2 above Street Kings);
+- a later whole word never outranks an exact title ("stree" → Stree; "guide" → Guide; "earth" →
+  Earth), and a partial later word comes after every name that starts with the query ("stree":
+  The Wolf of Wall Street after Stree 2);
 - an exact match on a film's display title beats an exact match on another film's other name
   unless that film has ten times the votes ("court" → Court, not Court – State Vs A Nobody, a.k.a.
   Court; "godfather" → The Godfather, a.k.a. Godfather, over the films titled Godfather).
 
-People rank the same way by ln(1 + Wikipedia editions): "deepika" → Deepika Padukone, not an
-IMDb-only "Deepika". A hit carries `aka`, the other name it matched by, shown in the dropdown as
-"also: K3G". With a person it searches their filmography the same way (Degrees); a film's cast is
-searched in memory by the same rules (`src/games/_movies/scoped-search.ts`). Each tier is its own
-indexed, limited query: typical searches take 10–30 ms end to end, "the" ~70 ms.
+People rank the same way, by the films they are in: ln(1 + the IMDb votes of every film they're
+credited in, a film counting fully when they're billed in its top four, a quarter at 5th–10th and
+a tenth below that). "salman" → Salman Khan, not Salman Rushdie (more Wikipedia editions, one
+cameo); "deepika" → Deepika Padukone, not an IMDb-only "Deepika". A hit carries `aka`, the other
+name it matched by, shown in the dropdown as "also: K3G". With a person it searches their
+filmography the same way (Degrees); a film's cast is searched in memory by the same classes and
+bonuses (`src/games/_movies/scoped-search.ts`), ranked by Wikipedia editions. Each class is its own
+indexed, limited query: typical searches take 10–30 ms end to end, "the" ~45 ms.
 
 **Rolling out to the hosted database** (the owner's call; agents never pass `--allow-remote`). One
 sequence, explained step by step in `design/catalog-rollout.md`. With the hosted project's
@@ -221,8 +246,12 @@ beat par with a credit the generator ignored.
 For each date:
 
 1. **Pool.** The 300 best-known people (`--pool-size`, by Wikipedia editions) who are actors
-   (`is_actor`: IMDb or Wikidata says so) and clearly act in this catalog: at least 6 films, at
-   least 3 of them billed in the top 5. Anyone credited can still be a link in a chain.
+   (`is_actor`: IMDb or Wikidata says so), people (`is_human` isn't false: no groups like the Marx
+   Brothers, no animals) and clearly act in this catalog: at least 6 films, at least 3 of them
+   billed in the top 5, counting fiction only. Documentaries and concert films (a genre that is
+   "Documentary", "… documentary" or "Concert"; `isNonFictionFilm`) don't count, so a singer's
+   tour films don't make them an actor. Anyone credited, in any film, can still be a link in a
+   chain. This is an interim rule (2026-10-07); the owner chooses the final one (`TODO.md`).
 2. **Target par.** The seeded rng chooses 2 links (about 55% of days) or 3. If no pair fits the
    target, it falls back to the other.
 3. **Pair.** A start from the pool, then an end from the pool whose shortest chain to the start

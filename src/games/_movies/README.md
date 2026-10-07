@@ -220,8 +220,10 @@ matches on those, so such rows would end up as duplicates. `popularity` is Wikip
 **IMDb credit.** Part of the catalog comes from IMDb's non-commercial datasets, whose licence
 requires the line in `IMDB_ATTRIBUTION` (`./attribution.ts`) wherever that information is shown.
 The kit already shows it: at the foot of every `MoviesStage` and under the hits of every catalog
-search list. A game that shows catalog data outside the kit (Fade to Color's theater) shows it
-too: its search list and its end card do.
+search list (outside the list's scrolling area, so it shows whatever the list's height or scroll
+position). A game that shows catalog data outside the kit (Fade to Color's theater) shows it too:
+its search list and its end card do. A game that renders `useCatalogSearch` itself puts the line
+in the dropdown it attaches `popupRef` to, after the scrolling `listbox`.
 
 ## The Movies UI kit (`./ui`)
 
@@ -233,7 +235,7 @@ Import everything from `@/games/_movies/ui`. Every component is a typed client c
 | `variant="neutral"` | **Required for color games** (`color-grade`, `fade-to-color`): a neutral-gray (R = G = B) colorist's suite, so the surrounding UI doesn't bias how colors read. Kit components inside inherit the variant. |
 | `PuzzleImage` | An asset by ref. Reserves the aspect ratio, shows a loading note and a retry button, and never draws over the picture. |
 | `IrisReveal` | Wrap the image in it, keyed by `revealKey={ref.id}`, to open each new image with a gun-barrel iris. It doesn't animate on first render or under reduced motion. |
-| `FilmSearch` / `PersonSearch` | Autocomplete over `/api/catalog/films` and `/api/catalog/people`: debounced, cancels stale requests, caches results, ARIA combobox with ↑ ↓ Enter Esc. `excludeIds` shows already-used items struck through and unselectable. `placement="above"` for a field low on the screen. A film found by another of its names shows it ("also: K3G"). Spaces and punctuation don't matter ("xmen" finds X-Men). The IMDb credit closes the list. |
+| `FilmSearch` / `PersonSearch` | Autocomplete over `/api/catalog/films` and `/api/catalog/people`: debounced, cancels stale requests, caches results, ARIA combobox with ↑ ↓ Enter Esc. `excludeIds` shows already-used items struck through and unselectable. `placement="above"` for a field low on the screen. A film found by another of its names shows it ("also: K3G"). Spaces and punctuation don't matter ("xmen" finds X-Men), nor how a sequel is numbered ("godfather 2" finds The Godfather Part II). The IMDb credit sits at the dropdown's foot, outside the scrolling hits, so it is always in view. |
 | `RevealStrip` | Stage progress as film frames. Each step has a `status` of `locked`, `current`, `seen`, `missed`, `skipped` or `solved`, shown by glyph and border as well as color. `onSelect` lets the player flip back through revealed stages. `showLabels` prints short stage names. |
 | `ClueChips` | A guess's clues, using arrows and shapes (↑ ↓ = ■ □ ◆ ◇ ● ○ ?) plus words. A long list of shared genres is shortened on the chip ("Shares Epic · Crime drama +1"); screen readers get the full list. |
 | `GuessLog` | Numbered guesses with verdicts and clue chips; takes `FilmGuess` entries or `{ skipped: true }`. `gaveUp` labels a final skip "Gave up". |

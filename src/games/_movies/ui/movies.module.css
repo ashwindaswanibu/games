@@ -496,26 +496,37 @@
   animation: mv-spin 0.7s linear infinite;
 }
 
-.listbox {
+/* The dropdown: the hits scroll inside it, IMDb's credit stays at its foot. */
+.dropdown {
   position: absolute;
   left: 0;
   right: 0;
   top: calc(100% + 6px);
   z-index: 40;
+  display: flex;
+  flex-direction: column;
   max-height: min(50vh, 344px);
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  list-style: none;
   background: var(--mv-raised);
   border: 2px solid var(--mv-accent);
   box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.7);
   animation: mv-drop 0.18s var(--mv-ease-cut) both;
 }
-.listbox[data-placement="above"] {
+/* `display: flex` would otherwise override the hidden attribute. */
+.dropdown[hidden] {
+  display: none;
+}
+.dropdown[data-placement="above"] {
   top: auto;
   bottom: calc(100% + 6px);
+}
+.listbox {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
 }
 .option {
   display: grid;
@@ -568,8 +579,10 @@
   font-size: 14px;
   color: var(--mv-fg-dim);
 }
-/* The data credit under the hits. */
+/* The data credit under the hits, outside the scrolling list: always in view. */
 .listCredit {
+  flex: none;
+  margin: 0;
   padding: 7px 14px 8px;
   border-top: 1px solid var(--mv-rule);
   font: 500 10px/1.45 var(--mv-mono);
@@ -874,7 +887,7 @@ button.cell {
   .leaderSweep,
   .leaderValue,
   .iris,
-  .listbox,
+  .dropdown,
   .entry {
     animation: none;
   }

@@ -22,6 +22,11 @@ export interface FilmInfo {
   title: string;
   year: number | null;
   popularity: number;
+  /**
+   * A documentary or a concert film (see `isNonFictionFilm`): its cast appear as themselves, so a
+   * credit there doesn't show that someone acts. Still a link like any other credit.
+   */
+  nonFiction: boolean;
 }
 
 export interface PersonInfo {
@@ -30,6 +35,21 @@ export interface PersonInfo {
   popularity: number;
   /** IMDb or Wikidata says they act (`movie_people.is_actor`). Only actors start or end a puzzle. */
   isActor: boolean;
+  /**
+   * Wikidata says they're a human (`movie_people.is_human`); false for a group (the Marx Brothers)
+   * or an animal, null without a Wikidata item. Only people who aren't false start or end a puzzle.
+   */
+  isHuman: boolean | null;
+}
+
+/**
+ * Whether a film's genres (catalog display names, `movie_films.genres`) make it a documentary or a
+ * concert film: "Documentary", any "… documentary" ("Music documentary", "Nature documentary") or
+ * "Documentary …" ("Documentary television"), or "Concert". Fiction that borrows the form
+ * (Mockumentary, Pseudo-documentary, Docudrama, Docufiction) has actors and doesn't count. Pure.
+ */
+export function isNonFictionFilm(genres: readonly string[]): boolean {
+  return genres.some((genre) => /^(?:.+ )?documentary(?: .+)?$/i.test(genre) || /^concert$/i.test(genre));
 }
 
 export interface CastGraph {
@@ -140,21 +160,29 @@ export function bestShortestPath(
 
 /**
  * People eligible as start or end: actors (IMDb or Wikidata says so: famous singers, politicians and
- * documentary subjects credited in films can be links, never endpoints), well known (top `size` by
- * popularity) *and* genuinely acting in this catalog, with at least `minFilms` credits of which
- * `minLeads` are top-`leadBilling` billed. The film minimum also guarantees the player has real
- * choices at every step.
+ * documentary subjects credited in films can be links, never endpoints) who are people (not a
+ * group or an animal: `isHuman` isn't false), well known (top `size` by popularity) *and* genuinely
+ * acting in this catalog, with at least `minFilms` credits of which `minLeads` are
+ * top-`leadBilling` billed, counting only fiction: documentaries and concert films (`nonFiction`)
+ * don't count, so a singer's concert films and tour documentaries don't make them an actor. The
+ * film minimum also guarantees the player has real choices at every step.
+ *
+ * Interim rule (2026-10-07); the owner chooses the final one (TODO.md, "Degrees with the bigger
+ * catalog").
  */
 export function actorPool(
   graph: CastGraph,
   people: ReadonlyMap<number, PersonInfo>,
+  films: ReadonlyMap<number, FilmInfo>,
   options: { size: number; minFilms: number; minLeads: number; leadBilling: number },
 ): number[] {
   const eligible: PersonInfo[] = [];
-  for (const [personId, films] of graph.filmsOf) {
+  for (const [personId, credited] of graph.filmsOf) {
     const person = people.get(personId);
-    if (!person?.isActor || films.length < options.minFilms) continue;
-    const leads = films.filter((filmId) => (graph.billing(filmId, personId) ?? Infinity) < options.leadBilling).length;
+    if (!person?.isActor || person.isHuman === false) continue;
+    const acting = credited.filter((filmId) => films.get(filmId)?.nonFiction !== true);
+    if (acting.length < options.minFilms) continue;
+    const leads = acting.filter((filmId) => (graph.billing(filmId, personId) ?? Infinity) < options.leadBilling).length;
     if (leads >= options.minLeads) eligible.push(person);
   }
   return eligible

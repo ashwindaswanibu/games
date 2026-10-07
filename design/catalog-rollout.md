@@ -67,11 +67,12 @@ Why this order:
 
 ## Steps in detail
 
-**1. `npx supabase db push`.** `npx supabase migration list` first: three migrations are pending,
-`20261011000000_catalog_expansion`, `20261012000000_catalog_search_tiers` and
-`20261012000100_degrees_actors_and_repar`. They add columns and indexes and replace the search
-functions; nothing is deleted. Adding the no-spaces keys rewrites `movie_people` and
-`movie_film_titles` (seconds at today's hosted size).
+**1. `npx supabase db push`.** `npx supabase migration list` first: five migrations are pending,
+`20261011000000_catalog_expansion`, `20261012000000_catalog_search_tiers`,
+`20261012000100_degrees_actors_and_repar`, `20261013000000_catalog_search_word_starts` and
+`20261013000100_movie_people_is_human`. They add columns and indexes and replace the search
+functions; nothing is deleted. Adding the no-spaces keys and the sequel-number key rewrites
+`movie_people` and `movie_film_titles` (seconds at today's hosted size).
 
 **2. Deploy the app** (Vercel, from `main`). Check that a Movies board shows *Information courtesy
 of IMDb (https://www.imdb.com). Used with permission.* at its foot and that a film search lists it
@@ -80,8 +81,9 @@ under the hits.
 **3. Build.** `npm run content:movies:catalog -- --build-only --allow-remote-read` (~6 minutes,
 ~850 MB of memory). It ends with the snapshot's summary; compare it with the local build: about
 60,500 films (49,000 by votes, 9,000 by Wikipedia editions), 168,000 people of whom 161,000 are
-actors, 666,000 credits before the cap. A count far off means a source was incomplete: stop (if
-QLever failed, the log says which cached result it used instead).
+actors and ~580 are not human (`notHuman`: groups, animals), 666,000 credits before the cap. A
+count far off means a source was incomplete: stop (if QLever failed, the log says which cached
+result it used instead).
 
 **4. Dry run.** `npm run content:movies:catalog -- --apply-only --dry-run --allow-remote-read`
 (~1 minute). Compare the plan with the local first import on the same old catalog:

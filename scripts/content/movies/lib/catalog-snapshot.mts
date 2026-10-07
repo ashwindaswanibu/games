@@ -12,8 +12,8 @@ import { z } from "zod";
  * identical content. Stored as NDJSON plus a `meta.json` summary; validated with zod on read.
  */
 
-/** 2: people carry `isActor`. */
-export const SNAPSHOT_VERSION = 2;
+/** 2: people carry `isActor`. 3: people carry `isHuman`. */
+export const SNAPSHOT_VERSION = 3;
 
 const qid = z.string().regex(/^Q[1-9][0-9]*$/);
 const tt = z.string().regex(/^tt[0-9]{7,10}$/);
@@ -52,6 +52,11 @@ export const snapshotPersonSchema = z.object({
   popularity: z.number().int().min(0),
   /** IMDb or Wikidata says they act (see `isActor`); Degrees' start and end actors must. */
   isActor: z.boolean(),
+  /**
+   * Wikidata says they're a human (instance of Q5): true, or false for a group or an animal;
+   * null without a Wikidata item. Degrees' start and end actors must not be false.
+   */
+  isHuman: z.boolean().nullable(),
 });
 export type SnapshotPerson = z.infer<typeof snapshotPersonSchema>;
 

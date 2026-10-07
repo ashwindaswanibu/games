@@ -4,7 +4,9 @@
  * `puzzle_assets.mime` are the CHECK-constrained unions; `leaderboard().avg_score`,
  * `search_films().year`, `search_films().aka` and `search_people().known_for` are nullable;
  * `movie_film_titles.kind` is its CHECK-constrained union; generated `search_key`, `compact_key`
- * and `fame` columns are never null (the values they derive from are NOT NULL);
+ * and `fame` columns are never null (the values they derive from are NOT NULL), while
+ * `movie_film_titles.number_key` is null unless a name has sequel numbering;
+ * `catalog_match_class()` returns null for no match;
  * `replace_unplayed_puzzle()` returns one of its four outcomes.
  * After a migration, run `npm run db:types` and diff against this file.
  */
@@ -225,6 +227,7 @@ export type Database = {
           fame: number;
           search_key: string;
           compact_key: string;
+          number_key: string | null;
         };
         Insert: {
           film_id: number;
@@ -233,6 +236,7 @@ export type Database = {
           fame?: number;
           search_key?: never;
           compact_key?: never;
+          number_key?: never;
         };
         Update: {
           film_id?: number;
@@ -241,6 +245,7 @@ export type Database = {
           fame?: number;
           search_key?: never;
           compact_key?: never;
+          number_key?: never;
         };
         Relationships: [
           {
@@ -260,6 +265,7 @@ export type Database = {
           wikidata_id: string | null;
           imdb_id: string | null;
           is_actor: boolean;
+          is_human: boolean | null;
           search_key: string;
           compact_key: string;
         };
@@ -270,6 +276,7 @@ export type Database = {
           wikidata_id?: string | null;
           imdb_id?: string | null;
           is_actor?: boolean;
+          is_human?: boolean | null;
           search_key?: never;
           compact_key?: never;
         };
@@ -280,6 +287,7 @@ export type Database = {
           wikidata_id?: string | null;
           imdb_id?: string | null;
           is_actor?: boolean;
+          is_human?: boolean | null;
           search_key?: never;
           compact_key?: never;
         };
@@ -359,6 +367,14 @@ export type Database = {
       catalog_search_key: {
         Args: { value: string };
         Returns: string;
+      };
+      catalog_number_key: {
+        Args: { key: string };
+        Returns: string;
+      };
+      catalog_match_class: {
+        Args: { name_key: string; query_key: string };
+        Returns: number | null;
       };
       search_films: {
         Args: { p_query: string; p_limit?: number; p_person?: number };
