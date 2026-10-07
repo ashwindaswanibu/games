@@ -79,6 +79,11 @@ export function parseCatalogSearchParams(search: URLSearchParams): CatalogSearch
 export const filmSearchHitSchema = filmRefSchema.extend({
   /** Up to two director names, to tell remakes and namesakes apart. */
   directors: z.array(nameSchema).max(2),
+  /**
+   * The name the query matched when it isn't the film's title (another title the film is known
+   * by: "K3G" or "Kabhi Khushi Kabhie Gham..." for Kabhi Khushi Kabhie Gham), else null.
+   */
+  aka: titleSchema.nullable().default(null),
 });
 export type FilmSearchHit = z.infer<typeof filmSearchHitSchema>;
 

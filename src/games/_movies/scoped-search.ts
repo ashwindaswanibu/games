@@ -4,13 +4,14 @@ import { catalogSearchKey } from "./search-key";
 export { catalogSearchKey };
 
 /**
- * Autocomplete within a small, known set: one person's filmography (`/api/catalog/filmography`) or
- * one film's cast (`/api/catalog/cast`). Degrees of Separation uses these so a player picks a film
- * the current actor was in, then a co-star from it.
+ * Scoped catalog routes: one person's filmography (`/api/catalog/filmography`) or one film's cast
+ * (`/api/catalog/cast`). Degrees of Separation uses these so a player picks a film the current
+ * actor was in, then a co-star from it.
  *
- * The sets are small (tens to a few hundred rows), so matching happens in memory with the same
- * normalization as the SQL `catalog_search_key` and the same tiers as `search_films` /
- * `search_people`, minus the typo-tolerant tier. Pure; safe on both sides of the wire.
+ * A filmography is searched in SQL (`search_films` with a person), so films match by every name
+ * they are known by. A cast is small (a few dozen people), so it is matched here, in memory, with
+ * the same normalization as the SQL `catalog_search_key` and the same tiers as `search_people`,
+ * minus the typo-tolerant tier. Pure; safe on both sides of the wire.
  */
 
 

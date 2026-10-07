@@ -6,6 +6,8 @@ import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
 import styles from "./theater.module.css";
 
 const byline = (film: FilmSearchHit) => [film.year, film.directors.join(" & ")].filter(Boolean).join(" · ");
+/** The dropdown's line under a title: the other title it matched by, if any, then the byline. */
+const optionMeta = (film: FilmSearchHit) => [film.aka ? `also ${film.aka}` : null, byline(film)].filter(Boolean).join(" · ");
 
 /**
  * The guess line. Search the catalog, choose a film (it stays in the field), then Guess, or press
@@ -109,7 +111,7 @@ export function Slate(props: {
                   onClick={() => search.choose(index)}
                 >
                   <span className={styles.optionTitle}>{hit.title}</span>
-                  <span className={styles.optionMeta}>{isExcluded ? `Already guessed · ${byline(hit)}` : byline(hit)}</span>
+                  <span className={styles.optionMeta}>{isExcluded ? `Already guessed · ${optionMeta(hit)}` : optionMeta(hit)}</span>
                 </li>
               );
             })}

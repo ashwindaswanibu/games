@@ -539,7 +539,14 @@
   line-height: 1.3;
   color: var(--mv-fg-dim);
 }
-.option[aria-selected="true"] .optionSecondary {
+.optionNote {
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.3;
+  color: var(--mv-fg-dim);
+}
+.option[aria-selected="true"] .optionSecondary,
+.option[aria-selected="true"] .optionNote {
   color: inherit;
   opacity: 0.85;
 }

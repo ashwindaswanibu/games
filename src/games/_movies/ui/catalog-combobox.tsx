@@ -24,7 +24,8 @@ export interface CatalogSearchProps<Hit> {
 }
 
 interface ComboboxConfig<Hit extends { id: number }> extends CatalogSearchProps<Hit>, Omit<CatalogSearchConfig<Hit>, keyof CatalogSearchProps<Hit>> {
-  describe(hit: Hit): { primary: string; secondary: string | null };
+  /** `note`: an optional quiet extra line, e.g. the other title a film matched by. */
+  describe(hit: Hit): { primary: string; secondary: string | null; note?: string | null };
 }
 
 /** The kit's look for `useCatalogSearch`: a labelled field with a dropdown of hits. */
@@ -68,7 +69,7 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
       <ul ref={listRef} id={listId} role="listbox" aria-label={label} hidden={!expanded} data-placement={placement} className={styles.listbox}>
         {status === "ready" &&
           results.map((hit, index) => {
-            const { primary, secondary } = describe(hit);
+            const { primary, secondary, note } = describe(hit);
             const isExcluded = excluded.has(hit.id);
             return (
               <li
@@ -86,6 +87,7 @@ export function CatalogCombobox<Hit extends { id: number }>(config: ComboboxConf
                 onClick={() => search.choose(index)}
               >
                 <span className={styles.optionPrimary}>{primary}</span>
+                {note && <span className={styles.optionNote}>{note}</span>}
                 {(secondary || isExcluded) && (
                   <span className={styles.optionSecondary}>{isExcluded ? `${excludedNote}${secondary ? ` · ${secondary}` : ""}` : secondary}</span>
                 )}

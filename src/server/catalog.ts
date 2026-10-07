@@ -6,7 +6,8 @@ import { db } from "./supabase/admin";
 
 /**
  * Movie catalog autocomplete. Ranking lives in the `search_films` / `search_people` SQL functions
- * (exact, prefix, substring, then typo-tolerant trigram matches; popularity within each tier).
+ * (exact, prefix, substring, then typo-tolerant trigram matches; films by fame and people by
+ * popularity within each tier). Films match by any name they are known by (`movie_film_titles`).
  * Callers authorize the request and validate `query`/`limit` first.
  */
 
@@ -18,10 +19,11 @@ export function canUseMoviesCatalog(profile: Pick<ProfileRow, "is_admin">): bool
   return visibleGames(profile.is_admin).some((game) => game.bucket === "movies");
 }
 
-export async function searchFilms(query: string, limit: number): Promise<FilmSearchHit[]> {
-  const { data, error } = await db().rpc("search_films", { p_query: query, p_limit: limit });
+/** Films matching `query`, best first; with `personId`, only films that person is credited in. */
+export async function searchFilms(query: string, limit: number, personId?: number): Promise<FilmSearchHit[]> {
+  const { data, error } = await db().rpc("search_films", { p_query: query, p_limit: limit, ...(personId === undefined ? {} : { p_person: personId }) });
   if (error) throw new Error(`Film search failed: ${error.message}`);
-  return data.map((row) => ({ id: row.id, title: row.title, year: row.year, directors: row.directors.slice(0, 2) }));
+  return data.map((row) => ({ id: row.id, title: row.title, year: row.year, directors: row.directors.slice(0, 2), aka: row.aka }));
 }
 
 export async function searchPeople(query: string, limit: number): Promise<PersonSearchHit[]> {
