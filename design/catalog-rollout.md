@@ -159,7 +159,7 @@ a second key that still finds the word after it ("hara" → the O'Haras). Same g
 the owner runs it, from `main` with the branch merged, in a terminal with `.env.hosted` loaded. In
 this order:
 
-1. **Schema and key recompute:** `npx supabase migration list`, then `npx supabase db push`. Three
+1. **Schema and key recompute:** `npx supabase migration list`, then `npx supabase db push`. Four
    migrations: `20261014000000_catalog_search_apostrophes` replaces `catalog_search_key` and
    rewrites every stored key that changes (locally 2,429 films, 976 people and 4,356 of 102,427
    searchable names, 49 of which merge into another name of the same film; seconds);
@@ -171,7 +171,9 @@ this order:
    locally (titles 26 → 28 MB, people unchanged at 54 MB), during which searches wait. Search uses
    the new keys from here on ("don" lists Don first, "hara" Catherine O'Hara). No reindex needed:
    the rewritten tables get fresh indexes, and the first migration rewrites only a few thousand
-   rows.
+   rows. `20261014000300_catalog_split_key_stats` then analyzes the new `split_key` columns:
+   without statistics the planner walks people by popularity and filters every row (~40 ms for
+   "sam" instead of ~13 ms) until autoanalyze catches up.
 2. **Deploy the app.** It reads `movie_films.is_adult`, so it must not go out before step 1; the
    old app keeps working after step 1.
 3. **Build against hosted** (read-only): `npm run content:movies:catalog -- --build-only
