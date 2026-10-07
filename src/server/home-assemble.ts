@@ -32,6 +32,7 @@ import type { PuzzleReadiness } from "./puzzles";
  *  - A result is only ever the viewer's own finished play. Presence names a player and a game,
  *    never a score, label or grid. Boards come from the spoiler-walled `leaderboard` RPC.
  *  - Progress counts every visible game (decision 9); streak and boards are live games only.
+ *  - Other players are named so the viewer can tell them apart (`shortNames`).
  */
 
 /** A play still in progress counts as "playing" if it moved this recently. */
@@ -47,9 +48,50 @@ export const PRESENCE_FUTURE_ALLOWANCE_MS = 60 * 1000;
 /** The opening's "present" card names at most this many players; above it the card is left out. */
 export const CAST_MAX = 8;
 
-/** What the home calls people: the display name up to the first space. */
+/** The display name up to the first space: the viewer's own name on the home ("Hey Zoë"). */
 export function firstNameOf(displayName: string): string {
   return displayName.trim().split(/\s+/)[0] ?? displayName;
+}
+
+/**
+ * What the home calls other people, by user id: the first name when no one else on the board
+ * shares it; when some do, the first name and the last word's initial ("Sam O."), if that tells
+ * them apart; otherwise "@username". Display names are unique but first names are not, and sign-up
+ * is open, so a name the viewer can't tell apart from a friend's never reaches the page (the
+ * boards show "@username" beside names for the same reason). Compared ignoring case, like display
+ * names. `rows`: the week board, which lists every player.
+ */
+export function shortNames(rows: readonly Pick<LeaderboardRow, "user_id" | "username" | "display_name">[]): Map<string, string> {
+  const fold = (s: string) => s.toLowerCase();
+  const groups = new Map<string, (typeof rows)[number][]>();
+  for (const row of rows) {
+    const key = fold(firstNameOf(row.display_name));
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+
+  const names = new Map<string, string>();
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      names.set(group[0].user_id, firstNameOf(group[0].display_name));
+      continue;
+    }
+    const initialed = new Map(group.map((r) => [r.user_id, withInitial(r.display_name)]));
+    const count = new Map<string, number>();
+    for (const name of initialed.values()) if (name) count.set(fold(name), (count.get(fold(name)) ?? 0) + 1);
+    for (const r of group) {
+      const name = initialed.get(r.user_id);
+      names.set(r.user_id, name && count.get(fold(name)) === 1 ? name : `@${r.username}`);
+    }
+  }
+  return names;
+}
+
+/** "Sam Okafor" → "Sam O."; null for a one-word name. */
+function withInitial(displayName: string): string | null {
+  const words = displayName.trim().split(/\s+/);
+  if (words.length < 2) return null;
+  const [initial] = Array.from(words[words.length - 1]);
+  return `${words[0]} ${initial}.`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -63,6 +105,7 @@ export type HomePlayRow = Pick<PlayRow, "game_id" | "status" | "score" | "result
 export interface PresenceItem {
   kind: "playing" | "finished";
   playerId: string;
+  /** The home's name for the player (`shortNames`). */
   firstName: string;
   gameId: string;
   gameName: string;
@@ -104,6 +147,7 @@ export function assembleHomeView(rows: HomeRows): HomeView {
     if (!canPlay(game, profile.is_admin)) throw new Error(`${game.id} is not visible to ${profile.username}`);
   }
 
+  const names = shortNames(rows.weekBoard);
   const buckets = BUCKETS.map((bucket): HomeBucket => {
     const games = gamesInBucket(rows.games, bucket.id).map((game) => homeGame(rows, game));
     return {
@@ -111,12 +155,15 @@ export function assembleHomeView(rows: HomeRows): HomeView {
       name: bucket.name,
       status: games.length > 0 ? "open" : "in_production",
       testingOnly: games.length > 0 && games.every((g) => g.testing),
-      leader: bucketLeader(rows.bucketBoards.get(bucket.id), profile.id),
+      leader: bucketLeader(rows.bucketBoards.get(bucket.id), profile.id, names),
       games,
     };
   });
   const ordered = buckets.flatMap((b) => b.games);
   const finishedLive = ordered.some((g) => !g.testing && g.state === "finished");
+  // The spoiler wall is per game: friends' points today stay hidden on each live game the viewer
+  // hasn't finished. (A game with no puzzle today has no points to hide.)
+  const walled = ordered.filter((g) => !g.testing && g.state !== "finished" && g.state !== "unavailable");
 
   return {
     viewer: homeViewer(rows, finishedLive),
@@ -126,8 +173,8 @@ export function assembleHomeView(rows: HomeRows): HomeView {
     buckets,
     primary: primaryAction(ordered),
     presence: presenceLine(rows.presence),
-    billing: homeBilling(rows, buckets, finishedLive),
-    cast: castOf(rows.weekBoard),
+    billing: homeBilling(rows, buckets, walled, names),
+    cast: castOf(rows.weekBoard, names),
     welcome: rows.welcome
       ? { firstName: firstNameOf(profile.display_name), displayName: profile.display_name, username: profile.username }
       : null,
@@ -234,28 +281,47 @@ export function primaryAction(ordered: readonly HomeGame[]): HomePrimary | null 
 // Boards, billing, cast, presence
 // ---------------------------------------------------------------------------------------------
 
-function bucketLeader(board: readonly LeaderboardRow[] | undefined, viewerId: string): HomeBucket["leader"] {
+/**
+ * The bucket board's leader, named from the week board's names (a bucket board is a subset of it).
+ * A player missing from the week board (signed up between the two reads) is named by username.
+ */
+function bucketLeader(board: readonly LeaderboardRow[] | undefined, viewerId: string, names: ReadonlyMap<string, string>): HomeBucket["leader"] {
   const top = board?.find((r) => r.points > 0);
-  return top ? { firstName: firstNameOf(top.display_name), isViewer: top.user_id === viewerId } : null;
+  return top ? { firstName: names.get(top.user_id) ?? `@${top.username}`, isViewer: top.user_id === viewerId } : null;
 }
 
-function homeBilling({ weekBoard, profile }: HomeRows, buckets: readonly HomeBucket[], finishedLive: boolean): HomeBilling {
+function homeBilling(
+  { weekBoard, profile }: HomeRows,
+  buckets: readonly HomeBucket[],
+  walled: readonly HomeGame[],
+  names: ReadonlyMap<string, string>,
+): HomeBilling {
   return {
     week: weekBoard
       .filter((r) => r.points > 0)
-      .map((r) => ({ firstName: firstNameOf(r.display_name), points: r.points, rank: r.rank, isViewer: r.user_id === profile.id })),
+      .map((r) => ({
+        userId: r.user_id,
+        firstName: names.get(r.user_id) ?? `@${r.username}`,
+        points: r.points,
+        rank: r.rank,
+        isViewer: r.user_id === profile.id,
+      })),
     leaders: buckets.flatMap((b) => (b.leader ? [{ bucketName: b.name, firstName: b.leader.firstName, isViewer: b.leader.isViewer }] : [])),
-    todayWalled: !finishedLive,
+    todayWalled: walled.length > 0,
+    walledGames: walled.map((g) => g.name),
   };
 }
 
-/** Everyone with a finished live game this week (as the viewer may see it), alphabetical; none above `CAST_MAX`. */
-export function castOf(weekBoard: readonly LeaderboardRow[]): string[] {
-  const names = weekBoard
+/**
+ * Everyone with a finished live game this week (as the viewer may see it), by the home's names
+ * (`shortNames` of the same board), alphabetical; none above `CAST_MAX`.
+ */
+export function castOf(weekBoard: readonly LeaderboardRow[], names: ReadonlyMap<string, string> = shortNames(weekBoard)): string[] {
+  const cast = weekBoard
     .filter((r) => r.games_played > 0)
-    .map((r) => firstNameOf(r.display_name))
+    .map((r) => names.get(r.user_id) ?? `@${r.username}`)
     .sort((a, b) => a.localeCompare(b, "en"));
-  return names.length > CAST_MAX ? [] : names;
+  return cast.length > CAST_MAX ? [] : cast;
 }
 
 function presenceLine(items: readonly PresenceItem[]): PresenceLine | null {
@@ -278,7 +344,7 @@ export function selectPresence(
     /** Visible game id → name. Anything else is never mentioned. */
     gameNames: ReadonlyMap<string, string>;
     now: Date;
-    /** Player id → first name. */
+    /** Player id → the home's name for them (`shortNames`). */
     names: ReadonlyMap<string, string>;
   },
 ): PresenceItem[] {

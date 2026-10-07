@@ -34,8 +34,9 @@ export interface HomeView {
   presence: PresenceLine | null;
   billing: HomeBilling;
   /**
-   * First names for the opening's "present" card: everyone with a finished live game this week (as
-   * the viewer may see it), alphabetical, at most 8. Empty when more than 8 played (the card is left out).
+   * Names (see `firstName` below) for the opening's "present" card: everyone with a finished live
+   * game this week (as the viewer may see it), alphabetical, at most 8. Empty when more than 8
+   * played (the card is left out).
    */
   cast: readonly string[];
   /** Present on a first sign-in (`?welcome=1`). */
@@ -114,7 +115,11 @@ export interface HomeBucket {
   status: "open" | "in_production";
   /** Every visible game is testing (admin only). False for a bucket with no visible games. */
   testingOnly: boolean;
-  /** This week's leader on the bucket's live games (first row with points > 0); null if none or no live games. */
+  /**
+   * This week's leader on the bucket's live games (first row with points > 0); null if none or no
+   * live games. `firstName` here and on every other person but the viewer is what the home calls
+   * them: the first name, or "Sam O." / "@sam" when another player shares it (`shortNames`).
+   */
   leader: { firstName: string; isViewer: boolean } | null;
   /** Visible games, registry order. Empty when `status` is "in_production". */
   games: readonly HomeGame[];
@@ -199,18 +204,27 @@ export interface HomePrimary {
 /** "Marco is playing Number Hunt" / "Sam finished Number Hunt". Never the viewer, never a result. */
 export interface PresenceLine {
   kind: "playing" | "finished";
+  /** The first name, or "Sam O." / "@sam" when another player shares it. */
   firstName: string;
   gameName: string;
   gameHref: `/play/${string}`;
 }
 
 export interface HomeBilling {
-  /** This week's overall board (live games, spoiler-walled for today), points > 0 only, in rank order. */
-  week: readonly { firstName: string; points: number; rank: number; isViewer: boolean }[];
+  /**
+   * This week's overall board (live games, spoiler-walled for today), points > 0 only, in rank
+   * order. `firstName`: the first name, or "Sam O." / "@sam" when another player shares it.
+   */
+  week: readonly { userId: string; firstName: string; points: number; rank: number; isViewer: boolean }[];
   /** One per bucket with live games and a leader this week, in bucket order. */
   leaders: readonly { bucketName: string; firstName: string; isViewer: boolean }[];
-  /** The viewer has no finished live game today, so today's points are hidden from them. */
+  /** `walledGames` is not empty: some of today's points are hidden from the viewer. */
   todayWalled: boolean;
+  /**
+   * The wall is per game: the live games (with a puzzle today) the viewer hasn't finished, whose
+   * points from friends today are left out of `week` and the leaders. Names, page order.
+   */
+  walledGames: readonly string[];
 }
 
 export interface WelcomeNote {

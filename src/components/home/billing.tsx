@@ -1,17 +1,27 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import { Fragment, memo, type CSSProperties } from "react";
 import type { HomeBilling } from "@/core/home-view";
+import { walledNote } from "./format";
 import styles from "./chrome.module.css";
 
 /**
  * Below the fold (§5.9): this week, billed like a film. The top three STARRING, the rest "with …
- * and …", each bucket's leader, the full board. The viewer is billed in vermilion.
+ * and …", each bucket's leader, the full board. The viewer is billed in vermilion. Names are set
+ * apart by space and their points, as on a billing block: no commas.
  */
-export function Billing({ billing }: { billing: HomeBilling }) {
+export const Billing = memo(function Billing({ billing, liveGames, inert }: { billing: HomeBilling; liveGames: number; inert?: boolean }) {
   const stars = billing.week.slice(0, 3);
   const rest = billing.week.slice(3);
+  const walled = walledNote(billing.walledGames, liveGames);
   return (
-    <section className={styles.billing} aria-labelledby="home-billing" data-op="billing" data-comes-up="" style={{ "--i": 8 } as CSSProperties}>
+    <section
+      className={styles.billing}
+      aria-labelledby="home-billing"
+      data-op="billing"
+      data-comes-up=""
+      style={{ "--i": 8 } as CSSProperties}
+      inert={inert}
+    >
       <div className={styles.billKicker}>
         <h2 id="home-billing" className={styles.billLabel}>
           This week
@@ -26,7 +36,7 @@ export function Billing({ billing }: { billing: HomeBilling }) {
           </p>
           <ol className={styles.stars}>
             {stars.map((s) => (
-              <li key={`${s.rank}:${s.firstName}`} className={styles.star} data-you={s.isViewer ? "" : undefined}>
+              <li key={s.userId} className={styles.star} data-you={s.isViewer ? "" : undefined}>
                 <b>{s.firstName}</b>
                 <span>
                   {s.points} pts{s.isViewer ? " · you" : ""}
@@ -36,24 +46,26 @@ export function Billing({ billing }: { billing: HomeBilling }) {
           </ol>
           {rest.length > 0 && (
             <p className={styles.with}>
-              <i>with</i>{" "}
+              <i>with</i>
               {rest.map((s, i) => (
-                <span key={`${s.rank}:${s.firstName}`} className={styles.withName} data-you={s.isViewer ? "" : undefined}>
+                <Fragment key={s.userId}>
+                  {" "}
                   {i > 0 && i === rest.length - 1 && (
                     <>
                       <i>and</i>{" "}
                     </>
                   )}
-                  <b>{s.firstName}</b>
-                  <sup>{s.points}</sup>
-                  {i < rest.length - 2 ? ", " : " "}
-                </span>
+                  <span className={styles.withName} data-you={s.isViewer ? "" : undefined}>
+                    <b>{s.firstName}</b>
+                    <sup>{s.points}</sup>
+                  </span>
+                </Fragment>
               ))}
             </p>
           )}
         </>
       )}
-      {billing.todayWalled && <p className={styles.walled}>Today&apos;s points show once you finish a game.</p>}
+      {walled && <p className={styles.walled}>{walled}</p>}
       <div className={styles.leaders}>
         {billing.leaders.map((l) => (
           <span key={l.bucketName} className={styles.leader}>
@@ -66,4 +78,4 @@ export function Billing({ billing }: { billing: HomeBilling }) {
       </div>
     </section>
   );
-}
+});

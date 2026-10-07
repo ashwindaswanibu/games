@@ -14,6 +14,7 @@ import {
   homeDay,
   primaryAction,
   selectPresence,
+  shortNames,
   type HomePlayRow,
   type HomeRows,
   type PresenceItem,
@@ -336,16 +337,44 @@ describe("assembleHomeView: billing, leaders, cast", () => {
   it("lists this week's scorers only, in board order, marking the viewer", () => {
     const { billing } = assembleHomeView(rows({ weekBoard: week }));
     expect(billing.week).toEqual([
-      { firstName: "Priya", points: 240, rank: 1, isViewer: false },
-      { firstName: "Ashwin", points: 180, rank: 2, isViewer: true },
-      { firstName: "Marco", points: 60, rank: 3, isViewer: false },
+      { userId: "priya", firstName: "Priya", points: 240, rank: 1, isViewer: false },
+      { userId: "viewer", firstName: "Ashwin", points: 180, rank: 2, isViewer: true },
+      { userId: "marco", firstName: "Marco", points: 60, rank: 3, isViewer: false },
     ]);
   });
 
-  it("walls today's points until the viewer finishes a live game", () => {
-    expect(assembleHomeView(rows()).billing.todayWalled).toBe(true);
-    expect(assembleHomeView(rows({ plays: plays(finishedPlay("movies-test")) })).billing.todayWalled).toBe(true);
-    expect(assembleHomeView(rows({ plays: plays(finishedPlay("words-a")) })).billing.todayWalled).toBe(false);
+  it("walls today's points until the viewer finishes the live game", () => {
+    const games = [WORDS_A, MOVIES_TEST];
+    expect(assembleHomeView(rows({ games })).billing).toMatchObject({ todayWalled: true, walledGames: ["Game words-a"] });
+    // Testing games aren't on the boards, so finishing one changes nothing.
+    expect(assembleHomeView(rows({ games, plays: plays(finishedPlay("movies-test")) })).billing.todayWalled).toBe(true);
+    expect(assembleHomeView(rows({ games, plays: plays(finishedPlay("words-a")) })).billing).toMatchObject({ todayWalled: false, walledGames: [] });
+  });
+
+  it("walls each live game on its own: finishing one leaves the other's points hidden", () => {
+    const games = [WORDS_A, MOVIES_LIVE, MOVIES_TEST];
+    const view = (p: Map<string, HomePlayRow>) => assembleHomeView(rows({ games, plays: p, ready: ready("movies-test") })).billing;
+    // Bucket order: Words, then Movies.
+    expect(view(plays())).toMatchObject({ todayWalled: true, walledGames: ["Game words-a", "Game movies-live"] });
+    expect(view(plays(finishedPlay("words-a")))).toMatchObject({ todayWalled: true, walledGames: ["Game movies-live"] });
+    expect(view(plays(finishedPlay("words-a"), startedPlay("movies-live")))).toMatchObject({ walledGames: ["Game movies-live"] });
+    expect(view(plays(finishedPlay("words-a"), finishedPlay("movies-live")))).toMatchObject({ todayWalled: false, walledGames: [] });
+  });
+
+  it("doesn't wall a live game with no puzzle today (there are no points to hide)", () => {
+    const curated = fakeGame("curated-live", { bucket: "movies", curated: true });
+    const billing = assembleHomeView(rows({ games: [WORDS_A, curated], plays: plays(finishedPlay("words-a")) })).billing;
+    expect(billing).toMatchObject({ todayWalled: false, walledGames: [] });
+  });
+
+  it("keys the billing by player, so two players tied on points stay two", () => {
+    const tied = [boardRow("sam-o", "Sam Okafor", 300, 3, 1), boardRow("sam-l", "Sam Lee", 300, 3, 1)];
+    const { billing } = assembleHomeView(rows({ weekBoard: tied }));
+    expect(billing.week.map((s) => [s.userId, s.firstName, s.rank])).toEqual([
+      ["sam-o", "Sam O.", 1],
+      ["sam-l", "Sam L.", 1],
+    ]);
+    expect(new Set(billing.week.map((s) => s.userId)).size).toBe(2);
   });
 
   it("names each live bucket's leader (first row with points), in bucket order", () => {
@@ -353,7 +382,7 @@ describe("assembleHomeView: billing, leaders, cast", () => {
       ["movies", [boardRow("viewer", "Ashwin Daswani", 90, 1, 1), boardRow("priya", "Priya Shah", 10, 1, 2)]],
       ["words", [boardRow("priya", "Priya Shah", 150, 2, 1), boardRow("viewer", "Ashwin Daswani", 90, 2, 2)]],
     ]);
-    const view = assembleHomeView(rows({ bucketBoards }));
+    const view = assembleHomeView(rows({ bucketBoards, weekBoard: week }));
     expect(view.buckets.find((b) => b.id === "words")!.leader).toEqual({ firstName: "Priya", isViewer: false });
     expect(view.buckets.find((b) => b.id === "movies")!.leader).toEqual({ firstName: "Ashwin", isViewer: true });
     expect(view.buckets.find((b) => b.id === "geography")!.leader).toBeNull(); // no live games, no board
@@ -448,6 +477,71 @@ describe("selectPresence", () => {
   it("never carries a score, label or grid", () => {
     const [item] = select([done("sam", "words-a", 5)]);
     expect(Object.keys(item).sort()).toEqual(["at", "firstName", "gameId", "gameName", "kind", "playerId"]);
+  });
+});
+
+describe("shortNames", () => {
+  const named = (...list: [string, string][]) => shortNames(list.map(([username, display_name]) => ({ user_id: `id-${username}`, username, display_name })));
+
+  it("keeps a first name nobody else on the board shares", () => {
+    expect(named(["priya", "Priya Shah"], ["sam", "Sam Okafor"], ["dev", "Dev"])).toEqual(
+      new Map([
+        ["id-priya", "Priya"],
+        ["id-sam", "Sam"],
+        ["id-dev", "Dev"],
+      ]),
+    );
+  });
+
+  it("adds the last word's initial when a first name is shared", () => {
+    expect(named(["samo", "Sam Okafor"], ["saml", "Sam Lee"])).toEqual(
+      new Map([
+        ["id-samo", "Sam O."],
+        ["id-saml", "Sam L."],
+      ]),
+    );
+    // Ignoring case, as display names are compared.
+    expect(named(["samo", "Sam Okafor"], ["saml", "sam lee"])).toEqual(
+      new Map([
+        ["id-samo", "Sam O."],
+        ["id-saml", "sam l."],
+      ]),
+    );
+    expect(named(["a", "Zoë Park Ünal"], ["b", "Zoë Park"]).get("id-a")).toBe("Zoë Ü.");
+  });
+
+  it("falls back to @username when the initial can't tell them apart", () => {
+    expect(named(["sam", "Sam"], ["saml", "Sam Lee"])).toEqual(
+      new Map([
+        ["id-sam", "@sam"],
+        ["id-saml", "Sam L."],
+      ]),
+    );
+    expect(named(["samlee", "Sam Lee"], ["samlin", "Sam Lin"], ["samo", "Sam Okafor"])).toEqual(
+      new Map([
+        ["id-samlee", "@samlee"],
+        ["id-samlin", "@samlin"],
+        ["id-samo", "Sam O."],
+      ]),
+    );
+  });
+
+  it("names a newcomer who copies a friend's first name apart from the friend, everywhere on the home", () => {
+    const weekBoard = [boardRow("priya", "Priya Shah", 240, 3, 1), boardRow("impostor", "Priya X", 200, 3, 2)];
+    const bucketBoards = new Map<BucketId, LeaderboardRow[]>([["words", [boardRow("impostor", "Priya X", 200, 3, 1)]]]);
+    const view = assembleHomeView(rows({ weekBoard, bucketBoards }));
+    expect(view.billing.week.map((s) => s.firstName)).toEqual(["Priya S.", "Priya X."]);
+    expect(view.buckets.find((b) => b.id === "words")!.leader).toEqual({ firstName: "Priya X.", isViewer: false });
+    expect(view.billing.leaders).toEqual([{ bucketName: "Words", firstName: "Priya X.", isViewer: false }]);
+    expect(view.cast).toEqual(["Priya S.", "Priya X."]);
+  });
+
+  it("leaves the viewer's own first name alone (the strip, the welcome)", () => {
+    const weekBoard = [boardRow("viewer", "Zoë Park", 10, 1, 1), boardRow("zoe2", "Zoë Lin", 5, 1, 2)];
+    const view = assembleHomeView(rows({ weekBoard, welcome: true, profile: profile({ display_name: "Zoë Park", username: "zoe" }) }));
+    expect(view.viewer.firstName).toBe("Zoë");
+    expect(view.welcome?.firstName).toBe("Zoë");
+    expect(view.billing.week[0]).toMatchObject({ firstName: "Zoë P.", isViewer: true });
   });
 });
 
