@@ -100,9 +100,9 @@ describe("game registry", () => {
       expect(lostLabel(game)).toBe(`X/${form.count}`);
     });
 
-    it("writes a result line from marks alone, without throwing", () => {
+    it("writes a result line from an empty grid, without throwing", () => {
       for (const outcome of ["won", "lost"] as const) {
-        const line = game.home!.line({ outcome, label: "", marks: [], par: null });
+        const line = game.home!.line({ outcome, label: "", grid: "", marks: game.home!.marks?.("") ?? [], par: null });
         expect(line === null || (typeof line === "string" && line.length > 0)).toBe(true);
       }
     });

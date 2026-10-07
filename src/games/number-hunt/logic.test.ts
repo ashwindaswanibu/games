@@ -54,8 +54,9 @@ describe("number hunt on the home", () => {
     const outcome = numberHunt.outcome({ puzzle, solution, state });
     if (outcome === "in_progress") throw new Error("not finished");
     const { label } = numberHunt.score({ puzzle, solution, state, outcome, elapsedMs: 0 });
-    const marks = shareMarkRow(numberHunt.shareGrid({ puzzle, state, outcome }));
-    return { marks, line: numberHunt.home!.line({ outcome, label, marks, par: null }) };
+    const grid = numberHunt.shareGrid({ puzzle, state, outcome });
+    const marks = shareMarkRow(grid);
+    return { marks, line: numberHunt.home!.line({ outcome, label, grid, marks, par: null }) };
   };
 
   it("draws one slot per guess: a lost play fills all seven", () => {

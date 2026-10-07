@@ -37,9 +37,31 @@ describe("mark forms (spec §6.2)", () => {
     expect(buildMark(FTC, "finished", ["miss", "miss", "hit"], "t").w).toBeCloseTo(12.42);
   });
 
-  it("Fade to Color on the final pick: eleven marks, the pick a cut disc", () => {
-    const marks: ShareMarkKind[] = [...Array<ShareMarkKind>(10).fill("miss"), "near"];
-    expect(kinds(FTC, marks).at(-1)).toBe("earned");
+  it("Fade to Color, a pick when the reels ran out: ten frames, then the disc set apart", () => {
+    const right: ShareMarkKind[] = [...Array<ShareMarkKind>(9).fill("skip"), "miss", "pick"];
+    expect(kinds(FTC, right)).toEqual([...Array(9).fill("skip"), "spent", "earned"]);
+    expect(kinds(FTC, [...right.slice(0, 10), "mispick"]).at(-1)).toBe("spent");
+    expect(buildMark(FTC, "finished", right, "t").w).toBeCloseTo(13.64);
+  });
+
+  it("Fade to Color, stopped on reel 3: the pick a disc in that frame, which stayed unexposed; no disc apart", () => {
+    const m = buildMark(FTC, "finished", ["miss", "skip", "pick"], "t");
+    expect(kinds(FTC, ["miss", "skip", "pick"])).toEqual(["spent", "skip", "earned", "hair", "hair", "hair", "hair", "hair", "hair", "hair"]);
+    expect(m.slots[2]!.unused).toEqual(m.slots[2]!.keyline);
+    expect(m.w).toBeCloseTo(12.42);
+    // The disc sits inside its frame (frame 3 spans 2.52u–3.6u across, .14u–.86u down).
+    const xs = [...m.slots[2]!.piece!.shape.d.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((p) => [Number(p[1]) / 20, Number(p[2]) / 20]);
+    for (const [x, y] of xs) {
+      expect(x).toBeGreaterThan(2.52);
+      expect(x).toBeLessThan(3.6);
+      expect(y).toBeGreaterThan(0.14);
+      expect(y).toBeLessThan(0.86);
+    }
+    expect(kinds(FTC, ["mispick"])[0]).toBe("spent");
+  });
+
+  it("Fade to Color's empty form still offers the disc apart", () => {
+    expect(buildMark(FTC, "not_started", null, "t").slots).toHaveLength(11);
   });
 
   it("Frame by Frame X/6: printed and skipped frames", () => {

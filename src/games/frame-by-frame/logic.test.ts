@@ -210,7 +210,7 @@ describe("frame-by-frame on the home", () => {
     if (o === "in_progress") throw new Error("not finished");
     const { label, grid } = finish(state);
     const marks = shareMarkRow(grid);
-    return { marks, line: home.line({ outcome: o, label, marks, par: null }) };
+    return { marks, line: home.line({ outcome: o, label, grid, marks, par: null }) };
   };
 
   it("draws one 4:3 frame per frame of the film: a lost play uses all of them", () => {

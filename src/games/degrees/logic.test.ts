@@ -234,7 +234,7 @@ describe("degrees on the home", () => {
   const home = degrees.home!;
   const lineFor = (state: DegreesState, outcome: FinishedOutcome, par: number | null = puzzle.par) => {
     const { score, share } = finish(state, outcome);
-    return home.line({ outcome, label: score.label, marks: shareMarkRow(share), par });
+    return home.line({ outcome, label: score.label, grid: share, marks: shareMarkRow(share), par });
   };
 
   it("draws a chain whose par the server fills in from today's puzzle", () => {

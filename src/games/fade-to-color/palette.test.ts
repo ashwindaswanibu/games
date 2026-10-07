@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accentOf, litBands, luminance, oklchToRgb, rgbToOklch, type Rgb } from "./palette";
+import { accentOf, gradeRgb, litBands, luminance, oklchToRgb, rgbToOklch, type Rgb } from "./palette";
 
 /** RGBA pixels, one per colour, in order. */
 function pixels(...colors: Rgb[]): Uint8ClampedArray {
@@ -80,5 +80,34 @@ describe("litBands", () => {
     const [a, b] = litBands(pixels(dark, bright), 2, 1);
     expect(rgbToOklch(a).l).toBeGreaterThan(0.6);
     expect(rgbToOklch(b).l).toBeGreaterThan(rgbToOklch(a).l);
+  });
+});
+
+describe("gradeRgb", () => {
+  it("leaves mid grey alone", () => {
+    expect(gradeRgb([128, 128, 128])).toEqual([128, 128, 128]);
+  });
+
+  it("is the identity at contrast 1, saturate 1", () => {
+    expect(gradeRgb([200, 120, 40], { contrast: 1, saturate: 1 })).toEqual([200, 120, 40]);
+  });
+
+  it("pushes lights lighter and darks darker", () => {
+    expect(gradeRgb([200, 200, 200])[0]).toBeGreaterThan(200);
+    expect(gradeRgb([60, 60, 60])[0]).toBeLessThan(60);
+  });
+
+  it("makes a colour more colourful without changing its hue much", () => {
+    const warm: Rgb = [200, 150, 110];
+    const graded = gradeRgb(warm);
+    expect(rgbToOklch(graded).c).toBeGreaterThan(rgbToOklch(warm).c);
+    expect(hueDistance(rgbToOklch(graded).h, rgbToOklch(warm).h)).toBeLessThan(0.15);
+  });
+
+  it("stays in range", () => {
+    for (const v of gradeRgb([255, 0, 255])) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(255);
+    }
   });
 });

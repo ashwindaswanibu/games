@@ -2,8 +2,12 @@
  * Database types in the shape `supabase gen types typescript` emits, verified against the
  * generated output. Deliberately tighter where the generator can't infer: `plays.status` and
  * `puzzle_assets.mime` are the CHECK-constrained unions; `leaderboard().avg_score`,
- * `search_films().year` and `search_people().known_for` are nullable; generated `search_key`
- * columns are never null (the title/name they derive from is NOT NULL).
+ * `search_films().year`, `search_films().aka` and `search_people().known_for` are nullable;
+ * `movie_film_titles.kind` is its CHECK-constrained union; generated `search_key`, `compact_key`
+ * and `fame` columns are never null (the values they derive from are NOT NULL), while
+ * `movie_film_titles.number_key` is null unless a name has sequel numbering;
+ * `catalog_match_class()` returns null for no match;
+ * `replace_unplayed_puzzle()` returns one of its four outcomes.
  * After a migration, run `npm run db:types` and diff against this file.
  */
 
@@ -178,6 +182,8 @@ export type Database = {
           genres: string[];
           directors: string[];
           popularity: number;
+          imdb_votes: number | null;
+          fame: number;
           tmdb_id: number | null;
           imdb_id: string | null;
           wikidata_id: string | null;
@@ -190,6 +196,8 @@ export type Database = {
           genres?: string[];
           directors?: string[];
           popularity?: number;
+          imdb_votes?: number | null;
+          fame?: never;
           tmdb_id?: number | null;
           imdb_id?: string | null;
           wikidata_id?: string | null;
@@ -202,6 +210,8 @@ export type Database = {
           genres?: string[];
           directors?: string[];
           popularity?: number;
+          imdb_votes?: number | null;
+          fame?: never;
           tmdb_id?: number | null;
           imdb_id?: string | null;
           wikidata_id?: string | null;
@@ -209,27 +219,77 @@ export type Database = {
         };
         Relationships: [];
       };
+      movie_film_titles: {
+        Row: {
+          film_id: number;
+          title: string;
+          kind: MovieFilmTitleKind;
+          fame: number;
+          search_key: string;
+          compact_key: string;
+          number_key: string | null;
+        };
+        Insert: {
+          film_id: number;
+          title: string;
+          kind: MovieFilmTitleKind;
+          fame?: number;
+          search_key?: never;
+          compact_key?: never;
+          number_key?: never;
+        };
+        Update: {
+          film_id?: number;
+          title?: string;
+          kind?: MovieFilmTitleKind;
+          fame?: number;
+          search_key?: never;
+          compact_key?: never;
+          number_key?: never;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "movie_film_titles_film_id_fkey";
+            columns: ["film_id"];
+            isOneToOne: false;
+            referencedRelation: "movie_films";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       movie_people: {
         Row: {
           id: number;
           name: string;
           popularity: number;
           wikidata_id: string | null;
+          imdb_id: string | null;
+          is_actor: boolean;
+          is_human: boolean | null;
           search_key: string;
+          compact_key: string;
         };
         Insert: {
           id?: number;
           name: string;
           popularity?: number;
           wikidata_id?: string | null;
+          imdb_id?: string | null;
+          is_actor?: boolean;
+          is_human?: boolean | null;
           search_key?: never;
+          compact_key?: never;
         };
         Update: {
           id?: number;
           name?: string;
           popularity?: number;
           wikidata_id?: string | null;
+          imdb_id?: string | null;
+          is_actor?: boolean;
+          is_human?: boolean | null;
           search_key?: never;
+          compact_key?: never;
         };
         Relationships: [];
       };
@@ -308,14 +368,23 @@ export type Database = {
         Args: { value: string };
         Returns: string;
       };
+      catalog_number_key: {
+        Args: { key: string };
+        Returns: string;
+      };
+      catalog_match_class: {
+        Args: { name_key: string; query_key: string };
+        Returns: number | null;
+      };
       search_films: {
-        Args: { p_query: string; p_limit?: number };
+        Args: { p_query: string; p_limit?: number; p_person?: number };
         Returns: {
           id: number;
           title: string;
           year: number | null;
           directors: string[];
-          popularity: number;
+          fame: number;
+          aka: string | null;
         }[];
       };
       search_people: {
@@ -326,6 +395,10 @@ export type Database = {
           popularity: number;
           known_for: string | null;
         }[];
+      };
+      replace_unplayed_puzzle: {
+        Args: { p_game_id: string; p_date: string; p_expected_payload: Json; p_payload: Json; p_solution: Json };
+        Returns: ReplaceUnplayedPuzzleOutcome;
       };
       orphan_auth_user_for_email: {
         Args: { p_email: string };
@@ -366,3 +439,10 @@ export type PuzzleAssetRow = Database["public"]["Tables"]["puzzle_assets"]["Row"
 export type MovieFilmRow = Database["public"]["Tables"]["movie_films"]["Row"];
 export type MoviePersonRow = Database["public"]["Tables"]["movie_people"]["Row"];
 export type MovieCreditRow = Database["public"]["Tables"]["movie_credits"]["Row"];
+export type MovieFilmTitleRow = Database["public"]["Tables"]["movie_film_titles"]["Row"];
+
+/** `movie_film_titles.kind`: the display title, IMDb's titles, Wikidata/Wikipedia names, or a former display title. */
+export type MovieFilmTitleKind = "display" | "original" | "alias" | "former";
+
+/** `replace_unplayed_puzzle()`: done, or why not (no puzzle; someone has played it; rewritten since it was read). */
+export type ReplaceUnplayedPuzzleOutcome = "replaced" | "missing" | "played" | "changed";

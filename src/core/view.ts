@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import type { PuzzleDate } from "./day";
-import type { AnyGame, MoveOf, Outcome, PuzzleOf, RevealOf, StateOf } from "./game";
+import type { AnyGame, FriendDetail, MoveOf, Outcome, PuzzleOf, RevealOf, StateOf } from "./game";
 
 /** Everything the browser receives about one player's play of one puzzle. */
 export interface PlayView<Puzzle = unknown, State = unknown, Reveal = unknown> {
@@ -47,6 +47,8 @@ export interface FriendResult {
   score: number | null;
   label: string | null;
   shareGrid: string | null;
+  /** What the game shares of a finished play (its `friendDetail`); absent until the play is finished, and for games without one. */
+  detail?: FriendDetail;
 }
 
 /**

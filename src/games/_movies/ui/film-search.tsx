@@ -12,8 +12,8 @@ export interface FilmSearchProps extends CatalogSearchProps<FilmSearchHit> {
 
 /**
  * Film autocomplete over `/api/catalog/films`. Hits show year and director so remakes and
- * namesakes can be told apart. Pass guessed film ids as `excludeIds`. With `withPerson`, it searches
- * only that person's filmography.
+ * namesakes can be told apart, and the other title they matched by ("also: K3G"). Pass guessed
+ * film ids as `excludeIds`. With `withPerson`, it searches only that person's filmography.
  *
  *   <FilmSearch label="Name the film" onSelect={(film) => submitMove({ type: "guess", filmId: film.id })} />
  */
@@ -29,6 +29,7 @@ export function FilmSearch({ placeholder = "Search films", withPerson, ...props 
       describe={(film) => ({
         primary: film.title,
         secondary: [film.year, film.directors.join(" & ")].filter(Boolean).join(" · ") || null,
+        note: film.aka ? `also: ${film.aka}` : null,
       })}
     />
   );

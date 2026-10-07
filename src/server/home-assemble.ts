@@ -246,12 +246,12 @@ function homeResult(game: AnyGame, play: HomePlayRow, par: number | null): HomeR
   if (status === "in_progress" || score === null || label === null || grid === null || finishedAt === null) {
     throw new Error(`Finished ${game.id} play is missing its score, label, grid or finish time`);
   }
-  const marks = shareMarkRow(grid);
+  const marks = game.home?.marks?.(grid) ?? shareMarkRow(grid);
   return {
     outcome: status,
     score,
     label,
-    line: game.home?.line({ outcome: status, label, marks, par }) ?? null,
+    line: game.home?.line({ outcome: status, label, grid, marks, par }) ?? null,
     marks,
     finishedAt: iso(finishedAt),
   };

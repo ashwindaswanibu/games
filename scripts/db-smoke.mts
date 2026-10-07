@@ -3,8 +3,8 @@
  * username emails (including renames, which move the sign-in email), the lock-down of the public
  * API roles, what Supabase Auth's public sign-up can and can't do, the password-change guard,
  * display-name rules, puzzle upsert semantics, optimistic concurrency on plays, check constraints,
- * the leaderboard/streak functions (with the spoiler wall), puzzle assets, and the movie catalog
- * search.
+ * the leaderboard/streak functions (with the spoiler wall), puzzle assets, the movie catalog
+ * search, and rewriting a puzzle nobody has played (`replace_unplayed_puzzle`).
  *
  * Runs against a live Supabase (local by default) and cleans up after itself.
  *   npm run db:start && npm run test:db
@@ -227,12 +227,40 @@ async function main() {
   await profileChecks(alice);
   await assetChecks(alice.client);
   await catalogChecks(alice.client);
+  await replacePuzzleChecks(alice);
+}
+
+// --- Rewriting a puzzle nobody has played (degrees --repar-unplayed) ---------------------------
+async function replacePuzzleChecks(alice: Player) {
+  const date = (n: number) => `2001-03-${String(n).padStart(2, "0")}`;
+  await admin.from("puzzles").insert([
+    { game_id: GAME, puzzle_date: date(1), payload: { par: 3 }, solution: { path: 3 } },
+    { game_id: GAME, puzzle_date: date(2), payload: { par: 3 }, solution: { path: 3 } },
+  ]);
+  await admin.from("plays").insert({ user_id: alice.id, game_id: GAME, puzzle_date: date(2), state: {} });
+  const replace = (n: number, expected: object) =>
+    admin.rpc("replace_unplayed_puzzle", { p_game_id: GAME, p_date: date(n), p_expected_payload: expected, p_payload: { par: 2 }, p_solution: { path: 2 } });
+  const stale = await replace(1, { par: 4 });
+  check("replace_unplayed_puzzle refuses when the payload changed since it was read", stale.data === "changed", stale);
+  const done = await replace(1, { par: 3 });
+  const { data: row } = await admin.from("puzzles").select("payload, solution").eq("game_id", GAME).eq("puzzle_date", date(1)).single();
+  check(
+    "replace_unplayed_puzzle rewrites an unplayed puzzle in place",
+    done.data === "replaced" && (row?.payload as { par: number }).par === 2 && (row?.solution as { path: number }).path === 2,
+    { done, row },
+  );
+  const played = await replace(2, { par: 3 });
+  const { data: kept } = await admin.from("puzzles").select("payload").eq("game_id", GAME).eq("puzzle_date", date(2)).single();
+  check("replace_unplayed_puzzle never touches a played puzzle", played.data === "played" && (kept?.payload as { par: number }).par === 3, { played, kept });
+  check("replace_unplayed_puzzle reports a missing day", (await replace(9, { par: 3 })).data === "missing");
+  const { error: denied } = await alice.client.rpc("replace_unplayed_puzzle", { p_game_id: GAME, p_date: date(1), p_expected_payload: { par: 2 }, p_payload: {}, p_solution: {} });
+  check("players cannot call replace_unplayed_puzzle() directly", Boolean(denied));
 }
 
 // --- Public roles: the publishable key and a user session reach nothing in `public` -----------
 async function lockdownChecks(alice: Player) {
   const anon = createClient(url, publishableKey, opts);
-  const tables = ["profiles", "plays", "puzzles", "puzzle_assets", "movie_films", "movie_people", "movie_credits", "rate_limits", "password_change_grants"];
+  const tables = ["profiles", "plays", "puzzles", "puzzle_assets", "movie_films", "movie_people", "movie_credits", "movie_film_titles", "rate_limits", "password_change_grants"];
   for (const table of tables) {
     const { error: userRead } = await alice.client.from(table).select("*").limit(1);
     const { error: anonRead } = await anon.from(table).select("*").limit(1);
@@ -427,7 +455,7 @@ async function catalogChecks(player: SupabaseClient) {
   // A token no real title contains, so the catalog's own rows can't disturb the ranking checks.
   const W = `smk${tag}q`;
   const films = [
-    { title: W, year: 2001, popularity: 1 },
+    { title: W, year: 2001, popularity: 30 },
     { title: `${W} Returns`, year: 2003, popularity: 90 },
     { title: `The ${W} Story`, year: 1999, popularity: 50 },
     { title: `Amélie and the ${W}`, year: 2001, popularity: 5 },
@@ -447,7 +475,7 @@ async function catalogChecks(player: SupabaseClient) {
   };
   const ranked = await search(W);
   check(
-    "film search ranks exact, then prefix/word-prefix by popularity, then substring",
+    "film search ranks an exact title first, then prefix/word-prefix matches by fame",
     JSON.stringify(ranked) === JSON.stringify([W, `${W} Returns`, `The ${W} Story`, `Amélie and the ${W}`, `Cinematography of ${W}`]),
     ranked,
   );
@@ -466,6 +494,139 @@ async function catalogChecks(player: SupabaseClient) {
   const hit = (people as { name: string; known_for: string | null }[] | null)?.[0];
   check("people search finds a person with their best-known film", hit?.name === `Ana ${W}` && hit.known_for === `${W} Returns`, people);
 
+  // People rank by their films' votes (billing-weighted), not Wikipedia editions: an exact name
+  // leads unless a name that starts with it as a whole word has ten times the fame.
+  const { data: namesakes } = await admin
+    .from("movie_people")
+    .insert([
+      { name: `Dee${tag}`, popularity: 0 },
+      { name: `Dee${tag} Padu`, popularity: 89 },
+      { name: `Shah${tag} Rukh`, popularity: 50 },
+      { name: `Salx${tag} Khan`, popularity: 104 },
+      { name: `Salx${tag} Rushdie`, popularity: 129 },
+    ])
+    .select("id, name");
+  personIds.push(...(namesakes ?? []).map((p) => p.id));
+  const personId = (name: string) => namesakes?.find((p) => p.name === name)?.id;
+  const { data: castFilms } = await admin
+    .from("movie_films")
+    .insert([
+      { title: `Big Hit ${tag}`, imdb_votes: 1_000_000 },
+      { title: `Small Hit ${tag}`, imdb_votes: 1_000 },
+      { title: `Cameo Hit ${tag}`, imdb_votes: 300_000 },
+    ])
+    .select("id, title");
+  filmIds.push(...(castFilms ?? []).map((f) => f.id));
+  const castFilm = (title: string) => castFilms?.find((f) => f.title === title)?.id;
+  const { error: namesakeCreditError } = await admin.from("movie_credits").insert([
+    { film_id: castFilm(`Big Hit ${tag}`)!, person_id: personId(`Dee${tag} Padu`)!, billing: 0 },
+    { film_id: castFilm(`Small Hit ${tag}`)!, person_id: personId(`Dee${tag}`)!, billing: 0 },
+    { film_id: castFilm(`Big Hit ${tag}`)!, person_id: personId(`Salx${tag} Khan`)!, billing: 1 },
+    { film_id: castFilm(`Cameo Hit ${tag}`)!, person_id: personId(`Salx${tag} Rushdie`)!, billing: 12 },
+  ]);
+  check("server can credit the namesakes", !namesakeCreditError, namesakeCreditError);
+  const searchPeople = async (q: string) => {
+    const { data, error } = await admin.rpc("search_people", { p_query: q, p_limit: 5 });
+    if (error) throw new Error(`search_people failed: ${error.message}`);
+    return (data as { name: string }[]).map((p) => p.name);
+  };
+  const dee = await searchPeople(`dee${tag}`);
+  check("people search ranks a far better-known name above an exact one", dee[0] === `Dee${tag} Padu` && dee[1] === `Dee${tag}`, dee);
+  check("people search ignores spaces", (await searchPeople(`shah${tag}rukh`))[0] === `Shah${tag} Rukh`);
+  const salx = await searchPeople(`salx${tag}`);
+  check(
+    "people rank by the films they're billed in, not Wikipedia editions",
+    salx[0] === `Salx${tag} Khan` && salx[1] === `Salx${tag} Rushdie`,
+    salx,
+  );
+
+  // Every name a film is known by is searchable; fame (IMDb votes, else Wikipedia editions) ranks.
+  const { error: aliasError } = await admin.from("movie_film_titles").insert([
+    { film_id: idOf(`${W} Returns`)!, title: `Zq${tag} Rises`, kind: "alias" },
+    { film_id: idOf(W)!, title: `Zq${tag} Rises Again`, kind: "original" },
+  ]);
+  check("server can add searchable names", !aliasError, aliasError);
+  const searchHits = async (q: string, extra: Record<string, unknown> = {}) => {
+    const { data, error } = await admin.rpc("search_films", { p_query: q, p_limit: 10, ...extra });
+    if (error) throw new Error(`search_films failed: ${error.message}`);
+    return data as { id: number; title: string; fame: number; aka: string | null }[];
+  };
+  const byAlias = await searchHits(`zq${tag} rises`);
+  check(
+    "a film is found by another name, which comes back as aka",
+    byAlias[0]?.title === `${W} Returns` && byAlias[0].aka === `Zq${tag} Rises` && byAlias[1]?.title === W && byAlias[1].aka === `Zq${tag} Rises Again`,
+    byAlias,
+  );
+  check("…and a match on the display title has no aka", (await searchHits(W))[0]?.aka === null);
+  const { data: fameRow } = await admin.from("movie_films").select("fame").eq("id", idOf(`${W} Returns`)!).single();
+  const { data: titleFame } = await admin.from("movie_film_titles").select("fame").eq("film_id", idOf(`${W} Returns`)!);
+  check(
+    "fame is derived from popularity when IMDb has no votes, and copied onto every name",
+    Math.abs((fameRow?.fame ?? 0) - Math.log(1 + 90 * 437)) < 1e-3 && (titleFame ?? []).length === 2 && titleFame!.every((t) => t.fame === fameRow?.fame),
+    { fameRow, titleFame },
+  );
+  await admin.from("movie_films").update({ imdb_votes: 5_000_000 }).in("id", [idOf(`${W} Returns`)!, idOf(`Cinematography of ${W}`)!]);
+  const reranked = (await searchHits(W)).map((r) => r.title);
+  // An exact title keeps the lead over a name that starts with the query unless that one has ten
+  // times the votes; a name in which only a later word starts with it never leads an exact title.
+  check(
+    "IMDb votes outrank Wikipedia editions; a far better-known name starting with the query outranks an exact title, a later-word match never does",
+    reranked[0] === `${W} Returns` && reranked[1] === W && reranked[2] === `Cinematography of ${W}`,
+    reranked,
+  );
+
+  // Spaces don't matter ("xmen" → X-Men), and a film's own title beats another film's alias.
+  const more = [
+    { title: `Q${tag}-Men`, year: 2000, popularity: 40 },
+    { title: `Bench${tag}`, year: 2014, popularity: 5 },
+    { title: `Bench${tag} - State Vs A Nobody`, year: 2025, popularity: 20 },
+  ];
+  const { data: moreRows } = await admin.from("movie_films").insert(more).select("id, title");
+  filmIds.push(...(moreRows ?? []).map((f) => f.id));
+  const moreId = (title: string) => moreRows?.find((f) => f.title === title)?.id;
+  check("a title is found without its spaces or punctuation", (await searchHits(`q${tag}men`))[0]?.title === `Q${tag}-Men`);
+  check("…also as the start of a name", (await searchHits(`q${tag}m`))[0]?.title === `Q${tag}-Men`);
+  await admin.from("movie_film_titles").insert({ film_id: moreId(`Bench${tag} - State Vs A Nobody`)!, title: `Bench${tag}`, kind: "alias" });
+  const bench = await searchHits(`bench${tag}`);
+  check(
+    "an exact display title beats another film's exact alias",
+    bench[0]?.title === `Bench${tag}` && bench[1]?.title === `Bench${tag} - State Vs A Nobody` && bench[1].aka === `Bench${tag}`,
+    bench,
+  );
+  await admin.from("movie_films").update({ imdb_votes: 1_000_000 }).eq("id", moreId(`Bench${tag} - State Vs A Nobody`)!);
+  check("…unless that film has ten times the votes", (await searchHits(`bench${tag}`))[0]?.title === `Bench${tag} - State Vs A Nobody`);
+
+  // Whole words, leading articles, partial later words and sequel numbers.
+  const third = [
+    { title: `Strx${tag}`, imdb_votes: 50_000 },
+    { title: `Strx${tag} 2`, imdb_votes: 45_000 },
+    { title: `Strx${tag}et Kings`, imdb_votes: 100_000 },
+    { title: `The Wolf of Wall Strx${tag}et`, imdb_votes: 2_000_000 },
+    { title: `Drk${tag}`, imdb_votes: 5_000 },
+    { title: `The Drk${tag} Knight`, imdb_votes: 2_500_000 },
+    { title: `The Gfr${tag}`, imdb_votes: 2_200_000 },
+    { title: `The Gfr${tag} Part II`, imdb_votes: 1_500_000 },
+  ];
+  const { data: thirdRows } = await admin.from("movie_films").insert(third).select("id, title");
+  filmIds.push(...(thirdRows ?? []).map((f) => f.id));
+  // (Typo matches for the random tag may follow; they always sort last.)
+  const strx = (await searchHits(`strx${tag}`)).map((r) => r.title).slice(0, 4);
+  check(
+    "a whole-word start outranks a mid-word start with under three times the votes; a partial later word comes after every start",
+    JSON.stringify(strx) === JSON.stringify([`Strx${tag}`, `Strx${tag} 2`, `Strx${tag}et Kings`, `The Wolf of Wall Strx${tag}et`]),
+    strx,
+  );
+  check("a match right after a leading article starts the name", (await searchHits(`drk${tag}`))[0]?.title === `The Drk${tag} Knight`);
+  check("a sequel number finds the sequel (2 = Part II)", (await searchHits(`gfr${tag} 2`))[0]?.title === `The Gfr${tag} Part II`);
+  check("…written either way", (await searchHits(`gfr${tag} part 2`))[0]?.title === `The Gfr${tag} Part II`);
+  const { data: renamed } = await admin.from("movie_films").update({ title: `${W} Forever` }).eq("id", idOf(`The ${W} Story`)!).select("id");
+  const formerHits = await searchHits(`the ${W} story`);
+  check(
+    "a retitled film keeps its old title searchable",
+    renamed?.length === 1 && formerHits[0]?.title === `${W} Forever` && formerHits[0].aka === `The ${W} Story`,
+    formerHits,
+  );
+
   const { error: dupCredit } = await admin.from("movie_credits").insert({ film_id: idOf(W)!, person_id: person!.id });
   check("a person is credited once per film (23505)", dupCredit?.code === "23505", dupCredit);
   const { error: badWikidata } = await admin.from("movie_films").insert({ title: `Bad ${W}`, wikidata_id: "X12" });
@@ -483,6 +644,23 @@ async function catalogChecks(player: SupabaseClient) {
   check("players cannot write the catalog", Boolean(playerCredits));
   const { error: rpcDenied } = await player.rpc("search_films", { p_query: W });
   check("players cannot call search_films() directly", Boolean(rpcDenied));
+  const { error: titlesDenied } = await player.from("movie_film_titles").select("film_id").limit(1);
+  check("players cannot read movie_film_titles", Boolean(titlesDenied), titlesDenied);
+
+  // A person's filmography: the same search, limited to their credits.
+  const filmography = (await searchHits(`zq${tag} rises`, { p_person: person!.id })).map((r) => r.title);
+  check("film search can be limited to one person's films", JSON.stringify(filmography) === JSON.stringify([`${W} Returns`, W]), filmography);
+  const notTheirs = await searchHits(`cinematography of ${W}`, { p_person: person!.id });
+  check("…and leaves out films they aren't in", notTheirs.length === 0, notTheirs);
+  check("…ignoring spaces there too", (await searchHits(`${W}returns`, { p_person: person!.id }))[0]?.title === `${W} Returns`);
+
+  // Catalog ids never change: stored puzzles and plays reference them.
+  const { error: filmIdChange } = await admin.from("movie_films").update({ id: 2_000_000_000 }).eq("id", idOf(W)!);
+  check("a film's id can't change (23000)", filmIdChange?.code === "23000", filmIdChange);
+  const { error: personIdChange } = await admin.from("movie_people").update({ id: 2_000_000_000 }).eq("id", person!.id);
+  check("a person's id can't change (23000)", personIdChange?.code === "23000", personIdChange);
+  const { error: badImdbPerson } = await admin.from("movie_people").update({ imdb_id: "tt0000001" }).eq("id", person!.id);
+  check("people's IMDb ids are validated (23514)", badImdbPerson?.code === "23514", badImdbPerson);
 
   // Rate limits: a fixed-window counter per key, server-only.
   const limitKey = `smoke:${W}`;

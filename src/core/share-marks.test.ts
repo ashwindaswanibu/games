@@ -94,22 +94,24 @@ describe("shareMarks on real share grids", () => {
       expect(shareMarks(grid)).toEqual([["miss", "skip", "hit"]]);
     });
 
-    it("named on the final pick: ten reels, then 🟨 as the eleventh mark (near)", () => {
-      const grid = play([...skips(LEVEL_COUNT - 1), guess(HEAT), { type: "pick", filmId: COLLATERAL.id }]);
-      const row = shareMarkRow(grid);
-      expect(row).toHaveLength(LEVEL_COUNT + 1);
-      expect(row.at(-1)).toBe("near");
-      expect(row.slice(0, LEVEL_COUNT)).toEqual([...Array(LEVEL_COUNT - 1).fill("skip"), "miss"]);
+    it("stopped on reel 3 and picked it: the reels used, then the pick", () => {
+      const grid = play([guess(HEAT), skip, { type: "stop" }, { type: "pick", filmId: COLLATERAL.id }]);
+      expect(grid).toBe("🟥⬛🟡");
+      expect(shareMarkRow(grid)).toEqual(["miss", "skip", "pick"]);
     });
 
-    it("missed the final pick: eleven marks ending in a miss", () => {
+    it("a wrong pick when the reels ran out: ten reels, then the wrong pick", () => {
       const grid = play([guess(HEAT), ...skips(LEVEL_COUNT - 2), guess(THIEF), { type: "pick", filmId: DRIVE.id }]);
-      expect(shareMarkRow(grid)).toEqual(["miss", ...Array(LEVEL_COUNT - 2).fill("skip"), "miss", "miss"]);
+      expect(shareMarkRow(grid)).toEqual(["miss", ...Array(LEVEL_COUNT - 2).fill("skip"), "miss", "mispick"]);
     });
 
-    it("gave up on reel 10: ten marks, no pick", () => {
-      const grid = play(skips(LEVEL_COUNT));
-      expect(shareMarkRow(grid)).toEqual(Array(LEVEL_COUNT).fill("skip"));
+    it("reads every grid the game writes now as the game reads it for the home", () => {
+      const grids = [
+        play([guess(HEAT), skip, guess(COLLATERAL)]),
+        play([{ type: "stop" }, { type: "pick", filmId: THIEF.id }]),
+        play([...skips(LEVEL_COUNT - 1), guess(HEAT), { type: "pick", filmId: COLLATERAL.id }]),
+      ];
+      for (const grid of grids) expect(shareMarkRow(grid)).toEqual(fadeToColor.home!.marks!(grid));
     });
   });
 });
@@ -130,8 +132,8 @@ describe("shareMarks parsing", () => {
   });
 
   it("accepts emoji with or without the variation selector", () => {
-    expect(shareMarks("⬆⬆️⬇⬇️🎞🎞️🏳🏳️⭐⭐️✅✅️⬛⬛️⬜⬜️")).toEqual([
-      ["up", "up", "down", "down", "link", "link", "flag", "flag", "win", "win", "hit", "hit", "skip", "skip", "unused", "unused"],
+    expect(shareMarks("⬆⬆️⬇⬇️🎞🎞️🏳🏳️⭐⭐️✅✅️⬛⬛️⬜⬜️⚫⚫️")).toEqual([
+      ["up", "up", "down", "down", "link", "link", "flag", "flag", "win", "win", "hit", "hit", "skip", "skip", "unused", "unused", "mispick", "mispick"],
     ]);
   });
 

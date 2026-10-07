@@ -15,16 +15,72 @@ import type { EncodedImage } from "../../lib/images.mjs";
 
 export { contentDb, type ContentDb };
 
+/** What a pipeline run may do to its database: everything, or only read. */
+export type DatabaseAccess = "read-write" | "read-only";
+
 /**
- * The service-role client, after refusing a non-local database unless `allowRemote` was passed.
- * Pipeline scripts write curated content; pointing one at production must be a deliberate act.
+ * The access a run gets, or null to refuse it. A local Supabase is read-write. Anything else (the
+ * hosted database) needs a flag: `--allow-remote` to write (the owner's call), or
+ * `--allow-remote-read` for a run that only reads (a catalog build, a dry run, a check). Pure.
  */
-export function pipelineDb({ allowRemote }: { allowRemote: boolean }): ContentDb {
+export function databaseAccess(local: boolean, flags: { allowRemote: boolean; allowRemoteRead?: boolean }): DatabaseAccess | null {
+  if (local || flags.allowRemote) return "read-write";
+  return flags.allowRemoteRead ? "read-only" : null;
+}
+
+/** Raised by a read-only client (`--allow-remote-read`) on any attempt to write. */
+export class ReadOnlyDatabaseError extends Error {
+  override name = "ReadOnlyDatabaseError";
+}
+
+const WRITES = new Set(["insert", "upsert", "update", "delete"]);
+/** Client members that could write or reach past the tables' query builders. */
+const REFUSED = new Set(["rpc", "schema", "storage", "functions", "channel", "realtime"]);
+
+/**
+ * `client`, but every write is refused before a request is made: `from(table)` gives a query builder
+ * whose insert/upsert/update/delete throw `ReadOnlyDatabaseError`, and `rpc()` (a function may
+ * write), `schema()`, storage, functions and realtime throw too. Reads (`select` and its filters)
+ * pass through unchanged.
+ */
+export function readOnlyDb(client: ContentDb, host: string): ContentDb {
+  const refuse = (what: string): never => {
+    throw new ReadOnlyDatabaseError(`Refusing to ${what} on ${host}: this run may only read it (--allow-remote-read). Writing needs --allow-remote (owner only).`);
+  };
+  const readOnlyTable = (builder: object, table: string): unknown =>
+    new Proxy(builder, {
+      get(target, prop, receiver) {
+        if (typeof prop === "string" && WRITES.has(prop)) return () => refuse(`${prop} ${table}`);
+        const value: unknown = Reflect.get(target, prop, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === "from") return (table: string) => readOnlyTable(target.from(table as never), table);
+      if (typeof prop === "string" && REFUSED.has(prop)) return () => refuse(prop === "rpc" ? "call a database function" : `use ${prop}`);
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+/**
+ * The service-role client for a pipeline run. A non-local database is refused unless the run passed
+ * `--allow-remote` (read-write: pipeline scripts write curated content, so pointing one at
+ * production must be a deliberate act) or `--allow-remote-read` (a client that refuses every write;
+ * for builds, dry runs and checks against the hosted database).
+ */
+export function pipelineDb({ allowRemote, allowRemoteRead = false }: { allowRemote: boolean; allowRemoteRead?: boolean }): ContentDb {
   const { url } = supabaseEnv();
-  if (!isLocalSupabase(url) && !allowRemote) {
-    throw new Error(`Refusing to write to ${new URL(url).host}: it isn't a local Supabase. Pass --allow-remote if you really mean it.`);
+  const host = new URL(url).host;
+  const access = databaseAccess(isLocalSupabase(url), { allowRemote, allowRemoteRead });
+  if (!access) {
+    throw new Error(
+      `Refusing to use ${host}: it isn't a local Supabase. Pass --allow-remote-read for a run that only reads it, ` +
+        "or --allow-remote to write to it (owner only).",
+    );
   }
-  return contentDb();
+  return access === "read-only" ? readOnlyDb(contentDb(), host) : contentDb();
 }
 
 /**
@@ -59,6 +115,24 @@ export async function selectAllPages<T>(
     if (error) throw new Error(error.message);
     rows.push(...(data ?? []));
     if (!data || data.length < pageSize) return rows;
+  }
+}
+
+/**
+ * Every row of a table with an integer `id`, read in id order by keyset (`id > last`), so each page
+ * costs the same however deep it is (an offset over 150,000 rows re-reads everything before it).
+ */
+export async function selectAllById<T extends { id: number }>(
+  fetchPage: (afterId: number, limit: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 1000,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let after = 0; ; ) {
+    const { data, error } = await fetchPage(after, pageSize);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) return rows;
+    after = data[data.length - 1]!.id;
   }
 }
 

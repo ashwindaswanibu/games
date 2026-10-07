@@ -95,7 +95,22 @@ export interface GameDefinition<Puzzle, Solution, State, Move, Reveal = never, R
 
   /** What to show the player about the solution once they've finished. */
   reveal?(ctx: { puzzle: Puzzle; solution: Solution }): Reveal;
+
+  /**
+   * What friends may see of a finished play beyond its score, label and share grid (for example,
+   * which of a game's options the player picked). It goes to the browser of everyone who has
+   * finished the same puzzle, so keep it small and share only what the results need: never a
+   * player's own guesses. The platform calls it only for finished plays, and only once the viewer
+   * has finished the puzzle too (the spoiler wall); a play's state never leaves the server otherwise.
+   */
+  friendDetail?(state: State): FriendDetail;
 }
+
+/** A value that crosses from the server to the browser as it is. */
+export type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+
+/** What a game shares of one finished play with friends (see `GameDefinition.friendDetail`). */
+export type FriendDetail = { readonly [key: string]: JsonValue };
 
 /**
  * Buckets are the app's worlds. Every game lives in exactly one; bucket metadata (names, order,
@@ -108,6 +123,12 @@ export type BucketId = (typeof BUCKET_IDS)[number];
 export interface GameHome {
   /** The mark's layout: one slot per attempt (`count` = the game's maximum attempts). */
   readonly form: MarkFormSpec;
+  /**
+   * The share grid as the mark's pieces, for a game that reads its own grids (Fade to Color: a pick
+   * sits in the frame it was made on, and grids from before a rule change still read). Without it,
+   * `shareMarkRow(grid)`.
+   */
+  marks?(grid: string): ShareMarkKind[];
   /** The result in words ("Found on guess 4", "Named on reel 3"), or null to show the label alone. */
   line(result: HomeLineInput): string | null;
 }
@@ -117,7 +138,9 @@ export interface HomeLineInput {
   outcome: FinishedOutcome;
   /** `result_label` as stored. */
   label: string;
-  /** The share grid as marks (`shareMarkRow`). */
+  /** `share_grid` as stored. */
+  grid: string;
+  /** The share grid as marks (the game's own `marks`, or `shareMarkRow`). */
   marks: readonly ShareMarkKind[];
   /** Today's par, for games whose puzzle has one (Degrees); null otherwise or when unknown. */
   par: number | null;

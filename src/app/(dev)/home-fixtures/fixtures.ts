@@ -15,7 +15,7 @@ import type { PuzzleReadiness } from "@/server/puzzles";
  * production code; the page that renders them 404s unless HOME_QA=1 in development.
  */
 
-export const SCENARIOS = ["A", "B", "C", "S3", "welcome", "not-ready", "last-hour"] as const;
+export const SCENARIOS = ["A", "B", "C", "S3", "welcome", "not-ready", "last-hour", "stop", "run-out"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 interface Play {
@@ -43,9 +43,6 @@ interface ScenarioSpec {
   leaders: Partial<Record<BucketId, string>>;
 }
 
-// Color Grade is being retired: the review stills leave it out (spec §15).
-const HIDDEN = new Set(["color-grade"]);
-
 const WEEK: readonly [string, string, number][] = [
   ["u-priya", "Priya Raman", 412],
   ["u-ashwin", "Ashwin Daswani", 380],
@@ -69,6 +66,18 @@ const C_PLAYS: Record<string, Play> = {
   "fade-to-color": { status: "won", grid: "🟥🟥🟩", label: "3/10", score: 80, at: "13:36" },
   degrees: { status: "won", grid: "🎞🎞🎞⭐", label: "3 links · par 2", score: 85, at: "19:02" },
   "frame-by-frame": { status: "lost", grid: "🟥🟥⬛🟥🟥🟥", label: "X/6", score: 0, at: "22:41" },
+};
+
+/** Fade to Color stopped on reel 4 and picked right (scenario "stop"): the pick in the fourth frame. */
+const STOP_PLAYS: Record<string, Play> = {
+  ...B_PLAYS,
+  "fade-to-color": { status: "won", grid: "🟥⬛🟥🟡", label: "Pick 4/10", score: 35, at: "13:36" },
+};
+
+/** Fade to Color's reels ran out and the pick was wrong (scenario "run-out"): the dark disc set apart. */
+const RUN_OUT_PLAYS: Record<string, Play> = {
+  ...C_PLAYS,
+  "fade-to-color": { status: "lost", grid: `${"⬛".repeat(9)}🟥⚫`, label: "X/10", score: 0, at: "13:36" },
 };
 
 const SPECS: Record<Scenario, ScenarioSpec> = {
@@ -120,6 +129,22 @@ const SPECS: Record<Scenario, ScenarioSpec> = {
     plays: C_PLAYS,
     finished: { "number-hunt": 6, "fade-to-color": 1, degrees: 1, "frame-by-frame": 1 },
     presence: null,
+    leaders: { words: "Priya" },
+  },
+  stop: {
+    viewer: ASHWIN,
+    time: "13:40",
+    plays: STOP_PLAYS,
+    finished: { "number-hunt": 4, "fade-to-color": 1 },
+    presence: { firstName: "Sam", gameId: "number-hunt", kind: "playing" },
+    leaders: { words: "Priya" },
+  },
+  "run-out": {
+    viewer: ASHWIN,
+    time: "22:50",
+    plays: RUN_OUT_PLAYS,
+    finished: { "number-hunt": 6, "fade-to-color": 1, degrees: 1, "frame-by-frame": 1 },
+    presence: { firstName: "Sam", gameId: "number-hunt", kind: "finished" },
     leaders: { words: "Priya" },
   },
   S3: {
@@ -186,7 +211,7 @@ export function fixtureView(scenario: Scenario, date: PuzzleDate = "2026-10-07" 
   const spec = SPECS[scenario];
   const now = at(date, spec.time);
   const extra = spec.extra ? PLACEHOLDERS : [];
-  const all = [...GAMES, ...extra].filter((g) => !HIDDEN.has(g.id));
+  const all = [...GAMES, ...extra];
   const games = spec.viewer.isAdmin ? all : all.filter((g) => g.availability === "live");
   // Keep registry order within each bucket: real games first, then the placeholders.
   const profile: ProfileRow = { id: spec.viewer.id, username: spec.viewer.username, display_name: spec.viewer.displayName, is_admin: spec.viewer.isAdmin, created_at: now.toISOString() };

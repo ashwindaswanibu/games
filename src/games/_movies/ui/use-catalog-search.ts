@@ -51,7 +51,8 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
   const [active, setActive] = useState(-1);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  /** The dropdown that opens and closes: the list of hits and, under it, IMDb's credit. */
+  const popupRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inflight = useRef<AbortController | null>(null);
   const cache = useRef(new Map<string, Hit[]>());
@@ -205,10 +206,10 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
   const expanded = open && !disabled && status !== "idle";
 
   // A search low on the screen opens its list below the fold or under the app's chrome, where
-  // the hits can't be seen or tapped. Bring the whole list into view whenever it opens or grows;
-  // "nearest" never scrolls a list that is already fully visible.
+  // the hits can't be seen or tapped. Bring the whole dropdown (hits and credit) into view whenever
+  // it opens or grows; "nearest" never scrolls one that is already fully visible.
   useEffect(() => {
-    if (expanded) listRef.current?.scrollIntoView({ block: "nearest" });
+    if (expanded) popupRef.current?.scrollIntoView({ block: "nearest" });
   }, [expanded, status, results.length]);
 
   const activeId = expanded && selectable(active) ? optionId(active) : undefined;
@@ -257,7 +258,7 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
     listId,
     optionId,
     inputRef,
-    listRef,
+    popupRef,
     inputProps,
     query,
     results,

@@ -44,9 +44,14 @@
   --chrome: 482px;
 }
 
-/* The final pick's four films need more room than the guess line. */
-.theater[data-picking] {
-  --chrome: 532px;
+/* A title long enough to take two lines on the end card: room for the second. */
+.theater[data-finished][data-long-title] {
+  --chrome: 548px;
+}
+
+/* The four take the guess line's place; they need only a little more room than it. */
+.theater[data-four] {
+  --chrome: 452px;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -60,12 +65,31 @@
   pointer-events: none;
 }
 
-/* The film's colours across the whole room, very low: the light bouncing off the walls. */
+/*
+ * The film's colours across the whole room, very low: the light bouncing off the walls. The light's
+ * strength is on the layer around the bands, never on the bands themselves, so a crossfade from one
+ * reel's bands to the next (opaque over opaque) never doubles the light partway.
+ */
+.washLight {
+  position: absolute;
+  inset: 0;
+  opacity: 0.15;
+  transition: opacity 1400ms ease;
+}
+
 .wash {
   position: absolute;
   inset: 0;
   background-size: 100% 100%;
-  opacity: 0.15;
+}
+
+/*
+ * The dip, while a pick resolves: the room's light (wash, beam, spill, glow) goes down to almost
+ * nothing over 600ms and holds there in the dark; it comes back up as the film rolls on.
+ */
+.theater[data-dip] .washLight {
+  opacity: 0.05;
+  transition: opacity 600ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
 /* The projector's beam from behind the audience. */
@@ -77,7 +101,22 @@
   height: 84vh;
   transform: translateX(-50%);
   background: radial-gradient(50% 60% at 50% 0%, rgb(var(--accent) / 0.13), transparent 70%);
-  transition: background 1400ms ease;
+  transition:
+    background 1400ms ease,
+    opacity 1400ms ease;
+}
+
+.theater[data-dip] .beam,
+.theater[data-dip] .glow {
+  opacity: 0.35;
+  transition:
+    background 1400ms ease,
+    opacity 600ms cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+.theater[data-dip] .spillLight {
+  opacity: 0.05;
+  transition: opacity 600ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
 .vignette {
@@ -268,11 +307,20 @@
 .reelBox {
   position: relative;
   width: var(--reel-w);
-  /* Eases smaller once, when the end card arrives. */
-  transition: width 1400ms var(--ease);
+  /* When the layout changes (the four, the end card), it glides into place by transform from here (see `useGlide`). */
+  transform-origin: 0 0;
 }
 
-/* The barcode's light, spilling up and down from the strip in vertical bands. */
+/* The barcode's light, spilling up and down from the strip in vertical bands (its strength on the layer around them, as the wash's). */
+.spillLight {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  opacity: 0.3;
+  pointer-events: none;
+  transition: opacity 1400ms ease;
+}
+
 .spill {
   position: absolute;
   left: -3%;
@@ -281,7 +329,6 @@
   bottom: -60vh;
   z-index: -2;
   background-size: 100% 100%;
-  opacity: 0.3;
   pointer-events: none;
   -webkit-mask-image:
     linear-gradient(to bottom, transparent 6%, rgb(0 0 0 / 0.35) 34%, #000 50%, rgb(0 0 0 / 0.35) 66%, transparent 94%),
@@ -302,7 +349,9 @@
   z-index: -1;
   pointer-events: none;
   background: radial-gradient(60% 55% at 50% 50%, rgb(var(--accent) / 0.34), transparent 72%);
-  transition: background 1400ms ease;
+  transition:
+    background 1400ms ease,
+    opacity 1400ms ease;
 }
 
 .reel {
@@ -345,6 +394,22 @@
   margin-left: auto;
 }
 
+/* The end label, with room for a second one in its place (the win's "Main title"). */
+.edgeStack {
+  display: inline-grid;
+  justify-items: end;
+}
+
+.edgeStack > .edge {
+  grid-area: 1 / 1;
+}
+
+/* "Main title" is printed in the title's light, not the reel's. */
+.edge[data-edge="title"] {
+  color: rgb(var(--title-accent, var(--accent)) / 0.9);
+  opacity: 0;
+}
+
 .edge a {
   color: inherit;
   text-decoration: none;
@@ -367,12 +432,25 @@
   transition: color 1400ms ease;
 }
 
+/* A new label on the edge (HELD, RUN-OUT): printed in, once. */
+.edge[data-fresh] {
+  animation: edgeIn 700ms cubic-bezier(0.3, 0, 0.2, 1) 600ms both;
+}
+
+@keyframes edgeIn {
+  from {
+    opacity: 0;
+  }
+}
+
 .screen {
   position: relative;
   aspect-ratio: 3 / 1;
   overflow: hidden;
   background: #000;
   contain: paint;
+  /* The win's title card is sized in the screen's own units. */
+  container-type: inline-size;
 }
 
 .frame {
@@ -407,6 +485,14 @@
   visibility: hidden;
 }
 
+/* The bar's track spans the screen and moves in percent of it, as the wipe does. */
+.lightbarTrack {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
 .lightbar {
   position: absolute;
   top: -2%;
@@ -414,12 +500,10 @@
   left: 0;
   width: 3px;
   opacity: 0;
-  pointer-events: none;
   background: #fffaf0;
   box-shadow:
     0 0 18px 6px rgb(var(--incoming, var(--accent)) / 0.85),
     0 0 64px 20px rgb(var(--incoming, var(--accent)) / 0.45);
-  will-change: transform;
 }
 
 .screen[data-unreeling] .lightbar {
@@ -446,6 +530,154 @@
   opacity: 0;
   pointer-events: none;
   background: linear-gradient(90deg, transparent, rgb(var(--incoming, var(--accent)) / 0.22), transparent);
+}
+
+/*
+ * The win's title card, over the picture (see `TitleCard`): a black card that comes down over the
+ * picture, and above it the title cut out of that same picture (the matte, in register with the
+ * frame beneath, so it can't be seen until the black comes down), then lit in the film's colours.
+ * Only opacity and transform move, all played by the win's timeline; the light is two small
+ * canvases drawn once and scaled up (no live blur).
+ */
+.titleCard {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dip {
+  position: absolute;
+  inset: -2px;
+  background: #000;
+  opacity: 0;
+}
+
+/* One cell exactly the screen's size, so the light (larger than the title) can never widen it and shift the letters. */
+.card {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template: 100% / 100%;
+  place-items: center;
+}
+
+.card > * {
+  grid-area: 1 / 1;
+}
+
+/* Sized from the screen's width when the card is laid out (`--card-fs`, in the screen's `cqw`). */
+.cardTitle {
+  display: block;
+  max-width: 84%;
+  margin: 0;
+  padding: 0 0.06em 0.04em;
+  font: 400 var(--card-fs, 92px)/1.04 var(--display);
+  letter-spacing: -0.02em;
+  text-align: center;
+  text-wrap: balance;
+  color: transparent;
+}
+
+.matte {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--pic) center / cover no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Each letter (or word) takes its own slice of one barcode spread across the whole title, as on the end card. */
+.cardLit .cardUnit {
+  background-image: var(--fill);
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* Warm, not hidden: painted once before it's needed, so its first frame on screen costs nothing. */
+  opacity: 0.002;
+  will-change: opacity;
+}
+
+/* No barcode to hand (it failed to load): the title lights in ink. */
+.cardLit:not([data-fill]) .cardUnit {
+  color: var(--ink);
+}
+
+.cardLight {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  /* The title's size, which its own size and place are measured in. */
+  font-size: var(--card-fs, 92px);
+  opacity: 0.002;
+  will-change: opacity, transform;
+}
+
+/* The film rolls on: the last reel unreels over the card, as every reel does (see `Reel`). */
+.cardWipe {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform: translate3d(-100%, 0, 0);
+  will-change: transform;
+}
+
+.cardWipe .frame {
+  transform: translate3d(100%, 0, 0);
+  will-change: transform;
+}
+
+.cardBarTrack {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.cardBar {
+  position: absolute;
+  top: -2%;
+  bottom: -2%;
+  left: 0;
+  width: 3px;
+  background: #fffaf0;
+  box-shadow:
+    0 0 18px 6px rgb(var(--incoming, var(--accent)) / 0.85),
+    0 0 64px 20px rgb(var(--incoming, var(--accent)) / 0.45);
+}
+
+/* Reduced motion: no card; the last reel simply fades up over the picture. */
+.titleCard[data-reduced] .cardWipe,
+.titleCard[data-reduced] .cardWipe .frame {
+  transform: none;
+}
+
+.titleCard[data-reduced] .cardWipe {
+  opacity: 0;
+}
+
+/* The title's own light behind the reel: a narrower spill of its bands, a faint glow on the floor. */
+.auraSpill {
+  left: 18%;
+  right: 18%;
+  top: -34vh;
+  bottom: -34vh;
+  opacity: 0;
+}
+
+.auraGlow {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 24%;
+  bottom: -26%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(50% 50% at 50% 50%, rgb(var(--title-accent, var(--accent)) / 0.16), transparent 74%);
+  opacity: 0;
 }
 
 /* Academy leader, before the film. */
@@ -517,11 +749,14 @@
 .console {
   width: min(780px, calc(100vw - 32px));
   display: grid;
+  /* One column that can't grow past the console: a long byline ellipsizes rather than widening it. */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 14px;
 }
 
 .contact {
+  position: relative;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -576,6 +811,68 @@
   animation: none;
 }
 
+/*
+ * The film was stopped: the reels never seen are shut in their cans, leader black. Seen live, they
+ * shut right to left, 50ms apart (`--shut` counts from the last reel).
+ */
+.print[data-state="closed"] .printImage {
+  position: relative;
+  opacity: 1;
+  background: #030303;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.025);
+  animation: none;
+}
+
+.print[data-state="closed"] .printNumber {
+  opacity: 0.45;
+}
+
+.contact[data-closing] .print[data-state="closed"] .printImage {
+  animation: canShut 380ms cubic-bezier(0.45, 0, 0.55, 1) both;
+  animation-delay: calc(150ms + var(--shut) * 50ms);
+}
+
+.contact[data-closing] .print[data-state="closed"] .printNumber {
+  animation: canShutNumber 380ms cubic-bezier(0.45, 0, 0.55, 1) both;
+  animation-delay: calc(150ms + var(--shut) * 50ms);
+}
+
+/* From unexposed film (the locked print's look) to black. */
+@keyframes canShut {
+  from {
+    background: #0e0e0f;
+    opacity: 0.8;
+  }
+}
+
+@keyframes canShutNumber {
+  from {
+    opacity: 1;
+  }
+}
+
+/*
+ * The win's print run: the reels you didn't need develop in order (`--develop-at` apart), under a
+ * playhead: the on-screen print's white ring, drawn apart and moved print to print by the timeline.
+ */
+.contact[data-run] .printImage {
+  animation-delay: var(--develop-at, 0ms);
+  transition: box-shadow 600ms ease;
+}
+
+.contact[data-run] .print[data-showing]:not([data-state="current"]) .printImage {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+
+.playhead {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--ink);
+  pointer-events: none;
+}
+
 .print:not(:disabled):hover .printImage {
   opacity: 0.9;
 }
@@ -618,6 +915,12 @@
   margin: 2px 0 0;
   font: 400 clamp(18px, 1.45vw, 22px)/1.2 var(--display);
   color: var(--ink-2);
+}
+
+/* After a pick, it goes with the four as the film rolls on. */
+.status[data-leaving] {
+  opacity: 0;
+  transition: opacity 450ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
 .status em {
@@ -697,22 +1000,36 @@
   color: var(--ink-3);
 }
 
-/* Hits open upward: the guess line sits low on the screen. */
-.list {
+/* Hits open upward: the guess line sits low on the screen. They scroll inside the panel; IMDb's
+   credit stays at its foot. */
+.hits {
   position: absolute;
   left: -14px;
   right: -14px;
   bottom: calc(100% + 16px);
   z-index: 5;
+  display: flex;
+  flex-direction: column;
   max-height: min(360px, 46dvh);
-  margin: 0;
   padding: 6px;
-  overflow: auto;
-  list-style: none;
   border: 1px solid var(--hair);
   border-radius: 10px;
   background: rgb(13 13 14 / 0.97);
   box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.85);
+}
+
+/* `display: flex` would otherwise override the hidden attribute. */
+.hits[hidden] {
+  display: none;
+}
+
+.list {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
 }
 
 .option {
@@ -749,6 +1066,19 @@
   padding: 10px 12px;
 }
 
+/* The data credit under the hits, outside the scrolling list (always in view): fine print, not
+   uppercase (it quotes a URL). */
+.listCredit {
+  flex: none;
+  margin: 4px 0 0;
+  padding: 8px 12px 4px;
+  border-top: 1px solid var(--hair);
+  font: 500 9.5px/1.4 var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+  cursor: default;
+}
+
 .slateActions {
   flex: none;
   display: flex;
@@ -756,12 +1086,14 @@
   gap: 8px;
 }
 
+/* Two lines at most on a laptop, in the guess line's height, so nothing around it moves. */
 .confirmText {
   flex: 1;
   margin: 0;
-  padding: 6px 0;
-  font: italic 400 clamp(19px, 1.6vw, 24px)/1.25 var(--display);
+  padding: 3px 0;
+  font: italic 400 clamp(16px, 1.22vw, 18px)/1.22 var(--display);
   color: var(--ink-2);
+  text-wrap: pretty;
 }
 
 .go,
@@ -847,66 +1179,309 @@
   color: #f0a58f;
 }
 
-/* The final pick: four films, one chance. */
-.finalPick {
+/*
+ * Letter by letter: `Letters` sets `--i` on each letter and `--n` on the line, for staggers.
+ * Words never break inside.
+ */
+.word {
+  white-space: nowrap;
+}
+
+.letter {
+  --down: cubic-bezier(0.45, 0, 0.55, 1);
+  --rise: cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+/*
+ * The quiet way out: "The four · 35", in the edge print's face, set apart at the left of the
+ * actions. Only its number ever moves: once per reel it dims out and the new stake develops in.
+ */
+.fourControl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  margin-right: 10px;
+  padding: 10px 18px 10px 4px;
+  border: 0;
+  border-right: 1px solid var(--hair);
+  background: none;
+  color: var(--ink-3);
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 300ms ease,
+    opacity 300ms ease;
+}
+
+.fourControl:not(:disabled):hover {
+  color: var(--ink);
+}
+
+.fourControl:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.fourControl:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.fourDot {
+  margin: 0 0.5em 0 0.6em;
+  opacity: 0.7;
+}
+
+/* The stake, in the room's light. Two figures wide, so the tick never shifts the row. */
+.stake {
+  display: inline-grid;
+  min-width: 2.6ch;
+  color: rgb(var(--accent) / 0.9);
+  font-variant-numeric: tabular-nums;
+  transition: color 1400ms ease;
+}
+
+.stake > span {
+  grid-area: 1 / 1;
+}
+
+.stakeOut {
+  animation: stakeOut 200ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+.stakeIn {
+  animation: stakeIn 400ms cubic-bezier(0.3, 0, 0.2, 1) 160ms both;
+}
+
+@keyframes stakeOut {
+  to {
+    opacity: 0;
+  }
+}
+
+/* As a print develops: out of white light into the colour. */
+@keyframes stakeIn {
+  from {
+    opacity: 0;
+    filter: brightness(2.4) saturate(0);
+  }
+}
+
+/*
+ * The guess line as the film is named, held for the win (see `HeardSlate`): laid out as the slate
+ * was, its actions mid-move. The name crossfades from ink to the film's light and a line of that
+ * light runs along under it; the timeline plays each part.
+ */
+.heardSlate {
+  position: relative;
+  pointer-events: none;
+  /* The live line's hairline was easing back from the focus colour as Guess went out; it carries on. */
+  animation: heardEdge 400ms ease both;
+}
+
+@keyframes heardEdge {
+  from {
+    border-color: rgb(var(--accent) / 0.75);
+  }
+}
+
+/* As wide as the input it stands in for, whatever the title's length (no min-content of its own), clipped as the input clips. */
+.heardTitle {
+  display: grid;
+  white-space: nowrap;
+  overflow: hidden;
+  contain: inline-size;
+}
+
+.heardTitle > span {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+
+.heardLit {
+  color: transparent;
+  background: var(--fill) 0 0 / 100% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  opacity: 0;
+}
+
+.heardLit:not([data-fill]) {
+  color: var(--ink);
+}
+
+.heardSlate .fourControl {
+  opacity: 0.45;
+}
+
+.heardSlate .quiet {
+  opacity: 0.4;
+}
+
+.heardGo {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--ink-3);
+}
+
+.slateLight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background-color: rgb(var(--accent));
+  background-image: var(--fill);
+  background-size: 100% 100%;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+/* The four's place in the console: the guess line goes out over the top of it as the tiles come up. */
+.fourSlot {
+  width: 100%;
+  display: grid;
+}
+
+.fourSlot > * {
+  grid-area: 1 / 1;
+}
+
+/*
+ * The guess line as the film stops, laid out as the slate was: its words fade letter by letter, left
+ * to right (600ms in all), and its actions and hairline go with them. It sits over the four's place.
+ */
+.fadingSlate {
+  align-self: start;
+  z-index: 1;
+  pointer-events: none;
+  animation: lineOut 600ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+
+.fadingSlate .letter {
+  animation: letterOut 260ms cubic-bezier(0.45, 0, 0.55, 1) both;
+  animation-delay: calc(var(--i) * 340ms / var(--n));
+}
+
+/* The actions were mid-move (disabled) when the answer came. */
+.fadingSlate .slateActions {
+  animation: letterOut 260ms ease-out both;
+}
+
+.fadingSlate .go {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--ink-3);
+}
+
+.fadingSlate .quiet,
+.fadingSlate .fourControl {
+  opacity: 0.45;
+}
+
+@keyframes lineOut {
+  0%,
+  55% {
+    border-color: var(--hair);
+  }
+  100% {
+    border-color: transparent;
+  }
+}
+
+@keyframes letterOut {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The four: one pick from the answer and three look-alikes. */
+.four {
+  --down: cubic-bezier(0.45, 0, 0.55, 1);
+  --rise: cubic-bezier(0.3, 0, 0.2, 1);
   width: 100%;
   display: grid;
   justify-items: center;
+  gap: 12px;
+  transition: opacity 450ms var(--down);
+}
+
+.four[data-leaving] {
+  opacity: 0;
+}
+
+.four .kicker {
+  margin: 0;
+}
+
+.fourRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
   gap: 14px;
 }
 
 .optionGrid {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
+/*
+ * A tile is lit only by the room's light (`--accent`): never by its own film, which would be a clue.
+ * Its frame is a pseudo-element, so it can fade with the title by opacity alone.
+ */
 .optionTile {
+  position: relative;
   display: grid;
   align-content: center;
-  gap: 6px;
-  min-height: 74px;
-  padding: 12px 14px;
+  gap: 7px;
+  min-height: 70px;
+  padding: 11px 14px 12px;
   border: 0;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 0.035);
-  box-shadow: inset 0 0 0 1px var(--hair);
+  border-radius: 6px;
+  background: none;
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+  transition: transform 300ms var(--ease);
+}
+
+.optionTile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgb(var(--accent) / 0.045);
+  box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.17);
   transition:
+    opacity 600ms ease,
     box-shadow 300ms ease,
-    background-color 300ms ease,
-    opacity 300ms ease;
-  animation: develop 900ms ease both;
+    background-color 300ms ease;
 }
 
-.optionTile:nth-child(2) {
-  animation-delay: 90ms;
+.optionTile:not(:disabled):not([aria-disabled]):hover::before {
+  background: rgb(var(--accent) / 0.08);
 }
 
-.optionTile:nth-child(3) {
-  animation-delay: 180ms;
-}
-
-.optionTile:nth-child(4) {
-  animation-delay: 270ms;
-}
-
-.optionTile:not(:disabled):hover {
-  background: rgb(255 255 255 / 0.06);
-}
-
+/* Chosen: it lifts 2px and takes an accent hairline. */
 .optionTile[aria-checked="true"] {
-  background: rgb(var(--accent) / 0.14);
-  box-shadow:
-    inset 0 0 0 1px rgb(var(--accent) / 0.9),
-    0 0 22px rgb(var(--accent) / 0.25);
+  transform: translate3d(0, -2px, 0);
 }
 
-.optionTile:disabled {
-  opacity: 0.38;
+.optionTile[aria-checked="true"]::before {
+  background: rgb(var(--accent) / 0.09);
+  box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.9);
+}
+
+.optionTile:disabled,
+.optionTile[aria-disabled] {
   cursor: default;
 }
 
@@ -915,15 +1490,172 @@
   outline-offset: 3px;
 }
 
-.optionTileTitle {
-  font: italic 400 clamp(17px, 1.35vw, 20px)/1.15 var(--display);
+.tileTitle {
+  display: grid;
+  font: 400 clamp(17px, 1.3vw, 20px)/1.12 var(--display);
+  letter-spacing: -0.005em;
+  text-wrap: balance;
 }
 
+.tileTitle > * {
+  grid-area: 1 / 1;
+}
+
+.tileInk .letter {
+  transition: opacity 300ms var(--down);
+}
+
+/* The year, as edge print. */
 .optionTileMeta {
-  font: 500 9.5px/1 var(--mono);
-  letter-spacing: 0.14em;
+  font: 500 8.5px/1 var(--mono);
+  letter-spacing: 0.3em;
   text-transform: uppercase;
+  color: rgb(var(--accent) / 0.72);
+  font-variant-numeric: tabular-nums;
+  transition:
+    opacity 500ms ease,
+    color 1400ms ease;
+}
+
+/* A film already guessed: dark, with the reel it was guessed on. */
+.optionTile[data-guessed] .tileInk {
+  opacity: 0.2;
+}
+
+.optionTile[data-guessed]::before {
+  background: none;
+  box-shadow: inset 0 0 0 1px rgb(239 233 223 / 0.06);
+}
+
+.optionTile[data-guessed] .optionTileMeta {
   color: var(--ink-3);
+}
+
+/* The stop, seen live: the tiles rise left to right, 80ms apart, under the kicker. */
+.four[data-live] > .kicker {
+  animation: riseIn 500ms var(--ease) 700ms both;
+}
+
+.four[data-live] .optionTile {
+  animation: riseIn 600ms var(--ease) both;
+  animation-delay: calc(760ms + var(--k) * 80ms);
+}
+
+.four[data-live] .pickButton {
+  animation: riseIn 600ms var(--ease) 1080ms both;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+}
+
+.pickButton {
+  flex: none;
+  transition:
+    background-color 1400ms ease,
+    opacity 300ms ease,
+    transform 150ms ease;
+}
+
+/*
+ * The pick resolve. Pressed: the other titles fade letter by letter (700ms in all) and Pick goes.
+ * Landed right: the chosen title fills with the barcode letter by letter. Landed wrong: it dims to
+ * black, and the answer comes back up in ink. Colour is what you earn.
+ */
+.four[data-resolving] .pickButton {
+  opacity: 0;
+}
+
+.optionTile[data-fate="out"] .tileInk .letter {
+  opacity: 0.1;
+  transition-delay: calc(var(--i) * var(--out-step));
+}
+
+.optionTile[data-fate="out"] .optionTileMeta,
+.optionTile[data-fate="black"] .optionTileMeta {
+  opacity: 0;
+}
+
+.optionTile[data-fate="out"]::before,
+.optionTile[data-fate="black"]::before {
+  opacity: 0.25;
+}
+
+.optionTile[data-fate="black"] .tileInk .letter {
+  opacity: 0.06;
+  transition:
+    opacity 600ms var(--down) calc(var(--i) * 12ms);
+}
+
+.optionTile[data-fate="ink"] .tileInk .letter {
+  opacity: 1;
+  transition: opacity 600ms var(--rise) 200ms;
+}
+
+.optionTile[data-fate="ink"]::before {
+  opacity: 1;
+  background: none;
+  box-shadow: inset 0 0 0 1px rgb(239 233 223 / 0.32);
+}
+
+.optionTile[data-fate="lit"] .tileInk .letter {
+  opacity: 0;
+  transition: opacity 900ms var(--rise) calc(var(--i) * var(--lit-step));
+}
+
+.tileLit {
+  display: block;
+  position: relative;
+  filter: contrast(1.15) saturate(1.4);
+}
+
+.litLetters .letter {
+  color: transparent;
+  background-image: var(--fill);
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: litIn 900ms var(--rise) both;
+  animation-delay: calc(var(--i) * var(--lit-step));
+}
+
+/* No barcode to hand (it failed to load): the title simply lights in ink. */
+.tileLit:not([data-fill]) .litLetters .letter {
+  color: var(--ink);
+}
+
+@keyframes litIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A small halo of the film's light: one static blur, only its opacity moves. */
+.tileHalo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: transparent;
+  background: var(--fill) 0 0 / 100% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: blur(7px);
+  opacity: 0.25;
+  animation: haloIn 1200ms var(--rise) 300ms both;
+}
+
+@keyframes haloIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The status line's new word, as the film stops. */
+.statusFresh {
+  animation: fadeIn 700ms ease 600ms both;
 }
 
 /* Before the film: three lines and the button. */
@@ -985,6 +1717,11 @@
   pointer-events: auto;
 }
 
+/* During the win the timeline brings the card up (a transition here would override it). */
+.theater[data-win] .creditsWrap {
+  transition: none;
+}
+
 .credits {
   display: grid;
   justify-items: center;
@@ -1015,6 +1752,13 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.dataCredit {
+  margin: 14px 0 0;
+  font: 500 9.5px/1.4 var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
 }
 
 .byline {
@@ -1057,7 +1801,36 @@
   background: rgb(239 233 223 / 0.18);
 }
 
-/* The final pick, after the ten reels: a round mark set a little apart. */
+/*
+ * A pick: a round mark. In the frame of the reel the film was stopped on, or set a little apart
+ * after the tenth when the reels ran out. Filled with the light if right; a dark ring if wrong.
+ */
+.frames [data-pick] {
+  position: relative;
+}
+
+.frames [data-pick]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 80%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.frames [data-pick]::after,
+.frames .pickMark {
+  background: rgb(var(--accent));
+}
+
+.frames [data-pick="wrong"]::after,
+.frames .pickMark[data-pick="wrong"] {
+  background: #050506;
+  box-shadow: inset 0 0 0 1px rgb(239 233 223 / 0.42);
+}
+
 .frames .pickMark {
   aspect-ratio: 1;
   width: 70%;
@@ -1066,8 +1839,8 @@
   margin-left: 3px;
 }
 
-.frames [data-mark="picked"] {
-  background: rgb(var(--accent));
+.frames .pickMark::after {
+  content: none;
 }
 
 .score {
@@ -1201,6 +1974,98 @@
   color: var(--ink-3);
 }
 
+/* How it went for everyone, in one line. */
+.tally {
+  margin: -2px 0 24px;
+  font: italic 400 18px/1.3 var(--display);
+  color: var(--ink-2);
+}
+
+/*
+ * Everyone's picks: the four as everyone saw them, in their shared order, with who picked which
+ * under each. Like the tiles they're lit by the room; only the film itself is lit with its barcode.
+ */
+.everyFour {
+  margin: 0 0 26px;
+}
+
+.everyFourLabel {
+  margin: 0 0 11px;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgb(var(--accent) / 0.85);
+}
+
+.everyFourGrid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 8px;
+}
+
+.everyFourGrid li {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 8px;
+}
+
+.everyCard {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  min-height: 62px;
+  padding: 10px 12px 11px;
+  border-radius: 6px;
+  background: rgb(var(--accent) / 0.045);
+  box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.17);
+}
+
+.everyTitle {
+  font: 400 16px/1.12 var(--display);
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+  color: var(--ink-2);
+}
+
+.everyFourGrid li[data-answer] .everyTitle:not([data-lit]) {
+  color: var(--ink);
+}
+
+.everyTitle[data-lit] {
+  background: var(--fill) center / 100% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: contrast(1.15) saturate(1.4);
+}
+
+/* The year, as edge print. */
+.everyYear {
+  font: 500 8.5px/1 var(--mono);
+  letter-spacing: 0.3em;
+  color: rgb(var(--accent) / 0.72);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Who picked it, by initials; yours in the light, as your name is in the list. */
+.pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 11px;
+  min-height: 10px;
+  padding: 0 2px;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--ink-2);
+}
+
+.pickers [data-you] {
+  color: rgb(var(--accent));
+}
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -1289,13 +2154,42 @@
     justify-content: space-between;
   }
 
+  .fourThe {
+    display: none;
+  }
+
+  .fourControl {
+    margin-right: auto;
+    padding-left: 0;
+    border-right: 0;
+  }
+
+  .fourRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
   .optionGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .optionTile {
-    min-height: 62px;
+    min-height: 66px;
+    padding: 10px 12px 11px;
   }
+
+  .pickButton {
+    align-self: center;
+    min-width: 132px;
+  }
+
+  .cardTitle {
+    max-width: 90%;
+  }
+
+
 
   .status {
     font-size: 18px;
@@ -1332,13 +2226,27 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Near-instant rather than none, so the crossfade still hears animationend and drops the old layer. */
+  /* A short crossfade of the room's light (no motion), which still ends, so the old layer is dropped. */
   .fadeIn {
-    animation-duration: 1ms;
+    animation-duration: 400ms;
   }
 
   .printImage,
-  .optionTile,
+  .four[data-live] .optionTile,
+  .four[data-live] > .kicker,
+  .four[data-live] .pickButton,
+  .contact[data-closing] .print[data-state="closed"] .printImage,
+  .contact[data-closing] .print[data-state="closed"] .printNumber,
+  .edge[data-fresh],
+  .statusFresh,
+  .stakeOut,
+  .stakeIn,
+  .tileHalo,
+  .litLetters .letter,
+  .fadingSlate,
+  .heardSlate,
+  .fadingSlate .letter,
+  .fadingSlate .slateActions,
   .leader::before,
   .screen[data-waiting]:not([data-unreeling]) .lightbar,
   .panel,
@@ -1358,7 +2266,28 @@
   .wmLit,
   .wmHalo,
   .creditsWrap,
-  .whisper {
+  .whisper,
+  .washLight,
+  .spillLight,
+  .status,
+  .fourControl,
+  .stake,
+  .four,
+  .optionTile,
+  .optionTile::before,
+  .optionTileMeta,
+  .tileInk .letter,
+  .optionTile[data-fate] .tileInk .letter {
     transition: none;
+  }
+
+  /* The stop: the guess line simply goes; the tiles are there, all at once. */
+  .fadingSlate {
+    display: none;
+  }
+
+  /* The stake: an instant swap. */
+  .stakeOut {
+    display: none;
   }
 }

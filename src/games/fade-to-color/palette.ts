@@ -131,6 +131,25 @@ export function litBands(pixels: Uint8ClampedArray, width: number, height: numbe
   );
 }
 
+/** The grade the lit titles take (the wordmark's "Color", the title matte): a touch more contrast and colour. */
+export const TITLE_GRADE = { contrast: 1.15, saturate: 1.4 } as const;
+
+/**
+ * A colour through CSS's `contrast(c) saturate(s)` filter, worked out once instead of filtering a
+ * layer live: contrast first (each channel pushed away from mid grey), then saturation (the
+ * filter's luminance-preserving matrix), on 0–255 sRGB values as browsers apply them.
+ */
+export function gradeRgb([r, g, b]: Rgb, { contrast, saturate }: { contrast: number; saturate: number } = TITLE_GRADE): Rgb {
+  const [cr, cg, cb] = [r, g, b].map((v) => clamp((v / 255 - 0.5) * contrast + 0.5, 0, 1));
+  const s = saturate;
+  const out = [
+    (0.213 + 0.787 * s) * cr + (0.715 - 0.715 * s) * cg + (0.072 - 0.072 * s) * cb,
+    (0.213 - 0.213 * s) * cr + (0.715 + 0.285 * s) * cg + (0.072 - 0.072 * s) * cb,
+    (0.213 - 0.213 * s) * cr + (0.715 - 0.715 * s) * cg + (0.072 + 0.928 * s) * cb,
+  ];
+  return out.map((v) => Math.round(clamp(v, 0, 1) * 255)) as unknown as Rgb;
+}
+
 /** "r g b", the form the CSS custom properties take (`rgb(var(--accent) / 0.5)`). */
 export const cssTriplet = ([r, g, b]: Rgb) => `${r} ${g} ${b}`;
 

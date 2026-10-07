@@ -21,12 +21,14 @@
     "test:e2e:accounts": "tsx --conditions=react-server --env-file=.env.local scripts/e2e/accounts.mts",
     "content:fixtures": "tsx --conditions=react-server --env-file=.env.local scripts/content/fixtures.mts",
     "content:movies:catalog": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/catalog.mts",
+    "content:movies:catalog-check": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/catalog-check.mts",
     "content:movies:degrees": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/degrees.mts",
     "content:movies:stills": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/stills.mts",
     "content:movies:frame-by-frame": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/frame-by-frame.mts",
-    "content:movies:color-grade": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/color-grade.mts",
     "content:movies:barcode-levels": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/barcode-levels.mts",
-    "content:movies:fixtures": "npm run content:fixtures -- --game degrees --game frame-by-frame --game color-grade --game fade-to-color"
+    "content:movies:recheck-fours": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/recheck-fours.mts",
+    "content:movies:plan-barcode": "tsx --conditions=react-server --env-file=.env.local scripts/content/movies/plan-barcode.mts",
+    "content:movies:fixtures": "npm run content:fixtures -- --game degrees --game frame-by-frame --game fade-to-color"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { referencedAssetIds } from "@/core/assets";
 import { attemptsScore } from "@/core/scoring";
-import { shareMarkRow } from "@/core/share-marks";
 import type { FilmDetails, FilmRef } from "@/games/_movies/schemas";
 import {
   fadeToColor,
@@ -12,7 +11,7 @@ import {
   levelsInView,
   MAX_GUESSES,
   awaitingPick,
-  resultLine,
+  pickWorth,
   type LevelRef,
   type Puzzle,
   type ResolvedMove,
@@ -52,6 +51,8 @@ const initial = fadeToColor.initialState(puzzle);
 const guess = (film: FilmDetails): ResolvedMove => ({ type: "guess", film: ref(film) });
 const skip: ResolvedMove = { type: "skip" };
 const pick = (film: FilmDetails): ResolvedMove => ({ type: "pick", filmId: film.id });
+const stop: ResolvedMove = { type: "stop" };
+const skips = (n: number): ResolvedMove[] => Array.from({ length: n }, () => skip);
 /** Nine skips and a wrong guess on reel 10: the final pick is open. */
 const NINE_SKIPS_AND_A_MISS: ResolvedMove[] = [...Array.from({ length: MAX_GUESSES - 1 }, () => skip), guess(heat)];
 const decoy = (n: number): FilmDetails => ({ ...up, id: 100 + n, title: `Decoy ${n}` });
@@ -183,7 +184,7 @@ describe("fade-to-color applyMove", () => {
   it("rejects moves once won or lost", () => {
     const finished = "Today's film is already finished.";
     expect(fadeToColor.applyMove({ puzzle, solution, state: play([guess(answer)]), move: skip })).toEqual({ ok: false, error: finished });
-    const lost = play(Array.from({ length: MAX_GUESSES }, () => skip));
+    const lost = play([stop, pick(thief)]);
     expect(outcome(lost)).toBe("lost");
     expect(fadeToColor.applyMove({ puzzle, solution, state: lost, move: guess(answer) })).toEqual({ ok: false, error: finished });
   });
@@ -193,51 +194,74 @@ describe("fade-to-color applyMove", () => {
   });
 });
 
-describe("fade-to-color final pick", () => {
-  it("opens after a wrong guess on reel 10, with the four options and no new level", () => {
+describe("fade-to-color: stop the film", () => {
+  it("opens the four on any reel without using an attempt or unlocking a level", () => {
+    const state = play([skip, guess(heat), stop]);
+    expect(state.options).toEqual(OPTIONS);
+    expect(state.turns).toHaveLength(2);
+    expect(state.unlocked).toEqual(LEVELS.slice(1, 3));
+    expect(outcome(state)).toBe("in_progress");
+    expect(awaitingPick(state)).toBe(true);
+  });
+
+  it("brings the four up after a wrong guess on reel 10 (the run-out)", () => {
     const state = play(NINE_SKIPS_AND_A_MISS);
     expect(state.options).toEqual(OPTIONS);
-    expect(state.pick).toBeNull();
     expect(state.unlocked).toEqual(LEVELS.slice(1));
     expect(outcome(state)).toBe("in_progress");
   });
 
-  it("doesn't open when the player gives up (skips) on reel 10", () => {
-    const state = play(Array.from({ length: MAX_GUESSES }, () => skip));
-    expect(state.options).toEqual([]);
-    expect(outcome(state)).toBe("lost");
+  it("refuses a skip on reel 10: guess or take the four", () => {
+    expect(fadeToColor.applyMove({ puzzle, solution, state: play(skips(MAX_GUESSES - 1)), move: skip })).toEqual({
+      ok: false,
+      error: "On the last reel, guess or take the four.",
+    });
   });
 
-  it("keeps the options (and so the answer's title) out of the state until it opens", () => {
-    const nine = play([...Array.from({ length: MAX_GUESSES - 2 }, () => skip), guess(heat)]);
+  it("keeps the four out of the state until the film is stopped", () => {
+    const nine = play([...skips(MAX_GUESSES - 2), guess(heat)]);
     expect(nine.turns).toHaveLength(MAX_GUESSES - 1);
     for (const secret of ["Collateral", "Drive", "Nightcrawler", "Thief"]) expect(JSON.stringify(nine)).not.toContain(secret);
   });
 
-  it("refuses a pick before it opens", () => {
-    expect(fadeToColor.applyMove({ puzzle, solution, state: play([skip]), move: pick(answer) })).toEqual({ ok: false, error: "There's nothing to pick yet." });
+  it("refuses a pick before the film is stopped, and a second stop", () => {
+    expect(fadeToColor.applyMove({ puzzle, solution, state: play([skip]), move: pick(answer) })).toEqual({ ok: false, error: "Stop the film first." });
+    expect(fadeToColor.applyMove({ puzzle, solution, state: play([stop]), move: stop })).toEqual({ ok: false, error: "The four are already up." });
   });
 
-  it("accepts only a pick, and only one of the options, while it's open", () => {
-    const state = play(NINE_SKIPS_AND_A_MISS);
-    const only = { ok: false, error: "Every reel is used: pick one of the 4 films." };
+  it("accepts only a pick of one of the four while they're up, never a film already guessed", () => {
+    const state = play([guess(thief), stop]);
+    const only = { ok: false, error: "You stopped the film: pick one of the four." };
     expect(fadeToColor.applyMove({ puzzle, solution, state, move: skip })).toEqual(only);
     expect(fadeToColor.applyMove({ puzzle, solution, state, move: guess(answer) })).toEqual(only);
     expect(fadeToColor.applyMove({ puzzle, solution, state, move: pick(up) })).toEqual({ ok: false, error: "Pick one of the 4 films." });
+    expect(fadeToColor.applyMove({ puzzle, solution, state, move: pick(thief) })).toEqual({ ok: false, error: "You already guessed Thief: it isn't the one." });
   });
 
-  it("wins for the pick score when the answer is picked", () => {
-    const state = play([...NINE_SKIPS_AND_A_MISS, pick(answer)]);
-    expect(state.pick).toEqual({ film: ref(answer), correct: true });
-    expect(outcome(state)).toBe("won");
-    expect(finish(state)).toEqual({ score: 5, label: "Final pick", grid: `${"⬛".repeat(9)}🟥🟨` });
+  it("scores a right pick at half of naming the film on that reel", () => {
+    const worths = Array.from({ length: MAX_GUESSES }, (_, i) => finish(play([...skips(i), stop, pick(answer)])).score);
+    expect(worths).toEqual([50, 45, 40, 35, 30, 25, 20, 15, 10, 5]);
+    expect(worths).toEqual(Array.from({ length: MAX_GUESSES }, (_, i) => pickWorth(i + 1)));
+  });
+
+  it("labels and marks a right pick by the reel it was stopped on", () => {
+    expect(finish(play([stop, pick(answer)]))).toEqual({ score: 50, label: "Pick 1/10", grid: "🟡" });
+    expect(finish(play([guess(heat), skip, guess(up), stop, pick(answer)]))).toEqual({ score: 35, label: "Pick 4/10", grid: "🟥⬛🟥🟡" });
+    expect(finish(play([...NINE_SKIPS_AND_A_MISS, pick(answer)]))).toEqual({ score: 5, label: "Pick 10/10", grid: `${"⬛".repeat(9)}🟥🟡` });
   });
 
   it("loses on a wrong pick, and nothing more can be played", () => {
-    const state = play([...NINE_SKIPS_AND_A_MISS, pick(thief)]);
+    const state = play([skip, stop, pick(drive)]);
     expect(outcome(state)).toBe("lost");
-    expect(finish(state)).toEqual({ score: 0, label: "X/10", grid: `${"⬛".repeat(9)}🟥🟥` });
+    expect(finish(state)).toEqual({ score: 0, label: "X/10", grid: "⬛⚫" });
     expect(fadeToColor.applyMove({ puzzle, solution, state, move: pick(answer) })).toEqual({ ok: false, error: "Today's film is already finished." });
+  });
+
+  it("still reads a play that gave up on reel 10 before that was refused", () => {
+    const old: State = { turns: Array.from({ length: MAX_GUESSES }, () => ({ skipped: true as const })), unlocked: LEVELS.slice(1), options: [], pick: null };
+    expect(fadeToColorStateSchema.parse(old)).toEqual(old);
+    expect(outcome(old)).toBe("lost");
+    expect(finish(old)).toEqual({ score: 0, label: "X/10", grid: "⬛".repeat(10) });
   });
 });
 
@@ -255,9 +279,12 @@ describe("fade-to-color outcome, score and share grid", () => {
     expect(scores).toEqual([100, 90, 80, 70, 60, 50, 40, 30, 20, 10]);
   });
 
-  it("loses after giving up on reel 10 for 0", () => {
-    const moves = Array.from({ length: MAX_GUESSES }, (_, i) => (i % 3 === 0 && i < MAX_GUESSES - 1 ? guess(decoy(i)) : skip));
-    expect(finish(play(moves))).toEqual({ score: 0, label: "X/10", grid: "🟥⬛⬛🟥⬛⬛🟥⬛⬛⬛" });
+  it("scores a name at double the pick on the same reel", () => {
+    for (let reel = 1; reel <= MAX_GUESSES; reel++) {
+      const named = finish(play([...skips(reel - 1), guess(answer)])).score;
+      const picked = finish(play([...skips(reel - 1), stop, pick(answer)])).score;
+      expect(named).toBe(2 * picked);
+    }
   });
 
   it("keeps the share grid free of spoilers", () => {
@@ -267,7 +294,7 @@ describe("fade-to-color outcome, score and share grid", () => {
 
 describe("fade-to-color reveal", () => {
   it("hands over the film, all ten levels and the frame credit", () => {
-    expect(fadeToColor.reveal!({ puzzle, solution })).toEqual({ film: answer, levels: LEVELS, credit: solution.credit });
+    expect(fadeToColor.reveal!({ puzzle, solution })).toEqual({ film: answer, levels: LEVELS, credit: solution.credit, options: OPTIONS });
   });
 
   it("round-trips puzzle and state through JSON", () => {
@@ -279,34 +306,74 @@ describe("fade-to-color reveal", () => {
 
 describe("fade-to-color on the home", () => {
   const home = fadeToColor.home!;
-  const finished = (moves: ResolvedMove[]) => {
-    const state = play(moves);
+  const read = (grid: string, o: "won" | "lost", label = "") => {
+    const marks = home.marks!(grid);
+    return { marks, line: home.line({ outcome: o, label, grid, marks, par: null }) };
+  };
+  const finished = (moves: ResolvedMove[], from?: State) => {
+    const state = play(moves, from);
     const o = outcome(state);
     if (o === "in_progress") throw new Error("not finished");
-    const { label, grid } = finish(state);
-    const marks = shareMarkRow(grid);
-    return { marks, line: home.line({ outcome: o, label, marks, par: null }) };
+    return read(finish(state).grid, o);
   };
-  const skips = (n: number) => Array.from({ length: n }, () => skip);
+  /** From before skipping the last reel was refused: giving up ended the play. */
+  const gaveUp = () => {
+    const nine = play(skips(MAX_GUESSES - 1));
+    return { ...nine, turns: [...nine.turns, { skipped: true as const }] };
+  };
 
-  it("draws one 3:2 frame per reel and a final-pick disc", () => {
+  it("draws one 3:2 frame per reel and a disc for the pick made when the reels ran out", () => {
     expect(home.form).toEqual({ kind: "frames", count: LEVEL_COUNT, aspect: "3:2", finalPick: true });
-    expect(finished(skips(LEVEL_COUNT)).marks).toHaveLength(LEVEL_COUNT);
-    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(answer)]).marks).toHaveLength(LEVEL_COUNT + 1);
   });
 
-  it("speaks the end credits' lines", () => {
+  it("reads the reels, then the pick: in the frame it was stopped on, or after the tenth", () => {
+    expect(finished([guess(heat), skip, guess(answer)]).marks).toEqual(["miss", "skip", "hit"]);
+    expect(finished([guess(heat), skip, stop, pick(answer)]).marks).toEqual(["miss", "skip", "pick"]);
+    expect(finished([stop, pick(thief)]).marks).toEqual(["mispick"]);
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(answer)]).marks).toEqual([...Array(MAX_GUESSES - 1).fill("skip"), "miss", "pick"]);
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(drive)]).marks).toEqual([...Array(MAX_GUESSES - 1).fill("skip"), "miss", "mispick"]);
+  });
+
+  it("still reads grids from before the stop: 🟨 a right final pick, an eleventh 🟥 a wrong one", () => {
+    const nine = "⬛".repeat(MAX_GUESSES - 1);
+    expect(read(`${nine}🟥🟨`, "won")).toEqual({ marks: [...Array(MAX_GUESSES - 1).fill("skip"), "miss", "pick"], line: "Picked after the last reel" });
+    expect(read(`${nine}🟥🟥`, "lost")).toEqual({ marks: [...Array(MAX_GUESSES - 1).fill("skip"), "miss", "mispick"], line: "Wrong pick after the last reel" });
+  });
+
+  it("says how it went in the home's few words, never with the end card's reveal", () => {
     expect(finished([guess(heat), skip, guess(answer)]).line).toBe("Named on reel 3");
     expect(finished([guess(answer)]).line).toBe("Named on reel 1");
-    expect(finished(skips(LEVEL_COUNT)).line).toBe("Not named in 10 reels");
-    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(answer)]).line).toBe("Named on the final pick");
-    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(drive)]).line).toBe("Not named, even on the final pick");
+    expect(finished([stop, pick(answer)]).line).toBe("Picked on reel 1");
+    expect(finished([guess(heat), skip, guess(drive), stop, pick(answer)]).line).toBe("Picked on reel 4");
+    expect(finished([skip, stop, pick(thief)]).line).toBe("Wrong pick on reel 2");
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(answer)]).line).toBe("Picked after the last reel");
+    expect(finished([...NINE_SKIPS_AND_A_MISS, pick(drive)]).line).toBe("Wrong pick after the last reel");
+    expect(finished([], gaveUp()).line).toBe("Not named in 10 reels");
+  });
+});
+
+describe("fade-to-color friendDetail (what friends see of a finished play)", () => {
+  const detail = (state: State) => fadeToColor.friendDetail!(state);
+
+  it("is the film picked from the four, right or wrong", () => {
+    expect(detail(play([skip, stop, pick(answer)]))).toStrictEqual({ pickId: answer.id });
+    expect(detail(play([stop, pick(thief)]))).toStrictEqual({ pickId: thief.id });
+    expect(detail(play([...NINE_SKIPS_AND_A_MISS, pick(drive)]))).toStrictEqual({ pickId: drive.id });
   });
 
-  it("resultLine covers every ending", () => {
-    expect(resultLine({ reels: 4, named: true, finalPick: false })).toBe("Named on reel 4");
-    expect(resultLine({ reels: 10, named: false, finalPick: false })).toBe("Not named in 10 reels");
-    expect(resultLine({ reels: 10, named: true, finalPick: true })).toBe("Named on the final pick");
-    expect(resultLine({ reels: 10, named: false, finalPick: true })).toBe("Not named, even on the final pick");
+  it("is no pick when the film was named, or got away without one", () => {
+    expect(detail(play([guess(heat), guess(answer)]))).toStrictEqual({ pickId: null });
+    // From before skipping the last reel was refused: giving up ended the play.
+    const gaveUp = play(skips(MAX_GUESSES - 1));
+    expect(detail({ ...gaveUp, turns: [...gaveUp.turns, { skipped: true }] })).toStrictEqual({ pickId: null });
+  });
+
+  it("carries only the pick, never the films a player typed (even among the four)", () => {
+    expect(detail(play([guess(drive), guess(heat), stop, pick(answer)]))).toStrictEqual({ pickId: answer.id });
+  });
+
+  it("is JSON-safe, as it travels to the browser as is", () => {
+    const value = detail(play([stop, pick(answer)]));
+    expect(JSON.parse(JSON.stringify(value))).toStrictEqual(value);
   });
 });

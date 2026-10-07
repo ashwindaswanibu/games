@@ -337,8 +337,8 @@
   min-height: var(--mark-u);
 }
 
-/* The voice line: one line when it fits; a long result line ("Named on the final pick" beside
-   Fade to Color's ten frames) takes a second rather than lose its end. */
+/* The voice line: one line when it fits; a long result line ("Wrong pick after the last reel"
+   beside Fade to Color's ten frames and its disc) takes a second rather than lose its end. */
 .voice {
   flex: 1 1 auto;
   min-width: 0;

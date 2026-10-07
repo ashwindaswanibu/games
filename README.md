@@ -103,8 +103,10 @@ scripts/
 
 1. Copy `src/games/number-hunt/` to `src/games/<your-id>/`.
 2. In `logic.ts`, define the zod schemas for puzzle/solution/move, then implement `generate`,
-   `initialState`, `applyMove`, `outcome`, `score` (0–100), `shareGrid`, and optionally `reveal`.
-   Keep it pure: use the `rng` you're given, never `Math.random()` or `Date.now()`.
+   `initialState`, `applyMove`, `outcome`, `score` (0–100), `shareGrid`, and optionally `reveal`
+   and `friendDetail` (a small JSON detail of a finished play for friends' results, such as which
+   option a player picked; only friends who have finished the puzzle get it). Keep it pure: use
+   the `rng` you're given, never `Math.random()` or `Date.now()`.
 3. Build the UI in `ui.tsx` as a client component that takes `GameUiProps<typeof yourGame>`, and
    export `YourGameEntry = connectGameUi(YourGameUi)` from it.
 4. Register the game in `src/games/registry.ts` (plus `src/games/server-registry.ts` if it has a

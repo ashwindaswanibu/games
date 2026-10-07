@@ -36,6 +36,9 @@ const KIND_BY_SYMBOL: ReadonlyMap<string, ShareMarkKind> = new Map<string, Share
   ["⭐️", "win"],
   ["🏳", "flag"],
   ["🏳️", "flag"],
+  ["🟡", "pick"],
+  ["⚫", "mispick"],
+  ["⚫️", "mispick"],
 ]);
 
 const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });

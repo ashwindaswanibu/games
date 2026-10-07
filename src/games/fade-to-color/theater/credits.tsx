@@ -1,63 +1,63 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { useShare } from "@/components/share-button";
 import { APP_NAME } from "@/config";
 import type { PuzzleDate } from "@/core/day";
+import type { Outcome } from "@/core/game";
 import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
-import type { FilmDetails } from "@/games/_movies/schemas";
-import { fadeToColor, LEVEL_COUNT, resultLine } from "../logic";
+import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
+import type { FilmDetails, FilmRef } from "@/games/_movies/schemas";
+import { fadeToColor, LEVEL_COUNT, type State } from "../logic";
+import { everyonesPicks, tallyLine, tallyOf, type FourCard } from "./everyone";
+import { describeGrid, endKicker, parseGrid } from "./grid";
 import styles from "./theater.module.css";
 import { BarcodeTitle } from "./wordmark";
 
-/** The share grid's marks, drawn as the strip's frames instead of emoji. */
-const MARKS: Record<string, "solved" | "missed" | "skipped" | "picked"> = { "🟩": "solved", "🟥": "missed", "⬛": "skipped", "🟨": "picked" };
-
-/** One result as ten little frames (how each reel went, then unexposed film) and, if it came to it, the final pick. */
+/**
+ * One result as ten little frames: how each reel went, then unexposed film. A pick is a round mark:
+ * inside the frame of the reel the film was stopped on (the rest stayed in the can), or set a
+ * little apart after the tenth when the reels ran out. Filled with the light if right; a dark ring
+ * if wrong.
+ */
 export function ResultFrames({ grid, label }: { grid: string; label?: string }) {
-  const marks = Array.from(grid)
-    .map((ch) => MARKS[ch])
-    .filter(Boolean);
-  const pick = marks[LEVEL_COUNT];
+  const marks = parseGrid(grid);
+  const stoppedAt = marks.pick && marks.reels.length < LEVEL_COUNT ? marks.reels.length : null;
   return (
     <span className={styles.frames} role="img" aria-label={label ?? describeGrid(marks)}>
       {Array.from({ length: LEVEL_COUNT }, (_, i) => (
-        <span key={i} data-mark={marks[i] ?? "none"} />
+        <span key={i} data-mark={marks.reels[i] ?? "none"} data-pick={i === stoppedAt ? marks.pick : undefined} />
       ))}
-      {pick && <span className={styles.pickMark} data-mark={pick} />}
+      {marks.pick && stoppedAt === null && <span className={styles.pickMark} data-pick={marks.pick} />}
     </span>
   );
 }
 
-function describeGrid(marks: readonly string[]): string {
-  const last = marks.at(-1);
-  return resultLine({
-    reels: Math.min(marks.length, LEVEL_COUNT),
-    named: last === "solved" || last === "picked",
-    finalPick: marks.length > LEVEL_COUNT,
-  });
-}
-
 /**
  * The end card under the reel: the film's title cut out of its own barcode, who made it, the
- * result, sharing (spoiler-free) and everyone else's results. (The frames' source is credited on
- * the reel's edge.)
+ * result, sharing (spoiler-free), everyone else's results and the catalog's data credit (IMDb).
+ * (The frames' source is credited on the reel's edge.)
+ *
+ * Everyone's results open in `panelHost` (the theater), outside the console: the console and the
+ * end card are moved by transforms as they rise and glide into place, and a transformed ancestor
+ * would hold the fixed panel inside its own box instead of over the room.
  */
 export function Credits(props: {
   film: FilmDetails;
-  won: boolean;
-  /** Named in the final pick rather than by a guess. */
-  pickedIt: boolean;
-  gaveUp: boolean;
-  attempts: number;
+  /** The four, in their shared order (for everyone's picks). */
+  options: readonly FilmRef[];
+  state: State;
+  status: Outcome;
   result: { score: number; label: string; shareGrid: string };
   fill: string | null;
   date: PuzzleDate;
   friends: readonly FriendResult[] | null;
   viewerId: string;
+  panelHost: HTMLElement | null;
 }) {
-  const { film, won, pickedIt, gaveUp, attempts, result, fill, date, friends, viewerId } = props;
+  const { film, options, state, status, result, fill, date, friends, viewerId, panelHost } = props;
   const { share, copied } = useShare(
     shareText({
       appName: APP_NAME,
@@ -70,19 +70,14 @@ export function Credits(props: {
     }),
   );
   const [showFriends, setShowFriends] = useState(false);
-  const kicker = pickedIt
-    ? "Named on the final pick"
-    : won
-      ? `Named on reel ${attempts}`
-      : gaveUp
-        ? "You gave up · the film was"
-        : "Out of reels · the film was";
+  const panel = showFriends && <FriendsPanel friends={friends} viewerId={viewerId} options={options} answerId={film.id} fill={fill} onClose={() => setShowFriends(false)} />;
   const byline = [film.directors.slice(0, 2).join(" & "), film.year].filter(Boolean).join(" · ");
 
   return (
     <section className={styles.credits} aria-label="Today's film">
-      <p className={styles.kicker}>{kicker}</p>
-      <BarcodeTitle text={film.title} fill={fill} />
+      <p className={styles.kicker}>{endKicker(state, status)}</p>
+      {/* Colour is what you earn: a film that got away is titled in plain ink. */}
+      <BarcodeTitle text={film.title} fill={status === "won" ? fill : null} />
       {byline && <p className={styles.byline}>{byline}</p>}
       <div className={styles.creditActions}>
         <span className={styles.result}>
@@ -98,13 +93,26 @@ export function Credits(props: {
           How everyone did
         </button>
       </div>
-      {showFriends && <FriendsPanel friends={friends} viewerId={viewerId} onClose={() => setShowFriends(false)} />}
+      <p className={styles.dataCredit}>{IMDB_ATTRIBUTION}</p>
+      {panel && (panelHost ? createPortal(panel, panelHost) : panel)}
     </section>
   );
 }
 
-/** Everyone's results for today's film, in a panel over the room. */
-function FriendsPanel({ friends, viewerId, onClose }: { friends: readonly FriendResult[] | null; viewerId: string; onClose(): void }) {
+/**
+ * Everyone's results for today's film, in a panel over the room: how it went for everyone in one
+ * line, the four with who picked which (when anyone stopped the film), then each player's result.
+ */
+function FriendsPanel(props: {
+  friends: readonly FriendResult[] | null;
+  viewerId: string;
+  options: readonly FilmRef[];
+  answerId: number;
+  fill: string | null;
+  onClose(): void;
+}) {
+  const { friends, viewerId, options, answerId, fill, onClose } = props;
+  const four = friends && everyonesPicks(options, answerId, friends, viewerId);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -125,29 +133,79 @@ function FriendsPanel({ friends, viewerId, onClose }: { friends: readonly Friend
         {friends === null ? (
           <p className={styles.panelNote}>Results are on their way. If they don&rsquo;t show, refresh the page.</p>
         ) : (
-          <ol className={styles.people}>
-            {friends.map((f) => {
-              const done = f.status === "won" || f.status === "lost";
-              return (
-                <li key={f.profile.id} data-you={f.profile.id === viewerId || undefined}>
-                  <span className={styles.who}>
-                    <b>{f.profile.display_name}</b>
-                    <small>@{f.profile.username}</small>
-                  </span>
-                  {done && f.shareGrid ? (
-                    <>
-                      <ResultFrames grid={f.shareGrid} />
-                      <span className={styles.personScore}>{f.label}</span>
-                    </>
-                  ) : (
-                    <span className={styles.panelNote}>{f.status === "in_progress" ? "Watching…" : "Not yet"}</span>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
+          <>
+            <p className={styles.tally}>{tallyLine(tallyOf(friends))}</p>
+            {four && <EveryonesPicks cards={four} fill={fill} />}
+            <ol className={styles.people} aria-label="Players">
+              {friends.map((f) => {
+                const done = f.status === "won" || f.status === "lost";
+                return (
+                  <li key={f.profile.id} data-you={f.profile.id === viewerId || undefined}>
+                    <span className={styles.who}>
+                      <b>{f.profile.display_name}</b>
+                      <small>@{f.profile.username}</small>
+                    </span>
+                    {done && f.shareGrid ? (
+                      <>
+                        <ResultFrames grid={f.shareGrid} />
+                        <span className={styles.personScore}>{f.label}</span>
+                      </>
+                    ) : (
+                      <span className={styles.panelNote}>{f.status === "in_progress" ? "Watching…" : "Not yet"}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </>
         )}
       </div>
     </div>
   );
+}
+
+/**
+ * The four as everyone saw them, in their shared order: the film lit with its own barcode, and
+ * under each card the initials of whoever picked it.
+ */
+function EveryonesPicks({ cards, fill }: { cards: readonly FourCard[]; fill: string | null }) {
+  return (
+    <section className={styles.everyFour} aria-labelledby="everyone-four">
+      <h4 className={styles.everyFourLabel} id="everyone-four">
+        The four
+      </h4>
+      <ol className={styles.everyFourGrid}>
+        {cards.map(({ film, answer, pickers }) => {
+          const lit = answer && fill !== null;
+          const names = pickers.map((p) => (p.you ? "you" : p.name));
+          return (
+            <li key={film.id} data-answer={answer || undefined}>
+              <span className={styles.everyCard}>
+                <span className={styles.everyTitle} data-lit={lit || undefined} style={lit ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined}>
+                  {film.title}
+                </span>
+                <span className={styles.everyYear}>{film.year ?? ""}</span>
+              </span>
+              <span className={styles.pickers} aria-hidden>
+                {pickers.map((p) => (
+                  <span key={p.id} title={p.name} data-you={p.you || undefined}>
+                    {p.initials}
+                  </span>
+                ))}
+              </span>
+              <span className={styles.srOnly}>
+                {answer ? "The film. " : ""}
+                {names.length > 0 ? `Picked by ${listOf(names)}.` : "Nobody picked it."}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+/** "a", "a and b", "a, b and c". */
+function listOf(items: readonly string[]): string {
+  return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }

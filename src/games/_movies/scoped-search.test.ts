@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalogSearchKey, matchTier, parseScopedSearchParams, rankByQuery } from "./scoped-search";
+import { catalogSearchKey, matchClass, parseScopedSearchParams, rankByQuery } from "./scoped-search";
 
 describe("catalogSearchKey", () => {
   it("lowercases, strips accents and collapses punctuation like the SQL key", () => {
@@ -8,16 +8,64 @@ describe("catalogSearchKey", () => {
     expect(catalogSearchKey("Emmanuelle Béart")).toBe("emmanuelle beart");
     expect(catalogSearchKey("Mission: Impossible – Fallout")).toBe("mission impossible fallout");
   });
+
+  it("rewrites what SQL's unaccent rewrites beyond accents", () => {
+    // Each expected key is what `catalog_search_key` returns in Postgres.
+    expect(catalogSearchKey("Bølgen")).toBe("bolgen");
+    expect(catalogSearchKey("Æon Flux")).toBe("aeon flux");
+    expect(catalogSearchKey("Hababam Sınıfı")).toBe("hababam sinifi");
+    expect(catalogSearchKey("Kanał")).toBe("kanal");
+    expect(catalogSearchKey("Dýrið")).toBe("dyrid");
+    expect(catalogSearchKey("À ma sœur !")).toBe("a ma soeur");
+    expect(catalogSearchKey("8½")).toBe("8 1 2");
+    expect(catalogSearchKey("The Lion King 1½")).toBe("the lion king 1 1 2");
+    expect(catalogSearchKey("Men in Black³")).toBe("men in black");
+  });
 });
 
-describe("matchTier", () => {
-  it("ranks exact, then prefix of the text or a word, then substring", () => {
-    expect(matchTier("heat", "heat")).toBe(0);
-    expect(matchTier("godf", "the godfather")).toBe(1);
-    expect(matchTier("the", "the godfather")).toBe(1);
-    expect(matchTier("father", "the godfather")).toBe(2);
-    expect(matchTier("alien", "the godfather")).toBeNull();
-    expect(matchTier("", "heat")).toBeNull();
+describe("matchClass", () => {
+  it("classifies exact, whole-word starts, mid-word starts, later words and substrings", () => {
+    expect(matchClass("heat", "heat")).toBe(0);
+    expect(matchClass("stree", "stree 2")).toBe(1);
+    expect(matchClass("stree", "street kings")).toBe(2);
+    expect(matchClass("godf", "godfather")).toBe(2);
+    expect(matchClass("the", "the godfather")).toBe(1);
+    expect(matchClass("guide", "the hitchhiker s guide to the galaxy")).toBe(3);
+    expect(matchClass("stree", "the wolf of wall street")).toBe(4);
+    expect(matchClass("father", "the godfather")).toBe(5);
+    expect(matchClass("alien", "the godfather")).toBeNull();
+    expect(matchClass("", "heat")).toBeNull();
+  });
+
+  it("counts a match right after a leading the, a or an as a start", () => {
+    expect(matchClass("dark", "the dark knight")).toBe(1);
+    expect(matchClass("godfather", "the godfather")).toBe(1);
+    expect(matchClass("godf", "the godfather")).toBe(2);
+    expect(matchClass("streetcar", "a streetcar named desire")).toBe(1);
+    expect(matchClass("american were", "an american werewolf in london")).toBe(2);
+    // Only a leading article: "of" isn't one, and "the" inside a name is a later word.
+    expect(matchClass("wolf", "of wolf and man")).toBe(3);
+    expect(matchClass("king", "the lion king")).toBe(3);
+  });
+
+  it("ignores spaces: exact at any length, starts from 3 characters", () => {
+    expect(matchClass("xmen", "x men")).toBe(0);
+    expect(matchClass("walle", "wall e")).toBe(0);
+    expect(matchClass("shahrukh", "shah rukh khan")).toBe(1);
+    expect(matchClass("shahru", "shah rukh khan")).toBe(2);
+    expect(matchClass("shah rukhkhan", "shah rukh khan")).toBe(0);
+    expect(matchClass("it", "i t")).toBe(0);
+    // Two characters only match the spaced key, so "it" doesn't find "I, Tonya".
+    expect(matchClass("it", "i tonya")).toBeNull();
+    expect(matchClass("it", "it s a wonderful life")).toBe(1);
+    expect(matchClass("ito", "i tonya")).toBe(2);
+  });
+
+  it("needs 3 characters for a later word or a substring", () => {
+    expect(matchClass("ha", "tom hanks")).toBeNull();
+    expect(matchClass("han", "tom hanks")).toBe(4);
+    expect(matchClass("hanks", "tom hanks")).toBe(3);
+    expect(matchClass("ank", "tom hanks")).toBe(5);
   });
 });
 
@@ -33,17 +81,54 @@ describe("rankByQuery", () => {
   const rank = (query: string, limit = 8) =>
     rankByQuery(films, query, { text: (f) => f.title, popularity: (f) => f.popularity, limit }).map((f) => f.id);
 
-  it("orders by tier, then popularity, then id", () => {
-    expect(rank("godfather")).toEqual([3, 5, 2, 1, 6]);
+  it("ranks names that start with the query (after an article too) with the exact name, by popularity and bonus", () => {
+    // ln(133) + ln 3 and ln(87) + ln 3 beat ln(2) + ln 30; the later whole word stays below the
+    // exact name; the later word that only starts with the query comes last, however popular.
+    expect(rank("godfather")).toEqual([2, 1, 3, 6, 5]);
   });
 
-  it("ignores case and punctuation, treating punctuation as a word break", () => {
+  it("ignores case, punctuation and spaces", () => {
     expect(rank("MR. GODFATHERS")).toEqual([5]);
-    expect(rank("god-father")).toEqual([]);
+    // Spaces are ignored for the whole name, not inside later words.
+    expect(rank("god-father")).toEqual([2, 1, 3]);
   });
 
   it("applies the limit", () => {
-    expect(rank("godfather", 2)).toEqual([3, 5]);
+    expect(rank("godfather", 2)).toEqual([2, 1]);
+  });
+
+  it("puts a whole-word start above a mid-word start unless that one has three times the fame", () => {
+    const streets = [
+      { id: 1, title: "Stree 2", popularity: 20 },
+      { id: 2, title: "Street Kings", popularity: 50 },
+      { id: 3, title: "Street Fighter", popularity: 200 },
+      { id: 4, title: "The Wolf of Wall Street", popularity: 5000 },
+    ];
+    const ranked = rankByQuery(streets, "stree", { text: (f) => f.title, popularity: (f) => f.popularity, limit: 8 }).map((f) => f.id);
+    // ln(21) + ln 3 > ln(51); ln(201) > ln(21) + ln 3; a partial later word comes after every start.
+    expect(ranked).toEqual([3, 1, 2, 4]);
+  });
+
+  const people = [
+    { id: 1, name: "Deepika", popularity: 0 },
+    { id: 2, name: "Deepika Padukone", popularity: 89 },
+    { id: 3, name: "Deepika Amin", popularity: 14 },
+    { id: 4, name: "Shah Rukh Khan", popularity: 136 },
+    { id: 5, name: "Salman Khan", popularity: 104 },
+    { id: 6, name: "Khan", popularity: 2 },
+    { id: 7, name: "Aamir Khanna", popularity: 3 },
+  ];
+  const rankPeople = (query: string) =>
+    rankByQuery(people, query, { text: (p) => p.name, popularity: (p) => p.popularity, limit: 8 }).map((p) => p.id);
+
+  it("ranks by popularity: an exact name wins unless a whole-word start has ten times the popularity", () => {
+    // ln(1 + 89) + ln 3 > ln(1 + 0) + ln 30, and so is ln(1 + 14) + ln 3.
+    expect(rankPeople("deepika")).toEqual([2, 3, 1]);
+    expect(rankPeople("shahrukh")).toEqual([4]);
+  });
+
+  it("keeps later whole words below the exact name, and partial later words after them", () => {
+    expect(rankPeople("khan")).toEqual([6, 4, 5, 7]);
   });
 });
 

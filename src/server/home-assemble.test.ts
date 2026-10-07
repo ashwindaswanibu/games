@@ -4,7 +4,7 @@ import { parsePuzzleDate } from "@/core/day";
 import { defineGame, type AnyGame, type BucketId, type GameHome } from "@/core/game";
 import type { HomeGame } from "@/core/home-view";
 import { BUCKETS } from "@/games/buckets";
-import { FULL_SCREEN_IDS, liveGames, visibleGames } from "@/games/registry";
+import { FULL_SCREEN_IDS, getGame, liveGames, visibleGames } from "@/games/registry";
 import type { ProfileRow } from "./database.types";
 import {
   assembleHomeView,
@@ -237,6 +237,24 @@ describe("assembleHomeView: games", () => {
 
     const unavailable = assembleHomeView(rows());
     expect(gameOf(unavailable, "chain-game").form).toEqual({ kind: "chain", par: null });
+  });
+
+  it("reads the grid the game's own way when it has one, and gives its line the stored grid", () => {
+    const own = fakeGame("words-own", {
+      bucket: "words",
+      home: { form: { kind: "slots", count: 7 }, marks: (grid) => (grid === "🟡" ? ["pick"] : []), line: ({ grid, marks }) => `${grid} read as ${marks.join()}` },
+    });
+    const view = assembleHomeView(rows({ games: [own], plays: plays(finishedPlay("words-own", { share_grid: "🟡" })) }));
+    expect(gameOf(view, "words-own").result).toMatchObject({ marks: ["pick"], line: "🟡 read as pick" });
+  });
+
+  it("draws Fade to Color's stop from its own reading of the grid, old grids included", () => {
+    const ftc = getGame("fade-to-color")!;
+    const result = (share_grid: string, result_label: string) =>
+      gameOf(assembleHomeView(rows({ games: [ftc], plays: plays(finishedPlay("fade-to-color", { share_grid, result_label })) })), "fade-to-color").result;
+    expect(result("🟥⬛🟥🟡", "Pick 4/10")).toMatchObject({ marks: ["miss", "skip", "miss", "pick"], line: "Picked on reel 4" });
+    expect(result("⬛⚫", "X/10")).toMatchObject({ marks: ["skip", "mispick"], line: "Wrong pick on reel 2" });
+    expect(result(`${"⬛".repeat(9)}🟥🟨`, "Final pick")).toMatchObject({ marks: [...Array(9).fill("skip"), "miss", "pick"], line: "Picked after the last reel" });
   });
 
   it("falls back to a generic row and no line for a game without a home entry", () => {

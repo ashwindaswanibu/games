@@ -9,12 +9,15 @@
  *
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --scenario B
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --scenario A --at now
+ *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --scenario B --play fade-to-color=xstp
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --clean
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --clean --adopt-untagged
  *
  * `--at HH:MM` (New York time today) or `--at now` moves the scenario's clock; every timestamp keeps
  * its distance from it (the presence windows are relative). Default: the scenario's own time. View
- * it with the home's `?qa_t=HH:MM` so the page's clock agrees.
+ * it with the home's `?qa_t=HH:MM` so the page's clock agrees. `--play <game>=<steps>` (repeatable)
+ * plays one of the viewer's games in the scenario another way (steps as in `PLANS`), e.g. a Fade to
+ * Color stopped on reel 3 and picked right.
  *
  * Whose accounts it touches: only the ones it created. Each is tagged at creation in its auth
  * `app_metadata` (`seed: "home-demo"`, writable by the admin API only, never by the user), and a
@@ -69,6 +72,7 @@ const { values: args } = parseArgs({
     at: { type: "string" },
     clean: { type: "boolean", default: false },
     "adopt-untagged": { type: "boolean", default: false },
+    play: { type: "string", multiple: true },
   },
   strict: true,
 });
@@ -153,7 +157,6 @@ const SCENARIOS: Record<string, Scenario> = {
       { player: "demo_sam", gameId: NUMBER_HUNT, steps: "4", at: "13:05" },
       { player: "demo_ashwin", gameId: "fade-to-color", steps: "xx*", at: "13:31" },
       { player: "demo_jess", gameId: NUMBER_HUNT, steps: "5", at: "19:30" },
-      { player: "demo_ashwin", gameId: "color-grade", steps: "x*", at: "20:10" },
       { player: "demo_ashwin", gameId: "degrees", steps: "+1", at: "21:40" }, // 3 links · par 2, 85
       { player: "demo_dev", gameId: NUMBER_HUNT, steps: "6", at: "22:20" }, // finished in the last hour
       { player: "demo_ashwin", gameId: "frame-by-frame", steps: "xxsxxx", at: "22:30" }, // X/6, 0
@@ -223,9 +226,10 @@ async function wrongFilms(exclude: ReadonlySet<number>, count: number): Promise<
 }
 
 /**
- * Film-naming games (Fade to Color, Frame by Frame, Color Grade): `x` a wrong guess, `s` a skip,
- * `*` the right film, `p` / `q` the final pick right / wrong (Fade to Color). Fade to Color's wrong
- * guesses are its own look-alikes (the pick's other options).
+ * Film-naming games (Fade to Color, Frame by Frame): `x` a wrong guess, `s` a skip, `*` the right
+ * film; Fade to Color also `t` stop the film, then `p` / `q` a right / wrong pick from the four.
+ * Fade to Color's wrong guesses are its own look-alikes (the four's other films); a wrong pick is
+ * one not already guessed (the game refuses those).
  */
 const filmGuesses: Plan = async (steps, ctx) => {
   const solution = ctx.solution as { answer: { id: number }; options?: { id: number }[] };
@@ -242,10 +246,12 @@ const filmGuesses: Plan = async (steps, ctx) => {
         return { type: "skip" };
       case "*":
         return { type: "guess", filmId: answer };
+      case "t":
+        return { type: "stop" };
       case "p":
         return { type: "pick", filmId: answer };
       case "q":
-        return { type: "pick", filmId: lookAlikes[0] };
+        return { type: "pick", filmId: lookAlikes.find((id) => !wrong.slice(0, w).includes(id)) };
       default:
         throw new Error(`Unknown film step "${step}"`);
     }
@@ -305,7 +311,6 @@ const PLANS: Record<string, Plan> = {
   [NUMBER_HUNT]: async (steps, ctx) => numberHuntGuesses(steps, ctx),
   "fade-to-color": filmGuesses,
   "frame-by-frame": filmGuesses,
-  "color-grade": filmGuesses,
   degrees: degreesLinks,
 };
 
@@ -602,7 +607,7 @@ async function seed(name: string): Promise<void> {
       if (row) rows.push(row);
     }
   }
-  for (const play of scenario.plays) {
+  for (const play of withOverrides(scenario, args.play ?? [])) {
     const userId = ids.get(play.player);
     if (!userId) throw new Error(`Unknown demo player ${play.player}`);
     const lastMoveAt = clampToDay(wallClockAt(date, minutesOf(play.at)).getTime() + shift, date);
@@ -631,6 +636,22 @@ async function seed(name: string): Promise<void> {
   }
   console.log(`Sign in as ${viewer.username}${viewer.isAdmin ? " (admin)" : ""}; the password is HOME_DEMO_PASSWORD in .env.local${isNew ? " (new)" : ""}.`);
   console.log(`View it at /?qa_t=${nyTime.format(at)} so the page's clock matches.`);
+}
+
+/** The scenario's plays, with the viewer's steps replaced for each `--play <game>=<steps>`. */
+function withOverrides(scenario: Scenario, overrides: readonly string[]): TodayPlay[] {
+  const steps = new Map<string, string>();
+  for (const o of overrides) {
+    const match = /^([a-z0-9-]+)=(\S+)$/.exec(o);
+    if (!match) throw new Error(`--play takes <game>=<steps>, not "${o}"`);
+    steps.set(match[1], match[2]);
+  }
+  for (const gameId of steps.keys()) {
+    if (!scenario.plays.some((p) => p.player === scenario.viewer && p.gameId === gameId)) {
+      throw new Error(`This scenario has no ${gameId} play for ${scenario.viewer} to play another way`);
+    }
+  }
+  return scenario.plays.map((p) => (p.player === scenario.viewer && steps.has(p.gameId) ? { ...p, steps: steps.get(p.gameId)! } : p));
 }
 
 async function main(): Promise<void> {

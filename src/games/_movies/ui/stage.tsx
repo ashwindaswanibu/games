@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
+import { IMDB_ATTRIBUTION } from "../attribution";
 import { MOVIES_FONT_VARS } from "./fonts";
 import styles from "./movies.module.css";
 import { MoviesVariantProvider, useMoviesVariant, type MoviesVariant } from "./variant";
@@ -32,7 +33,8 @@ export interface MoviesStageProps {
 /**
  * The frame every Movies game board sits in: an ochre title slate (cut-paper edge, grain,
  * perforations, the game's name in film-title type) over an ink "screen" lit by a cyan projector
- * beam. The `neutral` variant swaps all of it for a colorist's gray.
+ * beam, with the catalog's data credit (IMDb) in fine print at the foot. The `neutral` variant
+ * swaps all of it for a colorist's gray.
  */
 export function MoviesStage({
   title,
@@ -70,6 +72,7 @@ export function MoviesStage({
           )}
         </header>
         <div className={styles.screen}>{children}</div>
+        <p className={styles.colophon}>{IMDB_ATTRIBUTION}</p>
       </section>
     </MoviesVariantProvider>
   );

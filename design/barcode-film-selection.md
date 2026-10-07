@@ -5,7 +5,7 @@
 ## 1. Which films are possible at all
 A film needs **frames from the whole movie** to make a barcode. Today's source is **movie-screencaps.com**, which has 1,385 films from 1902–2026. MovieNet (1,100 films, pre-2019) gets added later.
 
-Of those 1,385, **825 match our movie catalog**, which we need for the guess search and the answer details. Most of the misses are pre-1950 films, which the catalog doesn't cover.
+Of those 1,385, **825 match our movie catalog**, which we need for the guess search and the answer details. Most of the misses are pre-1950 films, which the catalog didn't cover until the 2026-10-07 expansion (it has no year floor now; recount when the tiers are built).
 
 ## 2. How "popular" is measured
 **The signal:** how many language editions of Wikipedia have an article on the film. This is a robust, worldwide measure of fame.
@@ -21,6 +21,8 @@ Of those 1,385, **825 match our movie catalog**, which we need for the guess sea
 - **Era:** compared with films released within 2 years of it.
 
 **Score (0–100) = the higher of overall, or era × 0.9.** This lifts recent hits fairly: *Barbie* and *Avatar: The Way of Water* score 90, *The Batman* 85.
+
+> **Catalog expansion (2026-10-07):** the catalog grew from ~5,000 films (20+ Wikipedia editions) to ~60,000 (1,000+ IMDb votes or 8+ editions), and now reaches back before 1950. "Compared with all films" over the new catalog would lift every film's percentile and inflate every tier. When the tiers are built, compute both percentiles over a **fixed reference set**: catalog films with `popularity ≥ 20` (the old catalog's bar) or the screencaps library itself, not "all catalog films". `popularity` still means Wikipedia editions; IMDb votes are a separate column (`imdb_votes`, with `fame` derived from it), which could become the "would my friends know this?" signal of gap 4 below.
 
 ## 3. Tiers and the daily mix
 | Tier | Score | Films today | Share of days |
@@ -49,3 +51,12 @@ The Batman (2022) · Star Trek: First Contact (1996) · Sweeney Todd (2007) · S
 - Do the tier cutoffs and the 25 / 55 / 20 mix feel right? Too mainstream, or not mainstream enough?
 - Should black-and-white films ever appear?
 - Any hard exclusions (horror, kids' films, sequels...)?
+
+## Implemented (2026-10-07)
+The picker is `src/games/fade-to-color/picker.ts`; `npm run content:movies:plan-barcode` plans (and renders) days with it, and `barcode-levels --film auto` picks one day. Details: `scripts/content/movies/README.md`, section 5.
+- **Percentiles are computed over the films that have frames** (the pool), which is what produced the numbers above. Computing them over the whole catalog instead (`--percentiles catalog`) would make 359 films Iconic.
+- **Today's numbers:** 859 catalog films have a gallery (the site lists 1,470 galleries now); Iconic 138, Well-known 238, Known 144: **520 eligible**.
+- **Series** uses the final pick's title match (generous: Star Wars and Star Trek count as one series).
+- **When a tier runs out**, the nearest tier is used, the more popular first. If every tier runs out, the day gets no film and the plan says so. A year of days currently needs no fallback.
+- **Black-and-white films** are found on their frames when rendered. A grey film is recorded and the day is picked again, so a dry-run plan can still change on those days.
+

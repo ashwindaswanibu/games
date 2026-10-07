@@ -151,7 +151,9 @@ export interface HomeGame {
 
 /**
  * A game's mark, as a layout spec for the generic renderer (spec §6.2). `count` is the game's
- * maximum attempts; the chain's `par` comes from today's puzzle (null when it isn't ready).
+ * maximum attempts; the chain's `par` comes from today's puzzle (null when it isn't ready). A
+ * frames form with `finalPick` keeps a disc set apart after its frames for a pick made once they
+ * ran out; a pick made earlier (a `pick` or `mispick` mark among the frames) is drawn in its frame.
  */
 export type MarkForm =
   | { kind: "slots"; count: number }
@@ -166,19 +168,35 @@ export type MarkFormSpec = Exclude<MarkForm, { kind: "chain" }> | { kind: "chain
  * What one share-grid symbol means, independent of the game's emoji (`shareMarks()` in
  * `src/core/share-marks.ts` maps them):
  *   hit 🟩 ✅ · near 🟨 · miss 🟥 · skip ⬛ · unused ⬜ · up ⬆️ · down ⬇️ · link 🎞 · win ⭐ · flag 🏳️ ·
+ *   pick 🟡 (a right pick from a game's options) · mispick ⚫ (a wrong one) ·
  *   other: anything else (never dropped).
+ * A game may read its own grids instead (`GameHome.marks`): Fade to Color's are the reels' marks,
+ * then a pick, if one was made.
  */
-export type ShareMarkKind = "hit" | "near" | "miss" | "skip" | "unused" | "up" | "down" | "link" | "win" | "flag" | "other";
+export type ShareMarkKind =
+  | "hit"
+  | "near"
+  | "miss"
+  | "skip"
+  | "unused"
+  | "up"
+  | "down"
+  | "link"
+  | "win"
+  | "flag"
+  | "pick"
+  | "mispick"
+  | "other";
 
 export interface HomeResult {
   outcome: "won" | "lost";
   /** 0–100. */
   score: number;
-  /** `result_label` as stored ("4/7", "X/6", "3 links · par 2", "Gave up", "Final pick"). */
+  /** `result_label` as stored ("4/7", "X/6", "3 links · par 2", "Gave up", "Pick 4/10"). */
   label: string;
   /** The game's result line ("Named on reel 3"); null for games without one (label only). */
   line: string | null;
-  /** The share grid as marks, in order. */
+  /** The share grid as marks, in order (the game's own reading of it, when it has one). */
   marks: readonly ShareMarkKind[];
   /** ISO 8601, for the set-in gate. */
   finishedAt: string;

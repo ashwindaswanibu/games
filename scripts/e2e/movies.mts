@@ -27,8 +27,7 @@ import { attemptsScore } from "@/core/scoring";
 import { describeClue, spokenClues } from "@/games/_movies/clue-text";
 import { computeClues } from "@/games/_movies/hints";
 import type { ClueKind, FilmDetails, PersonRef } from "@/games/_movies/schemas";
-import { fadeToColor, LAST_REEL_SCORE, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES, OPTION_COUNT, PICK_SCORE } from "@/games/fade-to-color/logic";
-import { colorGrade, CLUE_KINDS as GRADE_CLUES, MAX_TRIES } from "@/games/color-grade/logic";
+import { fadeToColor, LAST_REEL_SCORE, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES, OPTION_COUNT, pickWorth } from "@/games/fade-to-color/logic";
 import { chainScore, degrees, maxLinks } from "@/games/degrees/logic";
 import { FRAME_COUNT, frameByFrame, CLUE_KINDS as FRAME_CLUES } from "@/games/frame-by-frame/logic";
 import type { PlayRow } from "@/server/database.types";
@@ -49,13 +48,14 @@ import {
   waitForImages,
   waitForText,
   PHONE_VIEWPORT,
+  WAIT_MS,
 } from "./lib/browser.mjs";
 import { assetIdsFor, decoyFilms, degreesDetour, e2eDb, loadPlay, loadPuzzle, profileByUsername, resetAssetBurst, resetPlays, waitForPlayVersion, type E2eDb } from "./lib/db.mjs";
 import { e2eEnv } from "./lib/env.mjs";
 import { Report } from "./lib/report.mjs";
 import { SpoilerWatch } from "./lib/spoilers.mjs";
 
-const MOVIES_GAMES: readonly AnyGame[] = [degrees, frameByFrame, colorGrade, fadeToColor];
+const MOVIES_GAMES: readonly AnyGame[] = [degrees, frameByFrame, fadeToColor];
 
 interface Ctx {
   page: Page;
@@ -446,71 +446,6 @@ async function playFrameByFrame(ctx: Ctx): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Color Grade
-// ---------------------------------------------------------------------------------------------
-
-async function playColorGrade(ctx: Ctx): Promise<void> {
-  const { page, report } = ctx;
-  const loaded = await loadPuzzle(ctx.db, colorGrade, ctx.date);
-  const { puzzle, solution } = loaded;
-  const answer = solution.answer;
-  const { neutral, graded, blurred, still } = { neutral: solution.neutral.id, graded: solution.graded.id, blurred: solution.blurred.id, still: solution.still.id };
-  const secrets = [answer.title];
-  report.note(`today's film: ${answer.title} (${answer.year})${puzzle.fixture ? " (DEV FIXTURE)" : ""}`);
-
-  await openAndStart(ctx, colorGrade, loaded, secrets);
-  const swatches = await page.$$eval('ul[aria-label="The film\'s palette, largest share first"] button', (buttons) =>
-    buttons.map((b) => b.getAttribute("aria-label") ?? ""),
-  );
-  report.check(
-    "the palette shows the puzzle's five colors",
-    swatches.length === puzzle.palette.length && puzzle.palette.every((s, i) => swatches[i]?.includes(s.hex)),
-    swatches,
-  );
-  report.check("no image is on screen at the palette stage", (await imageSrcs(page)).length === 0, await imageSrcs(page));
-  await checkAssetAccess(ctx, "palette stage", { hidden: [neutral, graded, blurred, still] });
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "at the palette stage", secrets);
-
-  // --- A wrong guess: clues, and the graded photo. ---
-  const [decoy] = await decoyFilms(ctx.db, 1, [answer.id]);
-  await playMove(ctx, colorGrade, 1, () =>
-    pickFromSearch(page, "Name the film", decoy.title, { primary: decoy.title, secondaryPrefix: String(decoy.year) }),
-  );
-  await checkLogRow(ctx, "Your tries", 0, { kind: "miss", film: decoy, chips: expectedChips(decoy, answer, GRADE_CLUES) });
-  await checkLastGuess(ctx, "color grade", decoy, answer, GRADE_CLUES);
-  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(graded));
-  report.check("the miss reveals the graded photo", true);
-  await checkAssetAccess(ctx, "graded stage", { shown: [neutral, graded], hidden: [blurred, still] });
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "after the wrong guess", secrets);
-  await waitForImages(page);
-  await checkNoSidewaysScroll(ctx, "mid-play");
-  await shot(ctx, "color-grade-mid");
-
-  // --- A skip: the blurred still. ---
-  await playMove(ctx, colorGrade, 2, () => clickButton(page, "Skip to the blur"));
-  await checkLogRow(ctx, "Your tries", 1, { kind: "skip" });
-  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(blurred));
-  await checkAssetAccess(ctx, "blurred stage", { shown: [blurred], hidden: [still] });
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "after the skip", secrets);
-
-  // --- The answer. ---
-  const row = await playMove(ctx, colorGrade, 3, () =>
-    pickFromSearch(page, "Name the film", answer.title, { primary: answer.title, secondaryPrefix: answer.year === null ? null : String(answer.year) }),
-  );
-  report.equal("the play is won", row.status, "won");
-  await checkLogRow(ctx, "Your tries", 2, { kind: "hit", film: answer });
-  await checkResultCard(ctx, row, { score: attemptsScore(3, MAX_TRIES, true), label: `3/${MAX_TRIES}`, grid: "🟥⬛🟩⬜⬜" });
-  await waitForText(page, "h3", answer.title);
-  report.check("the verdict names the film", await hasText(page, "p", "✓ You named it on try 3"));
-  await checkAssetAccess(ctx, "after finishing, every image", { shown: [neutral, graded, blurred, still] });
-  await checkFriendsResults(ctx, row);
-  await spoilerCheckpoint(ctx, colorGrade, loaded, "after finishing");
-  await checkFinishedImages(ctx, "finished");
-  await checkNoSidewaysScroll(ctx, "finished");
-  await shot(ctx, "color-grade-finished");
-}
-
-// ---------------------------------------------------------------------------------------------
 // Fade to Color
 // ---------------------------------------------------------------------------------------------
 
@@ -528,7 +463,7 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
 
   const onScreen = (id: string) =>
     page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(id));
-  const status = () => page.evaluate(() => (document.querySelector("main p")?.textContent ?? "").replace(/\s+/g, " ").trim());
+  const status = () => fadeStatus(page);
 
   // --- Before the film: no app chrome, the leader, three rules and "Roll film". ---
   await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
@@ -589,6 +524,8 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
   report.equal("the play is won", row.status, "won");
   report.equal("stored score is as expected (100, 90, 80 … by reel)", row.score, attemptsScore(3, BARCODE_GUESSES, true, LAST_REEL_SCORE));
   report.equal("stored share grid is as expected", row.share_grid, "🟥⬛🟩");
+  // Named live: the film says its name back (the title matte) before it rolls on to the end card.
+  report.check("the film says its name back: a title card over the reel", await titleCardSays(page, answer.title));
   await waitForText(page, "h2", answer.title);
   // The end card comes up (and takes clicks) once the reel has unreeled to the film's last level.
   await page.waitForFunction(() => {
@@ -606,6 +543,10 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
     await page.$$eval('ol[aria-label="Reels"] button:not(:disabled)', (bs) => bs.length),
     LEVEL_COUNT,
   );
+  await lookBackAt(page, 1, levels[0]!);
+  report.check("looking back at reel 1 after the win: the title card stays gone", await page.evaluate(() => document.querySelector('[data-win="matte"], [class*="__titleCard"]') === null));
+  report.check("…and the end card stays up", await endCardLive(page));
+  await lookBackAt(page, LEVEL_COUNT, levels[LEVEL_COUNT - 1]!);
   await checkAssetAccess(ctx, "after finishing, every level", { shown: levels });
 
   // --- Everyone's results, in a panel. ---
@@ -627,13 +568,388 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
   await shot(ctx, "fade-to-color-finished");
 }
 
-/** A second play of the same film: nine skips, a wrong guess on reel 10, then the final pick. */
-async function playFadeToColorFinalPick(ctx: Ctx): Promise<void> {
+/** The win's title card (over the reel, for looking at only) shows `title`, within a few seconds. */
+async function titleCardSays(page: Page, title: string): Promise<boolean> {
+  return page
+    .waitForFunction((want) => document.querySelector('[data-win="lit"]')?.textContent === want, { timeout: 4000 }, title)
+    .then(() => true)
+    .catch(() => false);
+}
+
+/**
+ * Naming the film plays the title matte once, live: a tap skips straight to the end card, and that
+ * tap goes no further (it can't press what's under it). A reload shows the end card at once.
+ */
+async function playFadeToColorWinSkipped(ctx: Ctx): Promise<void> {
+  const { page, report } = ctx;
+  const loaded = await loadPuzzle(ctx.db, fadeToColor, ctx.date);
+  const answer = loaded.solution.answer;
+  await resetPlays(ctx.db, ctx.userId, [fadeToColor.id], ctx.date);
+
+  await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
+  await clickButton(page, "Roll film");
+  await waitForPlayVersion(ctx.db, { userId: ctx.userId, gameId: fadeToColor.id, date: ctx.date, version: 0 });
+  await fourControlReady(page);
+  const row = await playMove(ctx, fadeToColor, 1, async () => {
+    await pickFromSearch(page, "Name the film", answer.title, { primary: answer.title, secondaryPrefix: answer.year === null ? null : String(answer.year) });
+    await clickButton(page, "Guess");
+  });
+  report.equal("named on reel 1", row.result_label, `1/${BARCODE_GUESSES}`);
+  report.check("the title card comes up with the film's name", await titleCardSays(page, answer.title));
+  report.check("…while the end card is still to come", await page.evaluate(() => document.querySelector('section[aria-label="Today\'s film"]') === null));
+
+  // Count clicks that get past the skip (a listener below the window, where the skip stops them).
+  await page.evaluate(() => {
+    (window as unknown as { leaked: number }).leaked = 0;
+    document.addEventListener("click", () => (window as unknown as { leaked: number }).leaked++);
+  });
+  const view = page.viewport()!;
+  await page.mouse.click(view.width / 2, view.height * 0.8);
+  await page.waitForFunction(
+    () => {
+      const card = document.querySelector('section[aria-label="Today\'s film"]');
+      return card !== null && card.closest("[inert]") === null;
+    },
+    { timeout: 1000 },
+  );
+  report.check("a tap skips straight to the end card", true);
+  report.equal("…and goes no further", await page.evaluate(() => (window as unknown as { leaked: number }).leaked), 0);
+  report.check("…the title card is gone", await page.evaluate(() => document.querySelector('[data-win="lit"]') === null));
+  report.check("…and nothing opened", await page.evaluate(() => document.querySelector('[role="dialog"]') === null));
+  report.check("the end card names it on reel 1", await hasText(page, "p", "Named on reel 1"));
+
+  await page.reload({ waitUntil: "networkidle0" });
+  await waitForCredits(page);
+  report.check("after a reload the end card is simply there: the win plays only live", await page.evaluate(() => document.querySelector("[data-win]") === null));
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the win");
+  await shot(ctx, "fade-to-color-win-skipped");
+}
+
+/**
+ * A key press skips the win too, and the player's next click is theirs: "How everyone did", pressed
+ * at once, opens the panel over the whole room (not inside the end card, still rising).
+ */
+async function playFadeToColorWinKeySkipped(ctx: Ctx): Promise<void> {
+  const { page, report } = ctx;
+  const loaded = await loadPuzzle(ctx.db, fadeToColor, ctx.date);
+  const answer = loaded.solution.answer;
+  await resetPlays(ctx.db, ctx.userId, [fadeToColor.id], ctx.date);
+
+  await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
+  await clickButton(page, "Roll film");
+  await waitForPlayVersion(ctx.db, { userId: ctx.userId, gameId: fadeToColor.id, date: ctx.date, version: 0 });
+  await fourControlReady(page);
+  await playMove(ctx, fadeToColor, 1, async () => {
+    await pickFromSearch(page, "Name the film", answer.title, { primary: answer.title, secondaryPrefix: answer.year === null ? null : String(answer.year) });
+    await clickButton(page, "Guess");
+  });
+  report.check("the title card comes up with the film's name", await titleCardSays(page, answer.title));
+  await page.keyboard.press("a");
+  await page.waitForFunction(
+    () => {
+      const card = document.querySelector('section[aria-label="Today\'s film"]');
+      return card !== null && card.closest("[inert]") === null;
+    },
+    { timeout: 1000 },
+  );
+  report.check("a key press skips straight to the end card", true);
+  await clickButton(page, "How everyone did");
+  const opened = await page
+    .waitForSelector('[role="dialog"][aria-label="How everyone did"]', { timeout: 1000 })
+    .then(() => true)
+    .catch(() => false);
+  report.check("…and the next click is the player's: everyone's results open at once", opened);
+  const cover = await page.evaluate(() => {
+    const box = document.querySelector('[role="dialog"]')?.parentElement?.getBoundingClientRect();
+    return box ? { box: [box.left, box.top, box.width, box.height], view: [0, 0, innerWidth, innerHeight] } : null;
+  });
+  report.check("…over the whole room", cover !== null && isDeepStrictEqual(cover.box, cover.view), cover);
+  await page.keyboard.press("Escape");
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the win, skipped with a key");
+}
+
+/** Looks back at reel `reel` (1-based) from the contact strip; waits until its picture (`id`) is on screen and still. */
+async function lookBackAt(page: Page, reel: number, id: string): Promise<void> {
+  await page.click(`ol[aria-label="Reels"] li:nth-child(${reel}) button`);
+  await page.waitForFunction(
+    (src) => {
+      const img = document.querySelector<HTMLImageElement>('[class*="__screen"] > img');
+      return img !== null && img.getAttribute("src") === src && img.getAnimations().length === 0;
+    },
+    { timeout: WAIT_MS },
+    assetUrl(id),
+  );
+}
+
+/** The end card is up (or still rising) and takes clicks. */
+function endCardLive(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const card = document.querySelector('section[aria-label="Today\'s film"]');
+    return card !== null && card.closest("[inert]") === null && card.parentElement!.hasAttribute("data-show");
+  });
+}
+
+/** The status line under the contact strip ("Reel 4 of 10 · 7 left", "Reel 4 of 10 · stopped"). */
+function fadeStatus(page: Page): Promise<string> {
+  return page.evaluate(() => (document.querySelector("main p")?.textContent ?? "").replace(/\s+/g, " ").trim());
+}
+
+/** The quiet control at the left of the guess line: the stake for stopping the film on this reel. */
+const FOUR_CONTROL = /^(The four|Take the four)/;
+
+/** Waits until the four's control is ready (the reel has settled, nothing is in flight); returns its spoken label. */
+async function fourControlReady(page: Page): Promise<string> {
+  const handle = await page.waitForFunction(
+    (pattern) => {
+      const button = [...document.querySelectorAll("button")].find((b) => new RegExp(pattern).test(b.getAttribute("aria-label") ?? ""));
+      return button && !button.disabled ? button.getAttribute("aria-label") : false;
+    },
+    { timeout: WAIT_MS },
+    FOUR_CONTROL.source,
+  );
+  return (await handle.jsonValue()) as string;
+}
+
+async function openFourConfirm(page: Page): Promise<void> {
+  await fourControlReady(page);
+  await page.evaluate((pattern) => {
+    const button = [...document.querySelectorAll("button")].find((b) => new RegExp(pattern).test(b.getAttribute("aria-label") ?? ""));
+    button!.click();
+  }, FOUR_CONTROL.source);
+}
+
+/** The four as tiles: film id, whether it can be chosen, and its edge print (the year, or the reel it was guessed on). */
+async function fourTiles(page: Page): Promise<{ id: number; disabled: boolean; meta: string }[]> {
+  await page.waitForSelector('[role="radiogroup"] [role="radio"]');
+  return page.$$eval('[role="radiogroup"] [role="radio"]', (tiles) =>
+    tiles.map((tile) => ({
+      id: Number((tile as HTMLElement).dataset.film),
+      disabled: (tile as HTMLButtonElement).disabled,
+      meta: (tile.lastElementChild?.textContent ?? "").trim(),
+    })),
+  );
+}
+
+/** The edge print along the reel's top rail says `text`. */
+function edgeSays(page: Page, text: string): Promise<boolean> {
+  return page.evaluate((want) => [...document.querySelectorAll('[class*="__edge"]')].some((el) => el.textContent?.trim() === want), text);
+}
+
+/** Waits for the end card to come up (and take clicks) once the reel has unreeled to the film's last level. */
+async function waitForCredits(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const card = document.querySelector('section[aria-label="Today\'s film"]');
+      return card !== null && card.closest("[inert]") === null;
+    },
+    { timeout: WAIT_MS },
+  );
+}
+
+/** The end card's title is in the film's colors (the barcode) rather than plain ink. */
+function endTitleLit(page: Page, title: string): Promise<boolean | null> {
+  return page.evaluate((want) => {
+    const h2 = [...document.querySelectorAll('section[aria-label="Today\'s film"] h2')].find((h) => h.textContent === want);
+    return h2 ? h2.hasAttribute("data-lit") : null;
+  }, title);
+}
+
+/** The result frames on the end card read as `label` to a screen reader. */
+function framesSay(page: Page, label: string): Promise<boolean> {
+  return page.evaluate((want) => document.querySelector(`section[aria-label="Today's film"] [role="img"][aria-label="${want}"]`) !== null, label);
+}
+
+/** The page's text (as written, before any CSS casing) contains `text`. */
+function pageTextHas(page: Page, text: string): Promise<boolean> {
+  return page.evaluate((want) => document.body.textContent!.replace(/\s+/g, " ").includes(want), text);
+}
+
+/**
+ * The friends panel's "The four", read with each card's words for screen readers ("The film.",
+ * "Picked by you."), plus its tally line. Opens the panel and leaves it open.
+ */
+async function everyonesFour(page: Page): Promise<{ tally: string; cards: string[] }> {
+  await clickButton(page, "How everyone did");
+  await page.waitForSelector('[role="dialog"] section[aria-labelledby="everyone-four"] li');
+  // (No named helpers inside: the page can't see the bundler's `__name`.)
+  return page.evaluate(() => {
+    const panel = document.querySelector('[role="dialog"]')!;
+    return {
+      tally: (panel.querySelector(":scope > p")?.textContent ?? "").replace(/\s+/g, " ").trim(),
+      cards: [...panel.querySelectorAll('section[aria-labelledby="everyone-four"] li')].map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim()),
+    };
+  });
+}
+
+/**
+ * Stop the film on reel 1 and pick right: half of naming it there. On the way, backing out of the
+ * confirm sends nothing, and the four's titles stay secret until the stop.
+ */
+async function playFadeToColorStopRight(ctx: Ctx): Promise<void> {
+  const { page, report } = ctx;
+  const loaded = await loadPuzzle(ctx.db, fadeToColor, ctx.date);
+  const { solution } = loaded;
+  const answer = solution.answer;
+  const fourTitles = solution.options.map((o) => o.title);
+  const worth = pickWorth(1);
+  await resetPlays(ctx.db, ctx.userId, [fadeToColor.id], ctx.date);
+
+  await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
+  await clickButton(page, "Roll film");
+  await waitForPlayVersion(ctx.db, { userId: ctx.userId, gameId: fadeToColor.id, date: ctx.date, version: 0 });
+  const label = await fourControlReady(page);
+  report.equal(`the four's control carries the stake for reel 1 (${worth})`, label, `The four: stop the film here, one pick worth ${worth}`);
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "on reel 1, before the stop", fourTitles);
+
+  // --- The confirm, and backing out of it: nothing is sent, nothing leaks. ---
+  await openFourConfirm(page);
+  await waitForText(page, "p", `Stop the film on reel 1? Four titles, one pick, worth ${worth}. The rest stays in the can.`);
+  report.check("the control asks first", true);
+  await clickButton(page, "Keep watching");
+  await page.waitForSelector('input[role="combobox"]');
+  report.equal("Keep watching sends nothing", (await loadPlay(ctx.db, ctx.userId, fadeToColor.id, ctx.date))?.version, 0);
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after backing out of the stop", fourTitles);
+
+  // --- The stop: the four come up, the rest stays in the can. ---
+  await openFourConfirm(page);
+  const stopped = await playMove(ctx, fadeToColor, 1, () => clickButton(page, "Stop the film"));
+  const state = stopped.state as { turns: unknown[]; options: { id: number }[] };
+  report.equal("the stop uses no attempt", state.turns.length, 0);
+  report.check("…and brings up the four, in their stored order", isDeepStrictEqual(state.options, solution.options), state.options);
+  const tiles = await fourTiles(page);
+  report.check(`the ${OPTION_COUNT} are on screen in that order`, isDeepStrictEqual(tiles.map((t) => t.id), solution.options.map((o) => o.id)), tiles);
+  report.check("…and any of them can be chosen", tiles.every((t) => !t.disabled), tiles);
+  report.check("one pick, worth half of naming it", await hasText(page, "p", `One pick · ${worth} pts`));
+  await page.waitForFunction(() => (document.querySelector("main p")?.textContent ?? "").includes("stopped"));
+  report.check("the status line says the film is stopped", (await fadeStatus(page)).startsWith(`Reel 1 of ${BARCODE_GUESSES} · stopped`), await fadeStatus(page));
+  report.check("the edge print holds the reel", await edgeSays(page, "Reel 01 ◂ Held"));
+  report.equal(
+    "the reels never seen are left in the can",
+    await page.$$eval('ol[aria-label="Reels"] button', (bs) => bs.filter((b) => (b.getAttribute("aria-label") ?? "").endsWith("left in the can")).length),
+    LEVEL_COUNT - 1,
+  );
+  report.check("Pick waits for a choice", await page.$$eval("button", (bs) => bs.some((b) => b.textContent?.trim() === "Pick" && (b as HTMLButtonElement).disabled)));
+  // The four's titles are on screen now (the answer among them); the unseen reels are still secret.
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "with the four up");
+  await checkNoSidewaysScroll(ctx, "the four up");
+  await shot(ctx, "fade-to-color-four");
+
+  // --- The pick: right, for half of reel 1. ---
+  const row = await playMove(ctx, fadeToColor, 2, async () => {
+    await page.click(`[role="radio"][data-film="${answer.id}"]`);
+    await clickButton(page, "Pick");
+  });
+  report.equal("picking the answer wins", row.status, "won");
+  report.equal(`…for ${worth} points`, row.score, worth);
+  report.equal("…labelled by the reel it was stopped on", row.result_label, `Pick 1/${BARCODE_GUESSES}`);
+  report.equal("…with a single circle for a share grid", row.share_grid, "🟡");
+  await waitForCredits(page);
+  report.check("the end card says it was picked by color alone", await hasText(page, "p", "Picked by color alone"));
+  report.equal("…titles the film in its own colors", await endTitleLit(page, answer.title), true);
+  report.check("…marks the pick inside the first frame", await framesSay(page, "Stopped on reel 1 and picked it"));
+  report.check("…with the score", await pageTextHas(page, `Pick 1/${BARCODE_GUESSES} · ${worth} pts`));
+  report.equal("focus moves to the end card", await page.evaluate(() => document.activeElement?.textContent?.trim()), "Share");
+  await lookBackAt(page, 1, solution.levels[0]!.id);
+  report.check("looking back at reel 1 after the pick: the room stays lit", await page.evaluate(() => document.querySelector("[data-dip]") === null));
+  report.check("…and the end card stays up", await endCardLive(page));
+  await lookBackAt(page, LEVEL_COUNT, solution.levels[LEVEL_COUNT - 1]!.id);
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the pick");
+  await checkNoSidewaysScroll(ctx, "stopped and picked");
+  await shot(ctx, "fade-to-color-stop-right");
+
+  // --- Everyone's picks, in the friends panel. ---
+  const everyone = await everyonesFour(page);
+  report.check("the friends panel tallies the picks", /\d+ picked it/.test(everyone.tally), everyone.tally);
+  report.check(
+    "…and shows the four in their shared order",
+    everyone.cards.length === OPTION_COUNT && everyone.cards.every((card, i) => card.startsWith(fourTitles[i]!)),
+    everyone.cards,
+  );
+  const answerCard = everyone.cards[solution.options.findIndex((o) => o.id === answer.id)] ?? "";
+  report.check("…with my pick under the film", answerCard.includes("The film.") && /Picked by .*\byou\b/.test(answerCard), answerCard);
+  await shot(ctx, "fade-to-color-everyone");
+  await page.keyboard.press("Escape");
+}
+
+/**
+ * Guess one of the look-alikes on reel 1, stop on reel 2 and pick another: the guessed one is dark
+ * and can't be chosen, and the wrong pick loses, with the film's title in ink.
+ */
+async function playFadeToColorStopWrong(ctx: Ctx): Promise<void> {
+  const { page, report } = ctx;
+  const loaded = await loadPuzzle(ctx.db, fadeToColor, ctx.date);
+  const { solution } = loaded;
+  const answer = solution.answer;
+  const [guessed, picked] = solution.options.filter((o) => o.id !== answer.id);
+  const worth = pickWorth(2);
+  await resetPlays(ctx.db, ctx.userId, [fadeToColor.id], ctx.date);
+
+  await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
+  await clickButton(page, "Roll film");
+  await waitForPlayVersion(ctx.db, { userId: ctx.userId, gameId: fadeToColor.id, date: ctx.date, version: 0 });
+  await fourControlReady(page);
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "on reel 1, before guessing", solution.options.map((o) => o.title));
+
+  await playMove(ctx, fadeToColor, 1, async () => {
+    await pickFromSearch(page, "Name the film", guessed!.title, { primary: guessed!.title, secondaryPrefix: guessed!.year === null ? null : String(guessed!.year) });
+    await clickButton(page, "Guess");
+  });
+  report.equal(`on reel 2 the stake is ${worth}`, await fourControlReady(page), `The four: stop the film here, one pick worth ${worth}`);
+  await openFourConfirm(page);
+  await waitForText(page, "p", `Stop the film on reel 2? Four titles, one pick, worth ${worth}. The rest stays in the can.`);
+  await playMove(ctx, fadeToColor, 2, () => clickButton(page, "Stop the film"));
+  const tiles = await fourTiles(page);
+  const dark = tiles.find((t) => t.id === guessed!.id);
+  report.check("the look-alike already guessed arrives dark, with the reel it was guessed on", dark?.disabled === true && dark.meta === "Guessed · reel 1", dark);
+  report.check("…and the other three can be chosen", tiles.filter((t) => t.id !== guessed!.id).every((t) => !t.disabled), tiles);
+  const focused = await page
+    .waitForFunction(() => document.activeElement?.getAttribute("role") === "radio", { timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  report.check("once the four are up, focus is on them", focused);
+  await page.keyboard.press("ArrowRight");
+  report.check(
+    "…so the arrow keys choose among them, and the reel stays put",
+    (await page.evaluate(() => document.querySelector('[role="radio"][aria-checked="true"]') !== null)) && (await edgeSays(page, "Reel 02 ◂ Held")),
+  );
+  report.check("one pick, worth half of naming it on reel 2", await hasText(page, "p", `One pick · ${worth} pts`));
+
+  const row = await playMove(ctx, fadeToColor, 3, async () => {
+    await page.click(`[role="radio"][data-film="${picked!.id}"]`);
+    await clickButton(page, "Pick");
+  });
+  report.equal("a wrong pick loses", row.status, "lost");
+  report.equal("…for nothing", row.score, 0);
+  report.equal("…labelled as a loss", row.result_label, `X/${BARCODE_GUESSES}`);
+  report.equal("…with the miss, then a dark circle", row.share_grid, "🟥⚫");
+  await waitForText(page, "h2", answer.title);
+  await waitForCredits(page);
+  report.check("the end card says where the film was stopped", await hasText(page, "p", "Stopped on reel 2 · the film was"));
+  report.equal("…and titles it in ink, not color", await endTitleLit(page, answer.title), false);
+  report.check("…marks the wrong pick inside the second frame", await framesSay(page, "Stopped on reel 2, wrong pick"));
+  report.check("…with the score", await pageTextHas(page, `X/${BARCODE_GUESSES} · 0 pts`));
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the wrong pick");
+  await checkNoSidewaysScroll(ctx, "wrong pick, finished");
+  await shot(ctx, "fade-to-color-stop-wrong");
+
+  // --- Everyone's picks: mine under the film I picked, never under the one I typed. ---
+  const everyone = await everyonesFour(page);
+  const card = (film: { id: number }) => everyone.cards[solution.options.findIndex((o) => o.id === film.id)] ?? "";
+  const mine = (text: string) => /Picked by .*\byou\b/.test(text);
+  report.check("the friends panel puts my pick under the film I picked", mine(card(picked!)), everyone.cards);
+  report.check("…and never lists the film I typed as mine", !mine(card(guessed!)), everyone.cards);
+  report.check("…and counts my wrong pick as one that didn't", /\d+ didn't/.test(everyone.tally), everyone.tally);
+  await page.keyboard.press("Escape");
+}
+
+/** Nine skips and a wrong guess on the last reel: the four come up anyway (the run-out), worth 5. */
+async function playFadeToColorRunOut(ctx: Ctx): Promise<void> {
   const { page, report } = ctx;
   const loaded = await loadPuzzle(ctx.db, fadeToColor, ctx.date);
   const { solution } = loaded;
   const answer = solution.answer;
   const secrets = [answer.title, ...solution.options.map((o) => o.title)];
+  const worth = pickWorth(LEVEL_COUNT);
   await resetPlays(ctx.db, ctx.userId, [fadeToColor.id], ctx.date);
 
   await page.goto(`${ctx.baseUrl}/play/${fadeToColor.id}`, { waitUntil: "networkidle0" });
@@ -643,8 +959,9 @@ async function playFadeToColorFinalPick(ctx: Ctx): Promise<void> {
     await playMove(ctx, fadeToColor, reel, () => clickButton(page, "Skip"));
   }
   report.check("nine skips leave the last reel", await pageSays(page, `Reel ${BARCODE_GUESSES} of ${BARCODE_GUESSES}`));
-  report.check("…where Skip becomes Give up", await hasText(page, "button", "Give up"));
-  await spoilerCheckpoint(ctx, fadeToColor, loaded, "on reel 10, before the final pick", secrets);
+  report.equal("…where the four are worth 5", await fourControlReady(page), `Take the four: one pick, worth ${worth}`);
+  report.check("…and there's no Skip and no Give up", !(await hasText(page, "button", "Skip")) && !(await hasText(page, "button", "Give up")));
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "on reel 10, before the run-out", secrets);
 
   const [decoy] = await decoyFilms(ctx.db, 1, solution.options.map((o) => o.id));
   const missed = await playMove(ctx, fadeToColor, BARCODE_GUESSES, async () => {
@@ -652,33 +969,28 @@ async function playFadeToColorFinalPick(ctx: Ctx): Promise<void> {
     await clickButton(page, "Guess");
   });
   report.equal("a wrong guess on reel 10 keeps the play going", missed.status, "in_progress");
-  await page.waitForSelector('[role="radiogroup"] [role="radio"]');
-  const shown = await page.$$eval('[role="radiogroup"] [role="radio"]', (tiles) => tiles.map((t) => (t.querySelector("span")?.textContent ?? "").trim()));
-  report.equal(`the final pick offers ${OPTION_COUNT} films`, shown.length, OPTION_COUNT);
-  report.check("…the stored options, in order (the answer among them)", isDeepStrictEqual(shown, solution.options.map((o) => o.title)), shown);
-  report.check("the status line says it's the final pick", (await page.evaluate(() => document.querySelector("main p")?.textContent ?? "")).includes("final pick"));
+  const tiles = await fourTiles(page);
+  report.check(`…and brings up the ${OPTION_COUNT}, in their stored order`, isDeepStrictEqual(tiles.map((t) => t.id), solution.options.map((o) => o.id)), tiles);
+  report.check("the status line says the reels ran out", (await fadeStatus(page)).startsWith(`Reel ${BARCODE_GUESSES} of ${BARCODE_GUESSES} · run-out`), await fadeStatus(page));
+  report.check("…and so does the edge print", await edgeSays(page, "Reel 10 ◂ Run-out"));
+  report.check("one pick, worth 5", await hasText(page, "p", `One pick · ${worth} pts`));
   report.check("Pick waits for a choice", await page.$$eval("button", (bs) => bs.some((b) => b.textContent?.trim() === "Pick" && (b as HTMLButtonElement).disabled)));
 
   const row = await playMove(ctx, fadeToColor, BARCODE_GUESSES + 1, async () => {
-    await page.evaluate((title) => {
-      const tile = [...document.querySelectorAll('[role="radio"]')].find((t) => t.querySelector("span")?.textContent?.trim() === title) as HTMLButtonElement;
-      tile.click();
-    }, answer.title);
+    await page.click(`[role="radio"][data-film="${answer.id}"]`);
     await clickButton(page, "Pick");
   });
   report.equal("picking the answer wins", row.status, "won");
-  report.equal(`…for ${PICK_SCORE} points`, row.score, PICK_SCORE);
-  report.equal("…labelled as the final pick", row.result_label, "Final pick");
-  report.equal("…with ten reel marks and the pick's", row.share_grid, `${"⬛".repeat(BARCODE_GUESSES - 1)}🟥🟨`);
+  report.equal(`…for ${worth} points`, row.score, worth);
+  report.equal("…labelled as a pick on the last reel", row.result_label, `Pick ${BARCODE_GUESSES}/${BARCODE_GUESSES}`);
+  report.equal("…with ten reel marks and the pick's circle", row.share_grid, `${"⬛".repeat(BARCODE_GUESSES - 1)}🟥🟡`);
   await waitForText(page, "h2", answer.title);
-  await page.waitForFunction(() => {
-    const card = document.querySelector('section[aria-label="Today\'s film"]');
-    return card !== null && card.closest("[inert]") === null;
-  });
-  report.check("the end card says it was named on the final pick", await hasText(page, "p", "Named on the final pick"));
-  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the final pick");
-  await checkNoSidewaysScroll(ctx, "final pick, finished");
-  await shot(ctx, "fade-to-color-final-pick");
+  await waitForCredits(page);
+  report.check("the end card says it was picked after the last reel", await hasText(page, "p", "Picked after the last reel"));
+  report.check("…with the pick's mark set apart after the tenth frame", await framesSay(page, "Picked after the last reel"));
+  await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the run-out pick");
+  await checkNoSidewaysScroll(ctx, "run-out, finished");
+  await shot(ctx, "fade-to-color-run-out");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -705,20 +1017,20 @@ async function checkToday(ctx: Ctx): Promise<void> {
     report.check(`Movies lists ${game.name}`, card !== undefined && card.text.includes(game.name), movies.cards);
     report.check(`${game.name} is marked Testing and ready to play`, card !== undefined && card.text.includes("Testing") && card.text.includes("Play"), card?.text);
   }
-  report.equal("Movies holds exactly the four Movies games", movies.cards.length, MOVIES_GAMES.length);
+  report.equal("Movies holds exactly the three Movies games", movies.cards.length, MOVIES_GAMES.length);
 
   // A first visit of the day plays the home's opening titles: measure the page once it has settled.
   await page.waitForFunction(() => document.querySelector("[data-home][data-moment]") === null);
   const layout = await page.evaluate(() => {
-    const shown = (el: Element | null): el is Element => el !== null && el.getClientRects().length > 0;
     // The page's one filled primary (`data-primary-action`): on a phone the Up next slip holds it when
-    // its game isn't in the first sheet, so the first one laid out wins.
-    const primary = [...document.querySelectorAll("[data-primary-action]")].find(shown) ?? null;
+    // its game isn't in the first sheet, so the first one laid out wins. (No named helpers in here:
+    // the page can't see the bundler's `__name`.)
+    const primary = [...document.querySelectorAll("[data-primary-action]")].find((el) => el.getClientRects().length > 0) ?? null;
     const tabBar = document.querySelector('[data-app-chrome="bottom-nav"]');
     return {
       h1s: document.querySelectorAll("h1").length,
       primaryBottom: primary ? Math.round(primary.getBoundingClientRect().bottom) : null,
-      tabBarTop: shown(tabBar) ? Math.round(tabBar.getBoundingClientRect().top) : null,
+      tabBarTop: tabBar && tabBar.getClientRects().length > 0 ? Math.round(tabBar.getBoundingClientRect().top) : null,
     };
   });
   report.equal("Today has exactly one h1", layout.h1s, 1);
@@ -747,7 +1059,7 @@ async function main(): Promise<boolean> {
   const profile = await profileByUsername(db, env.E2E_TEST_USERNAME);
   if (!report.check(`${profile.username} is an admin (Movies games are still in testing)`, profile.is_admin)) return false;
   for (const game of MOVIES_GAMES) await loadPuzzle(db, game, date);
-  report.check(`today (${date}) has a puzzle for all four Movies games`, true);
+  report.check(`today (${date}) has a puzzle for all three Movies games`, true);
   const removed = await resetPlays(db, profile.id, MOVIES_GAMES.map((g) => g.id), date);
   report.note(`reset ${removed} earlier play${removed === 1 ? "" : "s"} of today's Movies puzzles`);
   const health = await fetch(`${env.E2E_BASE_URL}/login`).catch((error: unknown) => error);
@@ -767,9 +1079,12 @@ async function main(): Promise<boolean> {
     await report.runSection("Today", () => checkToday(ctx));
     await report.runSection("Degrees of Separation", () => playDegrees(ctx));
     await report.runSection("Frame by Frame", () => playFrameByFrame(ctx));
-    await report.runSection("Color Grade", () => playColorGrade(ctx));
     await report.runSection("Fade to Color", () => playFadeToColor(ctx));
-    await report.runSection("Fade to Color: the final pick", () => playFadeToColorFinalPick(ctx));
+    await report.runSection("Fade to Color: the win, skipped and reloaded", () => playFadeToColorWinSkipped(ctx));
+    await report.runSection("Fade to Color: the win, skipped with a key", () => playFadeToColorWinKeySkipped(ctx));
+    await report.runSection("Fade to Color: stop the film, pick right", () => playFadeToColorStopRight(ctx));
+    await report.runSection("Fade to Color: stop the film, pick wrong", () => playFadeToColorStopWrong(ctx));
+    await report.runSection("Fade to Color: the run-out", () => playFadeToColorRunOut(ctx));
 
     report.section("browser health");
     report.check("no console errors or uncaught page errors", errors.length === 0, errors);

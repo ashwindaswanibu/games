@@ -4,38 +4,91 @@ import { catalogSearchKey } from "./search-key";
 export { catalogSearchKey };
 
 /**
- * Autocomplete within a small, known set: one person's filmography (`/api/catalog/filmography`) or
- * one film's cast (`/api/catalog/cast`). Degrees of Separation uses these so a player picks a film
- * the current actor was in, then a co-star from it.
+ * Scoped catalog routes: one person's filmography (`/api/catalog/filmography`) or one film's cast
+ * (`/api/catalog/cast`). Degrees of Separation uses these so a player picks a film the current
+ * actor was in, then a co-star from it.
  *
- * The sets are small (tens to a few hundred rows), so matching happens in memory with the same
- * normalization as the SQL `catalog_search_key` and the same tiers as `search_films` /
- * `search_people`, minus the typo-tolerant tier. Pure; safe on both sides of the wire.
+ * A filmography is searched in SQL (`search_films` with a person), so films match by every name
+ * they are known by. A cast is small (a few dozen people), so it is matched here, in memory, with
+ * the same normalization as the SQL `catalog_search_key` and the same match classes and bonuses as
+ * `search_people` (`catalog_match_class`), minus the typo-tolerant tier. One difference: a cast
+ * ranks by Wikipedia editions, where `search_people` ranks by the votes of each person's films
+ * (namesakes in one film's cast are rare, so that lookup isn't worth a query). Pure; safe on both
+ * sides of the wire.
  */
 
+/** The search key without spaces (SQL `compact_key`): "xmen" matches X-Men, "shahrukh" Shah Rukh Khan. */
+export function compactSearchKey(key: string): string {
+  return key.replaceAll(" ", "");
+}
 
-/** 0 exact, 1 prefix of the text or of any word in it, 2 substring; null when it doesn't match. */
-export function matchTier(queryKey: string, textKey: string): 0 | 1 | 2 | null {
-  if (!queryKey) return null;
-  if (textKey === queryKey) return 0;
-  if (textKey.startsWith(queryKey) || textKey.includes(` ${queryKey}`)) return 1;
-  if (textKey.includes(queryKey)) return 2;
+/** Prefix matches ignore spaces from this many characters (shorter, "it" would match "I, Tonya"). */
+const COMPACT_PREFIX_MIN = 3;
+
+/**
+ * How `textKey` matches `queryKey` (both search keys), as SQL `catalog_match_class` classifies it:
+ *
+ *  - 0 exact (ignoring spaces);
+ *  - 1 the text starts with the query as whole words, or does after a leading "the", "a" or "an"
+ *    ("stree" → "stree 2", "dark" → "the dark knight");
+ *  - 2 the text starts with the query, ending mid-word ("stree" → "street kings"), also after an
+ *    article;
+ *  - 3 a later word starts with the query, ending at a word end ("guide" → "the hitchhiker s guide…");
+ *  - 4 a later word starts with the query, ending mid-word ("stree" → "the wolf of wall street");
+ *  - 5 substring;
+ *
+ * or null when it doesn't match. Starts ignore spaces from 3 characters of query; later words and
+ * substrings need 3 characters.
+ */
+export function matchClass(queryKey: string, textKey: string): 0 | 1 | 2 | 3 | 4 | 5 | null {
+  const queryCompact = compactSearchKey(queryKey);
+  if (!queryCompact) return null;
+  if (compactSearchKey(textKey) === queryCompact) return 0;
+  const starts = (text: string) =>
+    queryCompact.length >= COMPACT_PREFIX_MIN ? compactSearchKey(text).startsWith(queryCompact) : text.startsWith(queryKey);
+  // The query's characters with optional spaces between them, then a word end. Search keys hold
+  // only letters, digits and single spaces, so nothing here needs escaping.
+  const wholeStart = new RegExp(`^${[...queryCompact].join(" ?")}( |$)`, "u");
+  const bare = /^(the|a|an) /.test(textKey) ? textKey.slice(textKey.indexOf(" ") + 1) : null;
+  const startsFull = starts(textKey);
+  const startsBare = bare !== null && starts(bare);
+  if ((startsFull && wholeStart.test(textKey)) || (startsBare && wholeStart.test(bare))) return 1;
+  if (startsFull || startsBare) return 2;
+  if (queryKey.length >= 3 && textKey.includes(` ${queryKey}`)) return new RegExp(` ${queryKey}( |$)`, "u").test(textKey) ? 3 : 4;
+  if (queryKey.length >= 3 && textKey.includes(queryKey)) return 5;
   return null;
 }
 
-/** Matches of `query` among `items`, best tier first, then most popular, then lowest id. */
+/** An exact name beats a whole-word start unless that one has ten times the fame (log scale)… */
+const EXACT_BONUS = Math.log(30);
+/** …and a whole-word start beats a start that ends mid-word unless that one has three times. */
+const WORD_BONUS = Math.log(3);
+
+/**
+ * Matches of `query` among `items`, ranked like `search_people`: classes 0–3 together by score
+ * (fame = ln(1 + popularity); exact names + ln 30, whole-word starts + ln 3, later whole words
+ * never above an exact name), then partial later words, then substrings. Ties: more popular, then
+ * lower id.
+ */
 export function rankByQuery<T extends { id: number }>(
   items: readonly T[],
   query: string,
   options: { text(item: T): string; popularity(item: T): number; limit: number },
 ): T[] {
   const queryKey = catalogSearchKey(query);
-  return items
-    .flatMap((item) => {
-      const tier = matchTier(queryKey, catalogSearchKey(options.text(item)));
-      return tier === null ? [] : [{ item, tier, popularity: options.popularity(item) }];
-    })
-    .sort((a, b) => a.tier - b.tier || b.popularity - a.popularity || a.item.id - b.item.id)
+  const hits = items.flatMap((item) => {
+    const match = matchClass(queryKey, catalogSearchKey(options.text(item)));
+    const popularity = options.popularity(item);
+    return match === null ? [] : [{ item, match, popularity, fame: Math.log1p(Math.max(0, popularity)) }];
+  });
+  const exactFames = hits.filter((hit) => hit.match === 0).map((hit) => hit.fame);
+  const laterWordCap = exactFames.length ? Math.min(...exactFames) + EXACT_BONUS - 0.001 : Infinity;
+  const score = (hit: (typeof hits)[number]) =>
+    hit.match === 0 ? hit.fame + EXACT_BONUS : hit.match === 1 ? hit.fame + WORD_BONUS : hit.match === 3 ? Math.min(hit.fame, laterWordCap) : hit.fame;
+  const group = (match: number) => (match <= 3 ? 0 : match);
+  return hits
+    .map((hit) => ({ ...hit, score: score(hit) }))
+    .sort((a, b) => group(a.match) - group(b.match) || b.score - a.score || b.popularity - a.popularity || a.item.id - b.item.id)
     .slice(0, options.limit)
     .map((hit) => hit.item);
 }

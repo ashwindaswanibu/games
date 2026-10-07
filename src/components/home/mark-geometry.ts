@@ -113,6 +113,7 @@ function pieceFor(kind: ShareMarkKind): PieceKind | "unused" | null {
     case "hit":
     case "win":
     case "near":
+    case "pick":
       return "earned";
     case "skip":
       return "skip";
@@ -139,7 +140,7 @@ function slotsForm(count: number, marks: readonly ShareMarkKind[] | null, r: Rng
     let unused: MarkShape | null = null;
     if (marks) {
       if (m === "up" || m === "down") piece = { kind: "spent", shape: { d: triangle(cx, cy, u(0.86), m === "up", r) }, rotate: tilt(r, 3) };
-      else if (m === "hit" || m === "win" || m === "near") piece = { kind: "earned", shape: { d: cutDisc(r, cx, cy, u(0.45)) }, rotate: tilt(r) };
+      else if (m === "hit" || m === "win" || m === "near" || m === "pick") piece = { kind: "earned", shape: { d: cutDisc(r, cx, cy, u(0.45)) }, rotate: tilt(r) };
       else if (m === "skip") piece = { kind: "skip", shape: { d: cutDisc(r, cx, cy, u(0.4)) }, rotate: 0 };
       else if (m) piece = { kind: "spent", shape: { d: cutDisc(r, cx, cy, u(0.4)) }, rotate: 0 };
       else unused = { d: circle(cx, cy, u(0.08)), dot: true };
@@ -148,6 +149,9 @@ function slotsForm(count: number, marks: readonly ShareMarkKind[] | null, r: Rng
   }
   return { w: count + (count - 1) * gap, h: 1, slots, joins: [], finished: marks !== null };
 }
+
+/** A pick made in a frame (the film stopped on that reel): its disc's diameter, in u (8/10 of a 3:2 frame's height). */
+const STOP_DISC = 0.58;
 
 function framesForm(form: Extract<MarkForm, { kind: "frames" }>, marks: readonly ShareMarkKind[] | null, r: Rng): MarkModel {
   const wide = form.aspect === "3:2";
@@ -163,7 +167,12 @@ function framesForm(form: Extract<MarkForm, { kind: "frames" }>, marks: readonly
     const m = marks?.[i];
     let piece: MarkPiece | null = null;
     let unused: MarkShape | null = null;
-    if (marks) {
+    if (marks && (m === "pick" || m === "mispick")) {
+      // A pick made on this reel, when the film was stopped: a disc in its frame, which stayed unexposed.
+      unused = keyline;
+      const earned = m === "pick";
+      piece = { kind: earned ? "earned" : "spent", shape: { d: cutDisc(r, u(x + fw / 2), u(0.5), u(STOP_DISC / 2)) }, rotate: earned ? tilt(r) : 0 };
+    } else if (marks) {
       const p = m ? pieceFor(m) : "unused";
       if (p === "unused") unused = keyline;
       else if (p) piece = { kind: p, shape: { d: cutQuad(r, u(x), u(y), u(fw), u(fh), 0.6) }, rotate: p === "earned" ? tilt(r) : 0 };
@@ -171,7 +180,8 @@ function framesForm(form: Extract<MarkForm, { kind: "frames" }>, marks: readonly
     slots.push({ keyline, piece, unused });
   }
   let w = form.count * fw + (form.count - 1) * gap;
-  // A finished game that never reached the final pick leaves its disc out, and its room with it.
+  // The disc set apart is the pick made when the reels ran out (the mark after the last frame's). A
+  // finished game that never came to it leaves the disc out, and its room with it.
   const pickReached = marks === null || marks.length > form.count;
   if (form.finalPick && pickReached) {
     const d = 0.72;
@@ -254,6 +264,12 @@ function rowForm(count: number | null, marks: readonly ShareMarkKind[] | null, r
           break;
         case "win":
           piece = { kind: "earned", shape: { d: star(cx, cy, u(0.5), u(0.22), r) }, rotate: tilt(r, 6) };
+          break;
+        case "pick":
+          piece = { kind: "earned", shape: { d: cutDisc(r, cx, cy, u(0.42)) }, rotate: tilt(r) };
+          break;
+        case "mispick":
+          piece = { kind: "spent", shape: { d: cutDisc(r, cx, cy, u(0.4)) }, rotate: 0 };
           break;
         case "skip":
           piece = { kind: "skip", shape: { d: square() }, rotate: 0 };
