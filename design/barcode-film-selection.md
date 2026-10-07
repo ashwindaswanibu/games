@@ -49,3 +49,12 @@ The Batman (2022) · Star Trek: First Contact (1996) · Sweeney Todd (2007) · S
 - Do the tier cutoffs and the 25 / 55 / 20 mix feel right? Too mainstream, or not mainstream enough?
 - Should black-and-white films ever appear?
 - Any hard exclusions (horror, kids' films, sequels...)?
+
+## Implemented (2026-10-07)
+The picker is `src/games/fade-to-color/picker.ts`; `npm run content:movies:plan-barcode` plans (and renders) days with it, and `barcode-levels --film auto` picks one day. Details: `scripts/content/movies/README.md`, section 5.
+- **Percentiles are computed over the films that have frames** (the pool), which is what produced the numbers above. Computing them over the whole catalog instead (`--percentiles catalog`) would make 359 films Iconic.
+- **Today's numbers:** 859 catalog films have a gallery (the site lists 1,470 galleries now); Iconic 138, Well-known 238, Known 144: **520 eligible**.
+- **Series** uses the final pick's title match (generous: Star Wars and Star Trek count as one series).
+- **When a tier runs out**, the nearest tier is used, the more popular first. If every tier runs out, the day gets no film and the plan says so. A year of days currently needs no fallback.
+- **Black-and-white films** are found on their frames when rendered. A grey film is recorded and the day is picked again, so a dry-run plan can still change on those days.
+

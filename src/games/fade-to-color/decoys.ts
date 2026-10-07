@@ -76,13 +76,33 @@ const stem = (word: string) => word.replace(/s$/, "");
  * through, unless they share a director.
  */
 export function sameSeries(a: string, b: string): boolean {
-  const ka = seriesKey(a);
-  const kb = seriesKey(b);
-  if (!ka || !kb) return false;
-  if (ka === kb || `${kb} `.startsWith(`${ka} `) || `${ka} `.startsWith(`${kb} `)) return true;
-  if (stem(ka.split(" ")[0]!) === stem(kb.split(" ")[0]!)) return true;
-  const inside = (key: string, title: string) => key.includes(" ") && ` ${words(title)} `.includes(` ${key} `);
-  return inside(ka, b) || inside(kb, a);
+  return sameSeriesProfile(seriesProfile(a), seriesProfile(b));
+}
+
+/** What `sameSeries` compares about a title, computed once (the film picker compares each title many times). */
+export interface SeriesProfile {
+  key: string;
+  /** The key's first word, stemmed. */
+  firstStem: string;
+  /** The key padded with spaces, when it has two or more words (else null). */
+  spacedKey: string | null;
+  /** The title's words, padded with spaces. */
+  padded: string;
+}
+
+export function seriesProfile(title: string): SeriesProfile {
+  const key = seriesKey(title);
+  return { key, firstStem: stem(key.split(" ")[0]!), spacedKey: key.includes(" ") ? ` ${key} ` : null, padded: ` ${words(title)} ` };
+}
+
+/**
+ * `sameSeries` on two precomputed profiles. One key starting the other implies the same first
+ * word, so the first-word test covers it.
+ */
+export function sameSeriesProfile(a: SeriesProfile, b: SeriesProfile): boolean {
+  if (!a.key || !b.key) return false;
+  if (a.firstStem === b.firstStem) return true;
+  return (a.spacedKey !== null && b.padded.includes(a.spacedKey)) || (b.spacedKey !== null && a.padded.includes(b.spacedKey));
 }
 
 const lower = (items: readonly string[]) => new Set(items.map((s) => s.trim().toLowerCase()).filter(Boolean));

@@ -142,12 +142,55 @@ export function normalizeTitle(title: string): string {
 export function findGallery(entries: readonly DirectoryEntry[], film: { title: string; year: number | null }): DirectoryEntry {
   const key = normalizeTitle(film.title);
   const sameTitle = entries.filter((e) => normalizeTitle(e.title) === key);
-  const yearGap = (e: DirectoryEntry) => (film.year === null || e.year === null ? 0 : Math.abs(e.year - film.year));
-  const candidates = sameTitle.filter((e) => yearGap(e) <= 1).sort((a, b) => yearGap(a) - yearGap(b) || Number(b.tags.includes("4k")) - Number(a.tags.includes("4k")));
-  if (candidates[0]) return candidates[0];
+  const best = bestGallery(sameTitle, film.year);
+  if (best) return best;
   const near = sameTitle.length > 0 ? sameTitle : entries.filter((e) => normalizeTitle(e.title).includes(key) || (key.length > 3 && key.includes(normalizeTitle(e.title)) && e.year === film.year));
   const hint = near.slice(0, 5).map((e) => `${e.title} (${e.year ?? "?"}) ${e.url}`);
   throw new Error(`No movie-screencaps.com gallery for ${film.title} (${film.year ?? "?"})${hint.length ? `. Near misses:\n    ${hint.join("\n    ")}\n  Pass --url to pick one.` : ". Pass --url if it is listed under another title."}`);
+}
+
+/** Years apart, 0 when either year is unknown. */
+const yearGap = (entry: DirectoryEntry, year: number | null) => (year === null || entry.year === null ? 0 : Math.abs(entry.year - year));
+
+/** Of galleries with the film's title, the best one within a year of it: the exact year first, then 4K. */
+function bestGallery(sameTitle: readonly DirectoryEntry[], year: number | null): DirectoryEntry | undefined {
+  return sameTitle
+    .filter((e) => yearGap(e, year) <= 1)
+    .sort((a, b) => yearGap(a, year) - yearGap(b, year) || Number(b.tags.includes("4k")) - Number(a.tags.includes("4k")))[0];
+}
+
+/**
+ * Every catalog film that has a gallery, with that gallery: `findGallery`'s match for each film
+ * (same normalised title, a year within one, the exact year and then 4K preferred), done for a
+ * whole catalog at once. When several films claim one gallery (a title shared by films a year
+ * apart; more likely as the catalog grows), it goes to the film whose year is exact, then the
+ * better-known one, then the lower id; the others have no gallery. Films without a year are left
+ * out: a title alone is too weak a match.
+ */
+export function matchGalleries<F extends { id: number; title: string; year: number | null; popularity: number }>(
+  entries: readonly DirectoryEntry[],
+  films: readonly F[],
+): Map<number, { film: F; gallery: DirectoryEntry }> {
+  const byTitle = new Map<string, DirectoryEntry[]>();
+  for (const entry of entries) {
+    const key = normalizeTitle(entry.title);
+    if (!key) continue;
+    const list = byTitle.get(key);
+    if (list) list.push(entry);
+    else byTitle.set(key, [entry]);
+  }
+  const claims = new Map<string, { film: F; gallery: DirectoryEntry }>();
+  for (const film of films) {
+    if (film.year === null) continue;
+    const gallery = bestGallery(byTitle.get(normalizeTitle(film.title)) ?? [], film.year);
+    if (!gallery) continue;
+    const held = claims.get(gallery.url)?.film;
+    const beatsHeld =
+      !held ||
+      (yearGap(gallery, film.year) - yearGap(gallery, held.year) || held.popularity - film.popularity || film.id - held.id) < 0;
+    if (beatsHeld) claims.set(gallery.url, { film, gallery });
+  }
+  return new Map([...claims.values()].map((claim) => [claim.film.id, claim]));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -161,9 +204,14 @@ async function fetchText(url: string): Promise<string> {
   return response.text();
 }
 
-/** Looks a catalog film up in the movie-screencaps.com directory. */
-export async function resolveGallery(film: { title: string; year: number | null }): Promise<DirectoryEntry> {
-  return findGallery(parseDirectory(await fetchText(SCREENCAPS_DIRECTORY)), film);
+/** The movie-screencaps.com directory page (one request; `screencaps-cache.mts` keeps a copy). */
+export async function fetchDirectoryHtml(): Promise<string> {
+  return fetchText(SCREENCAPS_DIRECTORY);
+}
+
+/** Looks a catalog film up in the movie-screencaps.com directory (fetched now, unless `entries` are given). */
+export async function resolveGallery(film: { title: string; year: number | null }, entries?: readonly DirectoryEntry[]): Promise<DirectoryEntry> {
+  return findGallery(entries ?? parseDirectory(await fetchDirectoryHtml()), film);
 }
 
 export interface Gallery {
@@ -182,15 +230,34 @@ export interface Gallery {
 export const MIN_FILM_CAPS = 1000;
 
 /**
- * The gallery's size, checked: refused when it reports a single page or fewer than
- * `MIN_FILM_CAPS` caps, unless `allowFew` (a short film, checked by hand).
+ * A gallery that can't be a whole film (see `checkGallerySize`). `kind`: `tiny` (under 100 caps),
+ * `one-page` (no second page found: a short, or the site's pagination markup changed, so worth a
+ * human look before concluding anything) or `few-caps` (several pages, but under `MIN_FILM_CAPS`).
+ */
+export class GallerySizeError extends Error {
+  override readonly name = "GallerySizeError";
+  constructor(
+    readonly kind: "tiny" | "one-page" | "few-caps",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * The gallery's size, checked: refused (a `GallerySizeError`) when it reports a single page or fewer
+ * than `MIN_FILM_CAPS` caps, unless `allowFew` (a short film, checked by hand).
  */
 export function checkGallerySize(galleryUrl: string, info: { lastPage: number; frameCount: number }, allowFew = false): void {
   const { lastPage, frameCount } = info;
-  if (!Number.isInteger(frameCount) || frameCount < 100) throw new Error(`${galleryUrl}: only ${frameCount} caps; too few for a barcode`);
+  if (!Number.isInteger(frameCount) || frameCount < 100) throw new GallerySizeError("tiny", `${galleryUrl}: only ${frameCount} caps; too few for a barcode`);
   if (allowFew) return;
-  if (lastPage <= 1) throw new Error(`${galleryUrl}: found only one gallery page (${frameCount} caps), which is not a whole film. Has the pagination changed? (--allow-few-caps for a genuinely short film)`);
-  if (frameCount < MIN_FILM_CAPS) throw new Error(`${galleryUrl}: only ${frameCount} caps, fewer than ${MIN_FILM_CAPS}; a whole film has far more (--allow-few-caps for a genuinely short film)`);
+  if (lastPage <= 1) {
+    throw new GallerySizeError("one-page", `${galleryUrl}: found only one gallery page (${frameCount} caps), which is not a whole film. Has the pagination changed? (--allow-few-caps for a genuinely short film)`);
+  }
+  if (frameCount < MIN_FILM_CAPS) {
+    throw new GallerySizeError("few-caps", `${galleryUrl}: only ${frameCount} caps, fewer than ${MIN_FILM_CAPS}; a whole film has far more (--allow-few-caps for a genuinely short film)`);
+  }
 }
 
 /** Reads a gallery's first and last pages: the cap URL pattern and how many caps it has. */

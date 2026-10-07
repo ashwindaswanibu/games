@@ -18,7 +18,7 @@ A running list of things we've agreed to do later. Newest decisions live in `des
   - Store the levels in Cloudflare R2 rather than Postgres (420 MB would fill the free database), served through the same "only what you've earned" check.
   - New films get rendered as they're added to the catalog (weekly).
 - [ ] **At launch, reset the testing period** (Ashwin, 2026-10-06): films used while the game is in testing (Dune: Part Two, The Matrix, Amélie, Mad Max: Fury Road, Barbie, …) go back into the pool, so the "no film twice within a year" rule only counts real days. Ashwin says when.
-- [ ] **Daily film picker:** implement the approved selection logic (tiers 25/55/20, no repeats within a year, no franchise or director repeats within 30 days, skip black-and-white films).
+- [x] **Daily film picker:** implement the approved selection logic (tiers 25/55/20, no repeats within a year, no franchise or director repeats within 30 days, skip black-and-white films). `content:movies:plan-barcode` (and `barcode-levels --film auto`).
 - [ ] **Add MovieNet as a second frame source** (*after* the 470 are rendered; same overnight job) (about 1,100 complete films, pre-2019). Needs a free OpenDataLab account (Ashwin). First download only the 10 KB Movie List and measure how many *new* popular films it adds before committing to the ~250 GB download (process in the cloud).
 
 ## Home page and overall UI

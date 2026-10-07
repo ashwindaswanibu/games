@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   checkGallerySize,
+  GallerySizeError,
+  matchGalleries,
   MIN_FILM_CAPS,
   canonicalGalleryUrl,
   capUrl,
@@ -53,6 +55,22 @@ describe("gallery pages", () => {
     expect(() => checkGallerySize(url, { lastPage: 4, frameCount: MIN_FILM_CAPS - 1 })).toThrow(/fewer than 1000/);
     expect(() => checkGallerySize(url, { lastPage: 1, frameCount: 180 }, true)).not.toThrow();
     expect(() => checkGallerySize(url, { lastPage: 1, frameCount: 40 }, true)).toThrow(/too few/);
+  });
+
+  it("says what kind of too small a gallery is, so only real verdicts are recorded", () => {
+    const url = "https://movie-screencaps.com/short-2020/";
+    const kind = (info: { lastPage: number; frameCount: number }) => {
+      try {
+        checkGallerySize(url, info);
+      } catch (error) {
+        return error instanceof GallerySizeError ? error.kind : "other";
+      }
+      return null;
+    };
+    expect(kind({ lastPage: 1, frameCount: 60 })).toBe("tiny");
+    expect(kind({ lastPage: 1, frameCount: 180 })).toBe("one-page");
+    expect(kind({ lastPage: 4, frameCount: 640 })).toBe("few-caps");
+    expect(kind({ lastPage: 60, frameCount: 10_000 })).toBeNull();
   });
 
   it("builds thumbnail and sized URLs for a cap", () => {
@@ -111,6 +129,30 @@ describe("the movie directory", () => {
 
   it("explains how to proceed when the film isn't listed", () => {
     expect(() => findGallery(entries, { title: "Heat", year: 1995 })).toThrow(/--url/);
+  });
+
+  describe("matching a whole catalog at once", () => {
+    const film = (id: number, title: string, year: number | null, popularity = 50) => ({ id, title, year, popularity });
+
+    it("gives each film the gallery findGallery would", () => {
+      const films = [film(1, "Dune: Part Two", 2024), film(2, "Dune", 1984), film(3, "Dune", 2021), film(4, "Barbie", 2023), film(5, "Amélie", 2001), film(6, "Heat", 1995)];
+      const matched = matchGalleries(entries, films);
+      expect([...matched.keys()].sort()).toEqual([1, 2, 3, 4, 5]);
+      for (const { film: f, gallery } of matched.values()) expect(gallery).toEqual(findGallery(entries, f));
+    });
+
+    it("gives a gallery two films claim to the exact year, then the better-known film", () => {
+      const twoBarbies = matchGalleries(entries, [film(10, "Barbie", 2024, 99), film(11, "Barbie", 2023, 1)]);
+      expect([...twoBarbies.keys()]).toEqual([11]);
+      const sameYear = matchGalleries(entries, [film(12, "Barbie", 2022, 10), film(13, "Barbie", 2024, 80)]);
+      expect([...sameYear.keys()]).toEqual([13]);
+      const tie = matchGalleries(entries, [film(15, "Barbie", 2022, 10), film(14, "Barbie", 2024, 10)]);
+      expect([...tie.keys()]).toEqual([14]);
+    });
+
+    it("leaves out films without a year (a title alone is too weak)", () => {
+      expect(matchGalleries(entries, [film(20, "Barbie", null)]).size).toBe(0);
+    });
   });
 });
 
