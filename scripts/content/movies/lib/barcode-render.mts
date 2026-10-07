@@ -2,8 +2,9 @@ import sharp, { type Sharp } from "sharp";
 import {
   averageColor,
   chooseFrame,
-  chunkOf,
+  chunkIn,
   createImage,
+  DEFAULT_STORY_TRIM,
   cropMattes,
   detectMattes,
   dominantColor,
@@ -18,11 +19,14 @@ import {
   squeezeColumn,
   stripEdges,
   stripSchedule,
+  storyRange,
   type FilmLook,
+  type FrameRange,
   type Hex,
   type Mattes,
   type Pace,
   type RgbImage,
+  type StoryTrim,
 } from "./barcode-levels.mjs";
 import { mapPool } from "./http.mjs";
 
@@ -57,6 +61,13 @@ export interface RenderOptions {
   samples?: number;
   /** Frames decoded and resized at once while drawing a strip level. Default 4. */
   concurrency?: number;
+  /** Opening and closing stretches strips never come from. Default `DEFAULT_STORY_TRIM`. */
+  trim?: StoryTrim;
+  /**
+   * Called with the film's colourfulness as soon as the thumbnails are in, before any full-quality
+   * frame is fetched; throw to stop the run there (a black-and-white film, say).
+   */
+  checkLook?: (look: FilmLook) => void;
   log?: (message: string) => void;
 }
 
@@ -70,12 +81,16 @@ export interface RenderedLevel {
   strips: number;
   /** Crop position, 0 (frame edge) to 1 (centre); null for level 1. */
   crop: number | null;
+  /** The frame each strip was cut from, left to right (level 1: empty). */
+  frames: number[];
 }
 
 export interface RenderedFilm {
   levels: RenderedLevel[];
   look: FilmLook;
   mattes: Mattes;
+  /** The frames strips may come from (the film minus its trimmed opening and closing). */
+  story: FrameRange;
   /** Frames sampled for level 1, and full-quality frames fetched for the strips. */
   sampled: number;
   fetched: number;
@@ -110,12 +125,13 @@ async function prepareFrame(frame: RgbImage, mattes: Mattes, height: number, min
 }
 
 export async function renderLevels(source: FrameSource, options: RenderOptions): Promise<RenderedFilm> {
-  const { width = DEFAULT_LEVEL_WIDTH, height = DEFAULT_LEVEL_HEIGHT, pace, concurrency = 4, log = () => {} } = options;
+  const { width = DEFAULT_LEVEL_WIDTH, height = DEFAULT_LEVEL_HEIGHT, pace, concurrency = 4, trim = DEFAULT_STORY_TRIM, log = () => {} } = options;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 64 || height < 32 || width > 8192 || height > 8192) {
     throw new Error(`Invalid level size ${width}×${height}`);
   }
   const schedule = stripSchedule(pace);
   const total = source.frameCount;
+  const story = storyRange(total, trim);
   const sampled = sampleFrames(total, options.samples ?? defaultSamples(width));
 
   // --- Thumbnails: mattes, brightness (for skipping dark frames), colourfulness, level 1. ---
@@ -132,6 +148,7 @@ export async function renderLevels(source: FrameSource, options: RenderOptions):
     `  mattes t${(mattes.top * 100).toFixed(1)}% b${(mattes.bottom * 100).toFixed(1)}% l${(mattes.left * 100).toFixed(1)}% r${(mattes.right * 100).toFixed(1)}%; ` +
       `saturation ${look.saturation.toFixed(3)}, chromatic ${(look.chromaticShare * 100).toFixed(1)}%${look.monochrome ? " (black and white)" : ""}`,
   );
+  options.checkLook?.(look);
 
   const levels: RenderedLevel[] = [];
   const rows = pictures[0]!.height;
@@ -140,12 +157,14 @@ export async function renderLevels(source: FrameSource, options: RenderOptions):
     width,
   );
   const level1 = await toRaw(fromRaw(squeezed).resize({ width, height, fit: "fill", kernel: "cubic" }));
-  levels.push({ level: 1, image: level1, average: averageColor(level1), dominant: dominantColor(level1), strips: sampled.length, crop: null });
+  levels.push({ level: 1, image: level1, average: averageColor(level1), dominant: dominantColor(level1), strips: sampled.length, crop: null, frames: [] });
 
   // --- Which frame each strip comes from, decided from thumbnails, so each is fetched once. ---
+  // Strips cover the story only: the trimmed opening and closing can hold titles and credits.
+  log(`  strips from frames ${story.first}–${story.last} of ${total} (trim ${(trim.head * 100).toFixed(1)}% head, ${(trim.tail * 100).toFixed(1)}% tail)`);
   const plan = schedule.map((step) => ({
     ...step,
-    frames: Array.from({ length: step.strips }, (_, i) => chooseFrame(chunkOf(total, step.strips, i), total, sampled, brightness)),
+    frames: Array.from({ length: step.strips }, (_, i) => chooseFrame(chunkIn(story, step.strips, i), total, sampled, brightness)),
   }));
   const needed = [...new Set(plan.flatMap((p) => p.frames))].sort((a, b) => a - b);
   // Full-quality frames must give a picture at least `height` tall once the mattes are cut away.
@@ -168,8 +187,8 @@ export async function renderLevels(source: FrameSource, options: RenderOptions):
       const x = pickStripX({ width: frame.width, height: frame.height, luma: lumaOf(frame) }, stripWidth, i % 2 === 0, step.crop);
       pasteStrip(canvas, frame, x, stripWidth, edges[i]!);
     });
-    levels.push({ level: step.level, image: canvas, average: averageColor(canvas), dominant: dominantColor(canvas), strips: step.strips, crop: step.crop });
+    levels.push({ level: step.level, image: canvas, average: averageColor(canvas), dominant: dominantColor(canvas), strips: step.strips, crop: step.crop, frames: step.frames });
     log(`  level ${step.level}: ${step.strips} strips, crop ${step.crop.toFixed(2)}`);
   }
-  return { levels, look, mattes, sampled: sampled.length, fetched: needed.length };
+  return { levels, look, mattes, story, sampled: sampled.length, fetched: needed.length };
 }

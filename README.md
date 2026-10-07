@@ -126,6 +126,11 @@ cp .env.example .env.local       # fill in the keys printed above, plus PUZZLE_S
 npm run dev                      # http://localhost:3000
 ```
 
+There is one local Supabase per machine: every checkout and git worktree shares it. Content one
+branch writes in a new format (for example the ten-level Color Barcode puzzles) breaks those days
+for checkouts still on the old code until that branch is merged; see
+`scripts/content/movies/README.md`. Never delete someone's plays to free a day for new content.
+
 Then make yourself an admin: sign up at `/signup`, then run this in Supabase Studio
 (http://127.0.0.1:54323):
 

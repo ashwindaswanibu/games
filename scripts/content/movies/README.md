@@ -216,7 +216,18 @@ puzzle.
 npm run content:movies:barcode-levels -- --film 483 --date 2026-10-06
 npm run content:movies:barcode-levels -- --film 483 --date next-free --pace slower
 npm run content:movies:barcode-levels -- --film 483 --dry-run --out design/barcode-tests/dune-part-two-2024/levels
+npm run content:movies:barcode-levels -- --film 243 --date 2026-10-10 --head 0.065 --replace-unplayed
 ```
+
+`design/barcode-tests/*/levels/` is gitignored: a review export reveals a puzzle's answer and every
+locked level, so it never goes in the repository.
+
+> **The local database is shared.** Every checkout and worktree on this machine (the main checkout,
+> `games-worktrees/*`) talks to the same local Supabase. Puzzles written by this script use the
+> ten-level Color Barcode format; a checkout still on the old single-barcode Color Barcode code
+> can't load those days (2026-10-06 onward locally) until this branch is merged. And a day that has
+> been played is never freed by deleting plays, not even the E2E account's: pick the next unplayed
+> day instead (`--date next-free`), or ask the owner first.
 
 **Frames.** From [movie-screencaps.com](https://movie-screencaps.com) (complete films as numbered
 screencaps in film order; free for non-commercial use). The script finds the film's gallery in the
@@ -232,23 +243,37 @@ kept. A run takes about two minutes.
 "G+ edges-first" design, reference prototypes in `design/barcode-tests/dune-part-two-2024/reference/`):
 
 - Level 1: the squeezed-frame barcode. Frames sampled evenly across the whole film (the level width,
-  kept within 1,600–3,000), letterbox mattes cut away, each frame squeezed to one column in linear
-  light (its vertical structure survives), laid out left to right.
-- Levels 2–10: the film cut into N equal stretches (pace `normal`: 128, 88, 60, 42, 30, 21, 15,
+  kept within 1,600–3,000), letterbox mattes cut away, each frame squeezed to one column (its
+  vertical structure survives), laid out left to right. Averaged in sRGB like the approved
+  prototype; averaging in linear light brightened Dune: Part Two's columns by about 20%.
+- Levels 2–10: the film's story (the whole film minus `--head`, default 5%, and `--tail`, default
+  1.5%: opening logos, titles and credits, which often run over the first scenes, and closing
+  cards; a credit names the film) cut into N equal stretches (pace `normal`: 128, 88, 60, 42, 30, 21, 15,
   10, 6; `slower` and `faster` are the other presets). Each stretch gives its middle frame (or a
   nearby one, if that is near black) and a full-height strip one N-th of the canvas wide. Cuts
   start at the frame edges, alternating left and right, and move toward the centre level by level
   (crop position (i/8)^ease). Of 9 candidate windows near the target, the most informative wins
-  (mean gradient + 0.35 × contrast; near-black windows rejected), never crossing the centre.
+  (mean gradient + 0.35 × contrast; near-black windows rejected; text on a flat ground, like a title
+  card, marked down to a quarter), never crossing the centre. The distance penalty and the edge
+  margin are in the prototype's 533-pixel frame units, so frame resolution doesn't change choices.
+  Credits laid over the picture (Barbie's run to 6.1% of the film) can't be told from the picture
+  automatically: the run log and `levels.json` say where each level's first and last strips come
+  from, so check them in the `--dry-run --out` review and raise `--head`/`--tail` if needed.
 - Each level is a 2400 × 800 WebP by default (`--width`, `--height`), with its average and
-  dominant colour. The film's colourfulness (mean saturation) is measured too, and a black-and-white
-  film is flagged (and warned about).
+  dominant colour. The film's colourfulness (mean saturation) is measured too.
 
 **Stored as** ten `puzzle_assets` (`barcode-level-1` … `barcode-level-10`). The public payload
 holds only level 1, `maxGuesses: 10` and the film's look; the solution holds the answer snapshot,
-all ten levels, the pace and the frame credit. A date that has a puzzle is refused unless it is an
-unplayed DEV FIXTURE and you pass `--replace-fixtures`; a played date is never touched. A film that
-is already another day's answer is refused unless `--allow-repeat`.
+all ten levels, the pace and the frame credit. A date that has a puzzle is refused unless nobody
+has played it and you pass `--replace-fixtures` (a DEV FIXTURE) or `--replace-unplayed` (a curated
+puzzle); a played date is never touched (the database refuses the delete).
+
+**Selection rules** (approved, `design/barcode-film-selection.md`), each refused unless overridden:
+a film that is already another day's answer (`--allow-repeat`); a director who has another answer
+within 30 days either side (`--allow-same-director`; checked before any download); a black-and-white
+film (`--allow-monochrome`; checked on the thumbnails, before the full-quality frames). Franchises
+can't be checked yet: the catalog has no franchise data. A gallery of a single page or under 1,000
+caps is refused as not a whole film (`--allow-few-caps`). Dry runs only warn.
 
 | Flag | Default | |
 |---|---|---|
@@ -260,15 +285,20 @@ is already another day's answer is refused unless `--allow-repeat`.
 | `--samples` | the width, within 1,600–3,000 | Frames squeezed into level 1 |
 | `--quality` | 88 | WebP quality |
 | `--concurrency` | 6 | Requests in flight (1–6) |
+| `--head`, `--tail` | 0.05, 0.015 | Fractions of the film strips never come from (titles and credits) |
 | `--replace-fixtures` | | Take a day that holds an unplayed DEV FIXTURE |
+| `--replace-unplayed` | | Take a day whose curated puzzle nobody has played (to re-render it) |
 | `--allow-repeat` | | Allow a film that is already another day's answer |
+| `--allow-same-director` | | Allow a director with another answer within 30 days |
+| `--allow-monochrome` | | Allow a black-and-white film |
+| `--allow-few-caps` | | Allow a one-page or under-1,000-cap gallery (a short film) |
 | `--dry-run` | | Render and validate, write nothing; with `--out <dir>`, save `level-01.webp` … and `levels.json` for review |
 
 ## Shared utilities (`lib/`)
 
 | Module | What it gives you |
 |---|---|
-| `pipeline.mts` | `pipelineDb({ allowRemote })` (the service-role client, refusing non-local databases by default); `puzzleDateRange(days, from?)` (dates in the game timezone, via `src/core/day.ts`); `contentSeed(gameId, date)`; `selectAllPages(...)` (reads past PostgREST's 1000-row cap); `existingPuzzleDates(...)`; `replaceableFixtureDates(...)` and `deleteFixturePuzzle(...)` (for `--replace-fixtures`); `newAsset(kind, image)` and `insertPuzzleIfAbsent(db, { gameId, date, puzzle, solution, assets })` (writes a puzzle and its assets, never overwrites, rolls back on a failed asset); `positiveInt` for flags |
+| `pipeline.mts` | `pipelineDb({ allowRemote })` (the service-role client, refusing non-local databases by default); `puzzleDateRange(days, from?)` (dates in the game timezone, via `src/core/day.ts`); `contentSeed(gameId, date)`; `selectAllPages(...)` (reads past PostgREST's 1000-row cap); `existingPuzzleDates(...)`; `replaceableFixtureDates(...)` and `deleteFixturePuzzle(...)` (for `--replace-fixtures`); `deleteUnplayedPuzzle(...)` (for `--replace-unplayed`, guarded by the plays foreign key); `newAsset(kind, image)` and `insertPuzzleIfAbsent(db, { gameId, date, puzzle, solution, assets })` (writes a puzzle and its assets, never overwrites, rolls back on a failed asset); `positiveInt` for flags |
 | `http.mts` | `fetchWithRetry` (timeouts, backoff with jitter, `Retry-After`, a descriptive User-Agent), `mapPool`, `chunk` |
 | `wikidata.mts` | SPARQL and `wbgetentities` clients with zod validation, plus claim helpers |
 | `catalog-model.mts` | Pure Wikidata → catalog rules: which films qualify, genre names, external-id conflicts |
@@ -277,7 +307,7 @@ is already another day's answer is refused unless `--allow-repeat`.
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |
 | `film-stills.mts` | `stillsSource()`: a film's stills from the cache, else TMDB (what the image pipelines use) |
 | `barcode-levels.mts` | Pure Color Barcode level maths: mattes, squeezed columns, the edges-first schedule, dark-frame skipping, smart crop, colour data |
-| `barcode-render.mts` | `renderLevels(source, options)`: the ten levels from any `FrameSource` (the real pipeline and the DEV FIXTURE generator share it) |
+| `barcode-render.mts` | `renderLevels(source, options)`: the ten levels from any `FrameSource` (the real pipeline and the DEV FIXTURE generator share it); tested end to end on an in-memory film |
 | `screencaps.mts` | movie-screencaps.com: directory resolver, gallery reader, and `ScreencapsSource` (polite downloads, temp cache deleted on `close()`) |
 
 Image encoding is shared with the fixture tooling in `scripts/content/lib/images.mts`

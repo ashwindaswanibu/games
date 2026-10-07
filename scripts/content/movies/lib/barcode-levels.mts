@@ -15,8 +15,13 @@
  *   rarely a face; each level the cut drifts toward the centre, choosing among nearby windows the
  *   most informative one and never crossing the centre.
  *
- * Images are packed 8-bit RGB (`RgbImage`). Averages of colour are taken in linear light, so a
- * squeezed column is the colour the frame would blur to on screen.
+ * Strips come from the film's story only: an opening stretch (studio logos, titles, credits
+ * over the first scenes) and a closing stretch (end cards) are left out, because a credit names the
+ * film. Level 1 still covers the whole film; squeezed into columns, text can't be read.
+ *
+ * Images are packed 8-bit RGB (`RgbImage`). Level 1 averages gamma-encoded sRGB values, as the
+ * approved prototype did (PIL resizes, `make_barcode.py`); the per-level colour data averages in
+ * linear light.
  */
 
 // ---------------------------------------------------------------------------------------------
@@ -209,8 +214,10 @@ export function cropMattes(image: RgbImage, mattes: Mattes): RgbImage {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * One frame squeezed into a single column of `rows` linear-light colours: each output row is the
- * mean of the frame's pixels in that horizontal band, across the whole width.
+ * One frame squeezed into a single column of `rows` sRGB colours (0–255, unrounded): each output
+ * row is the mean of the frame's pixels in that horizontal band, across the whole width. Means are
+ * of the encoded sRGB values, like the approved prototype's PIL resize (averaging in linear light
+ * instead brightens contrasty frames: +20% median column brightness on Dune: Part Two).
  */
 export function squeezeColumn(frame: RgbImage, rows: number): Float32Array {
   assertImage(frame);
@@ -221,9 +228,9 @@ export function squeezeColumn(frame: RgbImage, rows: number): Float32Array {
     let g = 0;
     let b = 0;
     for (let x = 0, i = y * width * 3; x < width; x++, i += 3) {
-      r += srgbToLinear(data[i]!);
-      g += srgbToLinear(data[i + 1]!);
-      b += srgbToLinear(data[i + 2]!);
+      r += data[i]!;
+      g += data[i + 1]!;
+      b += data[i + 2]!;
     }
     rowMeans[y * 3] = r / width;
     rowMeans[y * 3 + 1] = g / width;
@@ -240,8 +247,8 @@ export function squeezeColumn(frame: RgbImage, rows: number): Float32Array {
 
 /**
  * Lays squeezed columns (film order) side by side across `width` pixels. With more columns than
- * pixels, neighbours are averaged into one pixel; with fewer, each column spans several pixels.
- * Averaging happens in linear light; the result is sRGB.
+ * pixels, neighbours are averaged into one pixel (in sRGB, like the prototype's BOX resize); with
+ * fewer, each column spans several pixels.
  */
 export function layoutColumns(columns: readonly Float32Array[], width: number): RgbImage {
   if (columns.length === 0) throw new Error("No columns to lay out");
@@ -260,9 +267,9 @@ export function layoutColumns(columns: readonly Float32Array[], width: number): 
         b += col[y * 3 + 2]! * weight;
       }
       const i = (y * width + x) * 3;
-      out.data[i] = linearToSrgb(r);
-      out.data[i + 1] = linearToSrgb(g);
-      out.data[i + 2] = linearToSrgb(b);
+      out.data[i] = Math.min(255, Math.max(0, Math.round(r)));
+      out.data[i + 1] = Math.min(255, Math.max(0, Math.round(g)));
+      out.data[i + 2] = Math.min(255, Math.max(0, Math.round(b)));
     }
   });
   return out;
@@ -327,6 +334,47 @@ export function chunkOf(total: number, count: number, index: number): { target: 
   const last = Math.max(first, Math.min(total, Math.floor(((index + 1) * total) / count)));
   const target = Math.min(last, Math.max(first, Math.round(((index + 0.5) / count) * total)));
   return { target, first, last };
+}
+
+/** Frames `first`…`last` (inclusive, 1-based) of a film. */
+export interface FrameRange {
+  first: number;
+  last: number;
+}
+
+/** Fractions of the film left out of the strips at each end. */
+export interface StoryTrim {
+  /** Opening: logos, titles and credits, which often run over the first scenes. */
+  head: number;
+  /** Closing: end cards and credits (screencap galleries mostly stop before the credit roll). */
+  tail: number;
+}
+
+/**
+ * Defaults, from the seeded films' galleries: opening credits end by 2.9% (Amélie), 3.7% (Mad Max:
+ * Fury Road's title card) and 6.1% (Barbie, credits over Barbieland, which needs `head` 0.065); the
+ * end cards sit in the last 0.2%. A film whose titles run longer gets its own `--head`/`--tail`.
+ */
+export const DEFAULT_STORY_TRIM: StoryTrim = { head: 0.05, tail: 0.015 };
+/** Trims are refused above this: past it, the strips would no longer stand for the whole film. */
+export const MAX_TRIM = 0.25;
+
+/** The frames strips may come from: the film minus its trimmed opening and closing. */
+export function storyRange(total: number, trim: StoryTrim): FrameRange {
+  if (!Number.isInteger(total) || total < 1) throw new Error(`Invalid frame count ${total}`);
+  for (const [name, value] of Object.entries(trim)) {
+    if (!Number.isFinite(value) || value < 0 || value > MAX_TRIM) throw new Error(`The ${name} trim must be 0–${MAX_TRIM}, not ${value}`);
+  }
+  const first = Math.min(total, 1 + Math.floor(trim.head * total));
+  const last = Math.max(first, total - Math.floor(trim.tail * total));
+  return { first, last };
+}
+
+/** `chunkOf` within a range of frames: stretch `index` of `count` equal stretches of `range`. */
+export function chunkIn(range: FrameRange, count: number, index: number): { target: number; first: number; last: number } {
+  const offset = range.first - 1;
+  const chunk = chunkOf(range.last - offset, count, index);
+  return { target: chunk.target + offset, first: chunk.first + offset, last: chunk.last + offset };
 }
 
 /** A frame whose mean brightness (0–255, all channels) is at or below this is "near black". */
@@ -411,14 +459,66 @@ export function infoScore(luma: Float32Array, frameWidth: number, frameHeight: n
   return gradY + gradX + 0.35 * std;
 }
 
+/** A luma step above this between neighbours is a sharp edge (a letter's stroke, on a ground). */
+const TEXT_EDGE = 64;
+/** Text has at least this share of sharp-edge pixels (a horizon line alone is ~1 / frame height). */
+const TEXT_MIN_EDGES = 0.004;
+/** Share of the window within ±8 luma of its mode at which text-likeness starts, and where it is full. */
+const TEXT_GROUND_FROM = 0.5;
+const TEXT_GROUND_FULL = 0.75;
+/** A fully text-like window keeps this share of its information score. */
+export const TEXT_SCORE_KEPT = 0.25;
+
+/**
+ * How much a window looks like text on a flat ground (a title card, a credit, a sign), 0–1. Text
+ * on a plain background is exactly what `infoScore` rewards most (sharp edges, high contrast), and
+ * it can name the film, so `pickStripX` marks such windows down. Signals: most of the window sits
+ * within a narrow band of luma (the ground), yet it has sharp, high-contrast edges (the strokes).
+ */
+export function textLikeness(luma: Float32Array, frameWidth: number, frameHeight: number, x0: number, width: number): number {
+  if (x0 < 0 || width < 1 || x0 + width > frameWidth) throw new Error(`Window ${x0}+${width} is outside a frame ${frameWidth} wide`);
+  const bins = new Uint32Array(64);
+  let strong = 0;
+  for (let y = 0; y < frameHeight; y++) {
+    const row = y * frameWidth + x0;
+    for (let x = 0; x < width; x++) {
+      const v = luma[row + x]!;
+      bins[Math.min(63, Math.floor(v / 4))]!++;
+      if ((x + 1 < width && Math.abs(luma[row + x + 1]! - v) > TEXT_EDGE) || (y + 1 < frameHeight && Math.abs(luma[row + frameWidth + x]! - v) > TEXT_EDGE)) strong++;
+    }
+  }
+  const n = width * frameHeight;
+  let mode = 0;
+  for (let b = 1; b < 64; b++) if (bins[b]! > bins[mode]!) mode = b;
+  let ground = 0;
+  for (let b = Math.max(0, mode - 2); b <= Math.min(63, mode + 2); b++) ground += bins[b]!;
+  if (strong / n < TEXT_MIN_EDGES) return 0;
+  return Math.min(1, Math.max(0, (ground / n - TEXT_GROUND_FROM) / (TEXT_GROUND_FULL - TEXT_GROUND_FROM)));
+}
+
 /** Candidate windows tried around the target, spread evenly over ± `spread`. */
 export const CROP_CANDIDATES = 9;
+
+/** Frame height the approved prototype chose crops at; its distance penalty was per pixel of this. */
+export const PROTOTYPE_FRAME_HEIGHT = 533;
+/** The prototype's penalty for straying from the target: this much score per prototype pixel. */
+const DISTANCE_PENALTY = 0.02;
+
+/**
+ * Score lost for choosing a window `offset` pixels from the target in a frame `frameHeight` tall:
+ * 0.02 per pixel of the prototype's 533-pixel frames, so the trade-off between information and
+ * distance doesn't change with the resolution the frames are fetched at.
+ */
+export function distancePenalty(offset: number, frameHeight: number): number {
+  return DISTANCE_PENALTY * Math.abs(offset) * (PROTOTYPE_FRAME_HEIGHT / frameHeight);
+}
 
 /**
  * Where to cut a strip `stripWidth` wide from a frame: the target moves from the frame's left (or
  * right) edge at `crop` = 0 to its centre at 1; of `CROP_CANDIDATES` windows around it (within
  * 12% of the frame width at the edge, narrowing to 4.8% at the centre) the most informative wins,
- * with a small penalty for straying from the target. A window's centre never passes the frame's
+ * with a small penalty for straying from the target (`distancePenalty`) and a large one for looking
+ * like text on a flat ground (`textLikeness`). A window's centre never passes the frame's
  * centre, so left-side strips stay left and right-side strips stay right. Returns the left x.
  */
 export function pickStripX(
@@ -430,7 +530,9 @@ export function pickStripX(
   const { width, height, luma } = frame;
   if (stripWidth > width) throw new Error(`A strip ${stripWidth} wide doesn't fit a frame ${width} wide`);
   const centre = width / 2;
-  const edge = fromLeft ? stripWidth / 2 + 8 : width - stripWidth / 2 - 8;
+  // The prototype kept the first cut 8 px in from the edge of its 533-pixel frames.
+  const margin = (8 * height) / PROTOTYPE_FRAME_HEIGHT;
+  const edge = fromLeft ? stripWidth / 2 + margin : width - stripWidth / 2 - margin;
   const target = edge + (centre - edge) * crop;
   const spread = width * 0.12 * (1 - 0.6 * crop);
   let best = 0;
@@ -440,7 +542,9 @@ export function pickStripX(
     let cx = target + offset;
     cx = fromLeft ? Math.min(cx, centre) : Math.max(cx, centre);
     const x0 = Math.floor(Math.max(0, Math.min(width - stripWidth, cx - stripWidth / 2)));
-    const score = infoScore(luma, width, height, x0, stripWidth) - 0.02 * Math.abs(offset);
+    const info = infoScore(luma, width, height, x0, stripWidth);
+    const kept = info === REJECTED ? 1 : 1 - (1 - TEXT_SCORE_KEPT) * textLikeness(luma, width, height, x0, stripWidth);
+    const score = info * kept - distancePenalty(offset, height);
     if (score > bestScore) {
       best = x0;
       bestScore = score;

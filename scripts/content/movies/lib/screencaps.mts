@@ -173,8 +173,28 @@ export interface Gallery {
   frameCount: number;
 }
 
+/**
+ * A whole feature film is thousands of caps (Dune: Part Two has 23,457; Barbie 13,052). Fewer
+ * means the gallery is partial or the last page wasn't found (if the pagination markup changes,
+ * `parseLastPage` falls back to page 1, ~180 caps: the first minutes of the film), and every level
+ * would silently be made from a sliver of it.
+ */
+export const MIN_FILM_CAPS = 1000;
+
+/**
+ * The gallery's size, checked: refused when it reports a single page or fewer than
+ * `MIN_FILM_CAPS` caps, unless `allowFew` (a short film, checked by hand).
+ */
+export function checkGallerySize(galleryUrl: string, info: { lastPage: number; frameCount: number }, allowFew = false): void {
+  const { lastPage, frameCount } = info;
+  if (!Number.isInteger(frameCount) || frameCount < 100) throw new Error(`${galleryUrl}: only ${frameCount} caps; too few for a barcode`);
+  if (allowFew) return;
+  if (lastPage <= 1) throw new Error(`${galleryUrl}: found only one gallery page (${frameCount} caps), which is not a whole film. Has the pagination changed? (--allow-few-caps for a genuinely short film)`);
+  if (frameCount < MIN_FILM_CAPS) throw new Error(`${galleryUrl}: only ${frameCount} caps, fewer than ${MIN_FILM_CAPS}; a whole film has far more (--allow-few-caps for a genuinely short film)`);
+}
+
 /** Reads a gallery's first and last pages: the cap URL pattern and how many caps it has. */
-export async function openGallery(url: string): Promise<Gallery> {
+export async function openGallery(url: string, { allowFewCaps = false } = {}): Promise<Gallery> {
   const galleryUrl = canonicalGalleryUrl(url);
   const first = await fetchText(galleryUrl);
   const { pattern, numbers } = parseCaps(first);
@@ -182,7 +202,7 @@ export async function openGallery(url: string): Promise<Gallery> {
   const lastPage = parseLastPage(first, galleryUrl);
   const last = lastPage === 1 ? numbers : parseCaps(await fetchText(`${galleryUrl}page/${lastPage}`)).numbers;
   const frameCount = Math.max(...last);
-  if (!Number.isInteger(frameCount) || frameCount < 100) throw new Error(`${galleryUrl}: only ${frameCount} caps; too few for a barcode`);
+  checkGallerySize(galleryUrl, { lastPage, frameCount }, allowFewCaps);
   return { url: galleryUrl, pattern, frameCount };
 }
 

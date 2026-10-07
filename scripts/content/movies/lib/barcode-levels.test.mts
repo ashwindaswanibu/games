@@ -3,7 +3,10 @@ import {
   areaWeights,
   averageColor,
   chooseFrame,
+  chunkIn,
   chunkOf,
+  DEFAULT_STORY_TRIM,
+  distancePenalty,
   createImage,
   crop,
   cropMattes,
@@ -25,6 +28,9 @@ import {
   srgbToLinear,
   stripEdges,
   stripSchedule,
+  storyRange,
+  textLikeness,
+  TEXT_SCORE_KEPT,
   type RgbImage,
 } from "./barcode-levels.mjs";
 
@@ -124,12 +130,13 @@ describe("level 1: squeezed frames", () => {
     // Blue sky over sand: the column is blue on top, sand below.
     const frame = paint(8, 4, (_, y) => (y < 2 ? [40, 90, 200] : [210, 180, 120]));
     const column = squeezeColumn(frame, 2);
-    expect(Array.from(column).map((v) => linearToSrgb(v))).toEqual([40, 90, 200, 210, 180, 120]);
+    expect(Array.from(column)).toEqual([40, 90, 200, 210, 180, 120]);
   });
 
-  it("averages across the width in linear light", () => {
+  it("averages across the width in sRGB, like the approved prototype (not in linear light)", () => {
     const frame = paint(2, 1, (x) => (x === 0 ? [0, 0, 0] : [255, 255, 255]));
-    expect(linearToSrgb(squeezeColumn(frame, 1)[0]!)).toBe(188);
+    expect(squeezeColumn(frame, 1)[0]).toBe(127.5);
+    expect(pixel(layoutColumns([squeezeColumn(frame, 1)], 1), 0, 0)).toEqual([128, 128, 128]);
   });
 
   it("lays columns out left to right in film order, spreading few columns over many pixels", () => {
@@ -149,8 +156,8 @@ describe("level 1: squeezed frames", () => {
     const black = squeezeColumn(solid(2, 2, [0, 0, 0]), 2);
     const white = squeezeColumn(solid(2, 2, [255, 255, 255]), 2);
     const strip = layoutColumns([black, white, black, white], 2);
-    expect(pixel(strip, 0, 0)).toEqual([188, 188, 188]);
-    expect(pixel(strip, 1, 1)).toEqual([188, 188, 188]);
+    expect(pixel(strip, 0, 0)).toEqual([128, 128, 128]);
+    expect(pixel(strip, 1, 1)).toEqual([128, 128, 128]);
   });
 
   it("samples frames evenly over the whole film, in order", () => {
@@ -198,6 +205,32 @@ describe("levels 2–10: the edges-first schedule", () => {
     expect(chunkOf(1000, 4, 3)).toEqual({ target: 875, first: 751, last: 1000 });
     const chunks = Array.from({ length: 128 }, (_, i) => chunkOf(23457, 128, i));
     expect(chunks.every((c, i) => c.first <= c.target && c.target <= c.last && (i === 0 || c.first === chunks[i - 1]!.last + 1))).toBe(true);
+  });
+});
+
+describe("the story range: no strips from the opening titles or the end cards", () => {
+  it("leaves the trimmed opening and closing out of every level's stretches", () => {
+    const total = 13_052; // Barbie's gallery
+    const story = storyRange(total, { head: 0.065, tail: 0.015 });
+    expect(story).toEqual({ first: 849, last: 12_857 });
+    for (const pace of Object.values(PACES)) {
+      for (const strips of pace.strips) {
+        const chunks = Array.from({ length: strips }, (_, i) => chunkIn(story, strips, i));
+        expect(chunks[0]!.first).toBe(story.first);
+        expect(chunks.at(-1)!.last).toBe(story.last);
+        expect(chunks.every((c, i) => c.first <= c.target && c.target <= c.last && (i === 0 || c.first === chunks[i - 1]!.last + 1))).toBe(true);
+      }
+    }
+  });
+
+  it("is the whole film with no trim, and refuses a trim that would hide too much of it", () => {
+    expect(storyRange(1000, { head: 0, tail: 0 })).toEqual({ first: 1, last: 1000 });
+    expect(chunkIn({ first: 1, last: 1000 }, 4, 3)).toEqual(chunkOf(1000, 4, 3));
+    expect(() => storyRange(1000, { head: 0.3, tail: 0 })).toThrow(/head trim/);
+    expect(() => storyRange(1000, { head: 0, tail: -0.1 })).toThrow(/tail trim/);
+    const story = storyRange(1000, DEFAULT_STORY_TRIM);
+    expect(story.first).toBeGreaterThan(1);
+    expect(story.last).toBeLessThan(1000);
   });
 });
 
@@ -252,6 +285,66 @@ describe("smart crop scoring", () => {
     // Vertical stripes 0/100: |dx| is 100 everywhere, |dy| is 0, std is 50. Mean 50 > 24.
     const frame = withLuma(paint(4, 3, (x) => (x % 2 ? [100, 100, 100] : [0, 0, 0])));
     expect(infoScore(frame.luma, 4, 3, 0, 4)).toBeCloseTo(100 + 0.35 * 50, 3);
+  });
+});
+
+describe("text on a flat ground", () => {
+  /** White "letters" (3 px strokes) in a band across a black or pink card. */
+  const card = (ground: Rgb) =>
+    paint(120, 60, (x, y) => (y >= 24 && y < 36 && x % 6 < 3 && (x >> 3) % 3 !== 2 ? [250, 250, 250] : ground));
+
+  it("recognises a title card, on black or on a colour", () => {
+    for (const ground of [[0, 0, 0], [236, 110, 170]] as const) {
+      const frame = withLuma(card(ground));
+      expect(textLikeness(frame.luma, 120, 60, 0, 120)).toBe(1);
+    }
+  });
+
+  it("leaves pictures alone: texture, a flat field, a horizon", () => {
+    const textured = withLuma(paint(120, 60, (x, y) => [((x * 7 + y * 13) % 200) + 40, 120, 90]));
+    expect(textLikeness(textured.luma, 120, 60, 0, 120)).toBe(0);
+    const flat = withLuma(solid(120, 60, [90, 140, 200]));
+    expect(textLikeness(flat.luma, 120, 60, 0, 120)).toBe(0);
+    const horizon = withLuma(paint(120, 300, (_, y) => (y < 150 ? [90, 140, 220] : [200, 160, 90])));
+    expect(textLikeness(horizon.luma, 120, 300, 0, 120)).toBe(0);
+  });
+
+  it("makes pickStripX prefer a picture to a credit, even one with sharper edges", () => {
+    // The left 50 px: a pink credit card (the edge window); right of it, gentle texture.
+    const W = 400;
+    const frame = withLuma(
+      paint(W, 60, (x, y) =>
+        x < 50 ? (y >= 24 && y < 36 && x % 6 < 3 ? [250, 250, 250] : [236, 110, 170]) : [((x * 3 + y * 5) % 60) + 90, 110, 80],
+      ),
+    );
+    const credit = infoScore(frame.luma, W, 60, 0, 40);
+    const picture = infoScore(frame.luma, W, 60, 140, 40);
+    expect(textLikeness(frame.luma, W, 60, 0, 40)).toBe(1);
+    // Unpenalised, the credit would win by a mile; marked down, it loses to plain texture.
+    expect(credit).toBeGreaterThan(2 * picture);
+    expect(credit * TEXT_SCORE_KEPT).toBeLessThan(picture);
+    const x = pickStripX(frame, 40, true, 0);
+    expect(textLikeness(frame.luma, W, 60, x, 40)).toBeLessThan(0.5);
+  });
+});
+
+describe("the distance penalty is in the prototype's pixels", () => {
+  it("costs 0.02 per pixel at the prototype's 533-pixel frames, and the same share of the frame at any size", () => {
+    expect(distancePenalty(100, 533)).toBeCloseTo(2, 9);
+    expect(distancePenalty(-200, 1066)).toBeCloseTo(distancePenalty(100, 533), 9);
+    expect(distancePenalty(300, 1599)).toBeCloseTo(distancePenalty(100, 533), 9);
+  });
+
+  it("picks the same place in a frame fetched at twice the resolution", () => {
+    // Coarse texture (16 px blocks, so per-pixel gradients barely change with scale) away from the edge.
+    const at = (scale: number) =>
+      paint(400 * scale, 100 * scale, (x, y) => {
+        const [u, v] = [x / scale, y / scale];
+        return u >= 70 && u < 130 ? ((u >> 4) + (v >> 4)) % 2 ? [200, 180, 150] : [70, 60, 50] : [120, 110, 100];
+      });
+    const small = pickStripX(withLuma(at(1)), 40, true, 0);
+    const large = pickStripX(withLuma(at(2)), 80, true, 0);
+    expect(Math.abs(large / 2 - small)).toBeLessThanOrEqual(1);
   });
 });
 

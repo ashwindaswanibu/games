@@ -107,6 +107,18 @@ export async function deleteFixturePuzzle(db: ContentDb, gameId: string, date: P
   if (!data || data.length !== 1) throw new Error(`The ${gameId} puzzle for ${date} is no longer a DEV FIXTURE; left alone`);
 }
 
+/**
+ * Deletes one day's puzzle that nobody has played (its assets cascade), so a re-rendered puzzle can
+ * take the day (`--replace-unplayed`). The database is the guard: `plays` references `puzzles` with
+ * `on delete restrict`, so a day with even one play refuses the delete. Plays are never deleted to
+ * make room.
+ */
+export async function deleteUnplayedPuzzle(db: ContentDb, gameId: string, date: PuzzleDate): Promise<void> {
+  const { data, error } = await db.from("puzzles").delete().eq("game_id", gameId).eq("puzzle_date", date).select("puzzle_date");
+  if (error) throw new Error(`Couldn't remove the ${gameId} puzzle for ${date} (has someone played it?): ${error.message}`);
+  if (!data || data.length !== 1) throw new Error(`The ${gameId} puzzle for ${date} is gone already; left alone`);
+}
+
 /** An encoded image waiting to be stored with its puzzle. */
 export interface AssetToInsert extends EncodedImage {
   /** Lowercase slug, e.g. "frame", "still". */

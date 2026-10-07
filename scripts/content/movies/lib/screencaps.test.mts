@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkGallerySize,
+  MIN_FILM_CAPS,
   canonicalGalleryUrl,
   capUrl,
   decodeEntities,
@@ -41,6 +43,16 @@ describe("gallery pages", () => {
 
   it("fails clearly on a page with no screencaps", () => {
     expect(() => parseCaps("<html><img src='/logo.png'></html>")).toThrow(/No screencaps/);
+  });
+
+  it("refuses a gallery that can't be a whole film: one page, or too few caps", () => {
+    const url = "https://movie-screencaps.com/barbie-2023-4k/";
+    expect(() => checkGallerySize(url, { lastPage: 73, frameCount: 13_052 })).not.toThrow();
+    // Pagination markup changed: the last page isn't found, so only page 1's 180 caps are known.
+    expect(() => checkGallerySize(url, { lastPage: 1, frameCount: 180 })).toThrow(/only one gallery page/);
+    expect(() => checkGallerySize(url, { lastPage: 4, frameCount: MIN_FILM_CAPS - 1 })).toThrow(/fewer than 1000/);
+    expect(() => checkGallerySize(url, { lastPage: 1, frameCount: 180 }, true)).not.toThrow();
+    expect(() => checkGallerySize(url, { lastPage: 1, frameCount: 40 }, true)).toThrow(/too few/);
   });
 
   it("builds thumbnail and sized URLs for a cap", () => {
