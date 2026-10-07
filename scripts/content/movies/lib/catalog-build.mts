@@ -11,12 +11,14 @@ import {
   parseTmdbId,
   searchableNames,
   selectionReason,
+  seriesOfFilm,
   stripWikipediaQualifier,
   wikidataGenreNames,
   imdbCastToKeep,
   type ImdbCastDepth,
   type SelectionReason,
   type SelectionRules,
+  type SeriesValue,
 } from "./catalog-model.mjs";
 import { SNAPSHOT_VERSION, type Snapshot, type SnapshotFilm, type SnapshotPerson } from "./catalog-snapshot.mjs";
 import { mapPool } from "./http.mjs";
@@ -38,15 +40,16 @@ import {
   parseTitleLine,
   type ImdbTitle,
 } from "./imdb.mjs";
-import { CATALOG_QUERIES, cachedQuery, forEachCsvRow, intCell, qidOf, type QleverQuery } from "./qlever.mjs";
+import { boolCell, CATALOG_QUERIES, cachedQuery, forEachCsvRow, intCell, qidOf, type QleverQuery } from "./qlever.mjs";
 
 /**
  * The catalog build: IMDb's datasets and Wikidata (through QLever) → a snapshot (no database).
  *
  * IMDb decides which films are in (`selectionReason`: votes, or Wikipedia editions for world cinema
- * IMDb under-votes) and supplies votes, top-billed cast, titles and, where Wikidata has none,
- * directors and genres. Wikidata adds its id, Wikipedia editions (popularity), English label and
- * aliases, the English Wikipedia title, year, genres, directors, TMDB id and deeper cast.
+ * IMDb under-votes) and supplies votes, top-billed cast, titles, the adult flag and, where Wikidata
+ * has none, directors and genres. Wikidata adds its id, Wikipedia editions (popularity), English
+ * label and aliases, the English Wikipedia title, year, genres, directors, series, TMDB id and
+ * deeper cast.
  *
  * Memory: the IMDb files are read as streams and only selected films and their people are kept
  * (the machine this runs on has 8 GB, and IMDb's principals alone are ~4 GB of text).
@@ -250,6 +253,29 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     const qid = qidOf(row.item!);
     if (qid && matchedQids.has(qid)) indian.add(qid);
   });
+  // "Part of the series" (P179): every value with what Wikidata says it is; `seriesOfFilm` picks the series.
+  const seriesValuesOf = new Map<string, SeriesValue[]>();
+  const seriesNames = new Map<string, string>();
+  await csv(CATALOG_QUERIES.series, (row) => {
+    const qid = qidOf(row.item!);
+    const series = qidOf(row.series!);
+    if (!qid || !series || !matchedQids.has(qid)) return;
+    const flag = (cell: string | undefined) => {
+      const value = boolCell(cell);
+      // A format change would otherwise read as "not a series" for every film, silently.
+      if (value === null) throw new Error(`Wikidata series: expected true or false, got ${JSON.stringify(cell)} (${row.item} → ${row.series})`);
+      return value;
+    };
+    (seriesValuesOf.get(qid) ?? seriesValuesOf.set(qid, []).get(qid)!).push({
+      qid: series,
+      creative: flag(row.creative),
+      universe: flag(row.universe),
+      brand: flag(row.brand),
+      list: flag(row.list),
+    });
+    const name = cleanText(row.en);
+    if (name) seriesNames.set(series, name);
+  });
   const wdCastOf = new Map<string, Set<string>>();
   await csv(CATALOG_QUERIES.cast, (row) => {
     const qid = qidOf(row.item!);
@@ -257,7 +283,10 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     if (!qid || !person || !matchedQids.has(qid)) return;
     (wdCastOf.get(qid) ?? wdCastOf.set(qid, new Set()).get(qid)!).add(person);
   });
-  log(`  wikidata details: ${directorsOf.size} films with directors, ${genreLabelsOf.size} with genres, ${aliasesOf.size} with aliases, ${wdCastOf.size} with cast (${elapsed(phase)})`);
+  log(
+    `  wikidata details: ${directorsOf.size} films with directors, ${genreLabelsOf.size} with genres, ${aliasesOf.size} with aliases, ` +
+      `${seriesValuesOf.size} with a "part of the series", ${wdCastOf.size} with cast (${elapsed(phase)})`,
+  );
 
   // ------------------------------------------------------------------------------------------
   // IMDb cast and directors of the selected films.
@@ -466,6 +495,8 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
       popularity: wd?.links ?? 0,
       imdbVotes,
       tmdbId: wd && wd.tmdbIds.size ? Math.min(...wd.tmdbIds) : null,
+      series: qid ? seriesOfFilm(seriesValuesOf.get(qid) ?? []) : [],
+      isAdult: title.isAdult,
       imdbCast,
       wikidataCast,
       reason,
@@ -488,6 +519,8 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
   const snapshotPeople = [...people.values()].filter((p) => referenced.has(p.key)).sort((a, b) => b.popularity - a.popularity || a.key.localeCompare(b.key));
 
   const count = (predicate: (film: SnapshotFilm) => boolean) => films.filter(predicate).length;
+  const filmsInSeries = new Map<string, number>();
+  for (const film of films) for (const series of film.series) filmsInSeries.set(series, (filmsInSeries.get(series) ?? 0) + 1);
   const castSizes = [...principalsOf.values()].map((list) => list.length).sort((a, b) => a - b);
   const credits = films.reduce((sum, f) => sum + new Set([...f.imdbCast, ...f.wikidataCast]).size, 0);
   const summary = {
@@ -501,6 +534,15 @@ export async function buildSnapshot(options: BuildOptions): Promise<Snapshot> {
     imdbCredits: films.reduce((sum, f) => sum + f.imdbCast.length, 0),
     withWikidataCast: count((f) => f.wikidataCast.length > 0),
     withoutCast: count((f) => f.imdbCast.length === 0 && f.wikidataCast.length === 0),
+    adult: count((f) => f.isAdult),
+    withSeries: count((f) => f.series.length > 0),
+    series: filmsInSeries.size,
+    seriesWithTwoOrMoreFilms: [...filmsInSeries.values()].filter((n) => n >= 2).length,
+    // For review: a studio's catalogue or a universe Wikidata types as a film series shows up here (see NOT_A_SERIES).
+    largestSeries: [...filmsInSeries]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 12)
+      .map(([qid, n]) => `${seriesNames.get(qid) ?? "?"} (${qid}): ${n}`),
     imdbBilledPerFilm: { median: castSizes[castSizes.length >> 1] ?? 0, max: castSizes[castSizes.length - 1] ?? 0, mean: +(castSizes.reduce((s, n) => s + n, 0) / Math.max(1, castSizes.length)).toFixed(2) },
     searchableNamesPerFilm: +(films.reduce((s, f) => s + 1 + f.originalTitles.length + f.aliases.length, 0) / Math.max(1, films.length)).toFixed(2),
     people: snapshotPeople.length,

@@ -96,6 +96,7 @@ export function createFixtureContext(params: {
       let query = db
         .from("movie_films")
         .select("id, title, year, genres, directors, popularity, tmdb_id, imdb_id, wikidata_id")
+        .eq("is_adult", false)
         .order("popularity", { ascending: false })
         .order("id")
         .limit(Math.min(Math.max(1, limit), 1000));

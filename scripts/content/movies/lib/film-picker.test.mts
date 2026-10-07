@@ -4,14 +4,21 @@ import type { GalleryVerdict } from "./screencaps-cache.mjs";
 import type { DirectoryEntry } from "./screencaps.mjs";
 
 const gallery = (slug: string, title: string, year: number): DirectoryEntry => ({ title, year, tags: [], url: `https://movie-screencaps.com/${slug}/` });
-const film = (id: number, title: string, year: number | null, popularity: number, directors: string[] = []): CatalogFilm => ({ id, title, year, directors, popularity });
+const film = (id: number, title: string, year: number | null, popularity: number, directors: string[] = [], series: string[] = []): CatalogFilm => ({
+  id,
+  title,
+  year,
+  directors,
+  popularity,
+  series_qids: series,
+});
 
 /**
  * Ten films with galleries (popularity 10…100) among a catalog padded with forty obscure films
  * that have none: over the pool, the best of the ten is Iconic; over the whole catalog, nearly
  * all ten are.
  */
-const withGalleries = Array.from({ length: 10 }, (_, i) => film(i + 1, `Picture${i + 1}x`, 2000, 10 * (i + 1), [`Director ${i + 1}`]));
+const withGalleries = Array.from({ length: 10 }, (_, i) => film(i + 1, `Picture${i + 1}x`, 2000, 10 * (i + 1), [`Director ${i + 1}`], i === 6 ? ["Q1576873"] : []));
 const obscure = Array.from({ length: 40 }, (_, i) => film(100 + i, `Obscure${i}x`, 2000, 1));
 const catalog = [...withGalleries, ...obscure, film(200, "No Year", null, 500)];
 const directory = withGalleries.map((f) => gallery(`picture${f.id}x-2000`, f.title, 2000));
@@ -62,7 +69,7 @@ describe("the picker's inputs", () => {
 
   it("carries what the rules need into each candidate", () => {
     const inputs = buildPickerInputs(catalog, directory, none);
-    expect(inputs.candidates.find((c) => c.id === 7)).toEqual({ id: 7, title: "Picture7x", year: 2000, directors: ["Director 7"], score: 70, monochrome: null });
+    expect(inputs.candidates.find((c) => c.id === 7)).toEqual({ id: 7, title: "Picture7x", year: 2000, directors: ["Director 7"], series: ["Q1576873"], score: 70, monochrome: null });
   });
 
   it("skips films Wikidata lists as black and white, unless the frames were measured as colour", () => {

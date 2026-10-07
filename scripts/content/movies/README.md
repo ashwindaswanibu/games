@@ -51,8 +51,9 @@ About 60,000 films (every film people are likely to name, Indian and world cinem
 
 - **[IMDb's non-commercial datasets](https://developer.imdb.com/non-commercial-datasets/)**
   (`title.basics`, `title.ratings`, `title.principals`, `title.crew`, `name.basics`; refreshed
-  daily). They decide which films are in and give vote counts, top-billed cast, IMDb's titles and,
-  where Wikidata has none, directors and genres, and who acts (`primaryProfession`). **Personal
+  daily). They decide which films are in and give vote counts, top-billed cast, IMDb's titles, the
+  adult flag (`isAdult`) and, where Wikidata has none, directors and genres, and who acts
+  (`primaryProfession`). **Personal
   and non-commercial use only**, with the credit line *"Information courtesy of IMDb
   (https://www.imdb.com). Used with permission."* (IMDb's exact wording) shown where players see
   the data: `IMDB_ATTRIBUTION` in `src/games/_movies/attribution.ts`, rendered at the foot of every
@@ -61,7 +62,7 @@ About 60,000 films (every film people are likely to name, Indian and world cinem
   [QLever](https://qlever.dev) (a fast public SPARQL engine over Wikidata; the official query
   service is too slow and rate-limited for whole tables). It adds the Wikidata id, Wikipedia
   editions, the English label and aliases, the English Wikipedia title, year, genres, directors,
-  TMDB id and deeper cast.
+  series ("part of the series"), TMDB id and deeper cast.
 
 **Which films** (`selectionReason` in `lib/catalog-model.mts`). A title that isn't adult is in when:
 
@@ -101,6 +102,34 @@ where films stop being something a friend would guess; 500 would give ~76,000 fi
   meaning hasn't changed: Degrees, Fade to Color decoys, stills and the fixtures rank by it.
 - **`imdb_votes`** and the generated **`fame`** = ln(1 + IMDb votes), or ln(1 + 437 × popularity)
   when IMDb has no rating (437 is the catalog's average votes per edition). Search ranks by fame.
+- **`series_qids`**: the Wikidata ids of the film series the film is part of (`seriesOfFilm` in
+  `lib/catalog-model.mts`), so sequels whose titles share no words (Fast Five, Furious 7; Casino
+  Royale, Quantum of Solace; Rogue One, Solo) count as one series: Fade to Color never puts two of
+  one series among the four (section 4) and the film picker never chooses two within 30 days
+  (section 5). They come from Wikidata's "part of the series" (P179), **direct values only** (a
+  series' own parent series isn't followed: Rogue One is in the Star Wars Anthology, not the Star
+  Wars saga; their titles still match), and only values Wikidata types as a series of creative
+  works (film series, TV series, trilogy, media franchise…). Left out: **universes** (fictional or
+  shared universe: the Marvel Cinematic Universe; Iron Man, Thor and the Avengers are each a
+  series, but the MCU is many series, not one), a universe's **phases and sagas** (Wikidata types
+  them as brands: MCU Phase Three, The Infinity Saga), **list articles** ("list of Pixar films",
+  "BBC's 100 Greatest Films of the 21st Century"), and the **studio catalogues** Wikidata types as
+  film series (`NOT_A_SERIES`: the Walt Disney Animation Studios and DreamWorks Animation features,
+  Studio Ghibli, DC's animated originals, the DC Extended Universe, Ealing comedies, Welcome to the
+  Blumhouse), so Tangled and Frozen stay look-alikes for each other. Measured on the 2026-10-07
+  data: 2,256 films in 658 series (539 with two or more catalog films); the largest are Batman in
+  film (37), Doraemon (36), Detective Conan (30) and James Bond (27). The build summary lists the
+  twelve largest (`largestSeries`): a new catalogue or universe typed as a film series shows up
+  there, and goes in `NOT_A_SERIES`.
+- **`is_adult`**: IMDb lists the title as adult. The rules above never select one, but the old
+  Wikidata import brought three (Deep Throat, Debbie Does Dallas and Hungry Bitches) and films are
+  never deleted (their ids are referenced). An adult film is **hidden**: film search, a person's
+  filmography search and their "known for" leave it out, Degrees never chains through it (the
+  server refuses it as a link and par is computed without it), and no content pipeline chooses it
+  (Fade to Color's answer and look-alikes, Frame by Frame, stills, the fixtures). Wikidata's genre
+  "pornographic film" is not used: of the 30 catalog films it tags, only those three are adult per
+  IMDb; the rest are films like Caligula, Baise-moi, Emmanuelle's sequels, Warhol's Blue Movie and,
+  by a Wikidata error, Marjaavaan (a 2019 Bollywood action film).
 
 **Cast and billing** (`imdbCastToKeep`, `mergeCast`). IMDb's billed cast (actors and actresses in
 `title.principals`, up to 10 a film; "self" and archive footage are left out, so documentary
@@ -117,7 +146,7 @@ without a database:
 
 1. **Build** (`lib/catalog-build.mts`, no writes). Downloads IMDb's files into `--cache-dir` (only
    when IMDb has a newer file than the cached one: ~1.4 GB, under a minute on a fast line), runs
-   eleven QLever queries (~50 s, ~310 MB of CSV, cached), then reads IMDb's files as streams,
+   twelve QLever queries (~50 s, ~310 MB of CSV, cached), then reads IMDb's files as streams,
    keeping only what the selected films need (IMDb's principals alone are ~100 million lines). It
    writes a **snapshot** (`<cache-dir>/snapshot/`: films and people as NDJSON plus `meta.json`
    with the counts) and prints its summary. About 3.5 minutes; peaks at ~850 MB of memory. If
@@ -145,15 +174,18 @@ snapshot writes nothing.
   `<cache-dir>/baselines/catalog-ids-<time>.json`; afterwards it checks that every one still exists
   with the same non-empty Wikidata, IMDb and TMDB ids, that every catalog id a stored puzzle or play
   references exists, and that every link of a stored Degrees solution is still a credit. Any
-  failure exits non-zero. The same checks run read-only with
-  `npm run content:movies:catalog-check [-- --baseline <file>]`.
+  failure exits non-zero. It also warns about unplayed Degrees days whose par is now stale and
+  about stored puzzles or plays that reference a film now hidden as adult. The same checks run
+  read-only with `npm run content:movies:catalog-check [-- --baseline <file>]`.
 - A run that would remove more than 20% of the stored credits of the films it covers stops (a
   source was probably incomplete); `--allow-mass-removal` overrides.
 
 **Search** (`search_films` / `search_people`, latest in
-`supabase/migrations/20261013000000_catalog_search_word_starts.sql`). A film matches by any of its
-names. How a name matches the query (`catalog_match_class`, one definition for films,
-filmographies and people; `matchClass` in `src/games/_movies/scoped-search.ts` mirrors it):
+`supabase/migrations/20261014000200_catalog_search_split_key.sql`; the ranking is
+`20261013000000_catalog_search_word_starts.sql`'s). A film matches by any of its names; adult films
+(`is_adult`) never match. How a name matches the query (`catalog_match_class` for one pair of
+keys, `catalog_name_match_class` for both keys below; one definition for films, filmographies and
+people, mirrored by `matchClass` and `nameMatchClass` in `src/games/_movies/scoped-search.ts`):
 
 0. exact;
 1. the name starts with the query as whole words ("stree" → Stree 2), also right after a leading
@@ -165,6 +197,33 @@ filmographies and people; `matchClass` in `src/games/_movies/scoped-search.ts` m
 5. substring (3+ characters);
 6. typos (4+ characters: trigram similarity, or one or two edits at the start of a name for short
    titles like "sholey"), only when the others found fewer results than asked for.
+
+Names and queries have two keys, each the same in SQL and TypeScript
+(`src/games/_movies/search-key.ts`): lowercase, accents removed, punctuation a space, and
+
+- the **search key** (`catalog_search_key`, `catalogSearchKey`) **drops apostrophes**: an
+  apostrophe is part of its word (`20261014000000_catalog_search_apostrophes.sql`), so "Don't Look
+  Up" is keyed "dont look up", and "dont look up", "don't look up" and "don’t look up" are the same
+  query, as are "oceans eleven" and "ocean's eleven";
+- the **split key** (`catalog_split_key`, `catalogSplitKey`) makes them spaces: "don t look up",
+  "maureen o hara" (stored as `split_key` on titles and people where it differs,
+  `20261014000200_catalog_search_split_key.sql`; `20261014000300_catalog_split_key_stats.sql`
+  analyzes the new columns, or the planner walks every person by popularity for the split-key
+  words: ~40 ms for "sam" instead of ~13 ms).
+
+A name matches by its search key, and its split key adds later words (classes 3 and 4): a word
+after an apostrophe is a word of its own ("hara" → Catherine O'Hara, "connell" → Jack and Jerry
+O'Connell, "souza" → Genelia D'Souza, "avventura" → L'Avventura), a later word may end at one
+("cuckoo" → One Flew Over the Cuckoo's Nest), and "o hara" or "o'hara" find the O'Haras either way.
+The split key makes no starts: "don" starts "don t look up" with a whole word, which would give
+Don't Look Up (15 times Don's votes) the whole-word bonus over Don (2006); by the search key the
+word is "dont", a longer word, so "don" lists Don first (Don't Look Up 4th, after Donnie Darko and
+Don Jon). Every apostrophe-like character counts (’ ‘ ‛ ′ ＇ ʼ ʻ ʹ ʽ ˈ: whatever Postgres'
+`unaccent` turns into "'"). Measured on the local catalog (2026-10-07) with 82 queries, 79 with an
+expected result: 74 as expected with the old key (apostrophes as spaces only, adult films listed),
+78 with the search key alone ("hara" missed the O'Haras), 79 with both keys. Of the 40 people with
+an O'/D' surname and the most Wikipedia editions, a search for the bare surname lists 30 in its top
+8 with both keys, the same 30 as with the old key (12 with the search key alone).
 
 Spaces and punctuation don't matter for exact matches and starts (a generated no-spaces key,
 `compact_key`, on titles and people's names): "xmen" finds X-Men, "walle" WALL-E, "raone" Ra.One,
@@ -190,7 +249,7 @@ Classes 0–3 rank together, by fame plus a bonus; then class 4, then 5, then ty
 
 People rank the same way, by the films they are in: ln(1 + the IMDb votes of every film they're
 credited in, a film counting fully when they're billed in its top four, a quarter at 5th–10th and
-a tenth below that). "salman" → Salman Khan, not Salman Rushdie (more Wikipedia editions, one
+a tenth below that; adult films count for nothing and are never anyone's "known for"). "salman" → Salman Khan, not Salman Rushdie (more Wikipedia editions, one
 cameo); "deepika" → Deepika Padukone, not an IMDb-only "Deepika". A hit carries `aka`, the other
 name it matched by, shown in the dropdown as "also: K3G". With a person it searches their
 filmography the same way (Degrees); a film's cast is searched in memory by the same classes and
@@ -219,6 +278,10 @@ then the same for `movie_credits`, `movie_films` and `movie_film_titles`. Indexe
 are ~25% larger than fresh ones (locally 163 MB → 134 MB). The catalog then takes ~140 MB of the
 free tier's 500 MB.
 
+The series, adult-film and apostrophe changes (2026-10-07, branch `catalog-quality`) go out the
+same way, plus a re-check of the stored fours (`recheck-fours`) and without the reindex: the
+ordered list is the last section of `design/catalog-rollout.md`.
+
 | Flag | Default | |
 |---|---|---|
 | `--min-votes` | 1000 | IMDb votes that bring a feature film in |
@@ -239,9 +302,11 @@ free tier's 500 MB.
 
 ## 2. Degrees puzzles: `content:movies:degrees`
 
-This builds the bipartite actor–film graph from **every** catalog credit, in memory. The game
-accepts any catalog credit as a link, so computing par over all credits means a player can never
-beat par with a credit the generator ignored.
+This builds the bipartite actor–film graph from **every** catalog credit a player can use, in
+memory: every credit except those of the films hidden as adult (`is_adult`, section 1), which
+search never shows and the game refuses as a link. The game accepts any other catalog credit, so
+computing par over all of them means a player can never beat par with a credit the generator
+ignored.
 
 For each date:
 
@@ -436,18 +501,33 @@ all ten levels, the pace and the frame credit. A date that has a puzzle is refus
 has played it and you pass `--replace-fixtures` (a DEV FIXTURE) or `--replace-unplayed` (a curated
 puzzle); a played date is never touched (the database refuses the delete).
 
+**The four** (the solution's `options`: the answer and three look-alikes, shown from reel 1 when a
+player stops the film) come from `finalPickOptions` (`lib/decoys.mts`, rules in
+`src/games/fade-to-color/decoys.ts`): catalog films with a year and 25+ Wikipedia editions, never
+adult, of the same kind as the answer (animated, hybrid or live action, per Wikidata), ranked by
+shared genres, closeness in years and fame, drawn with the server's seed. No two of the four may be
+one series, Wikidata's (`series_qids`, section 1) or by title (`sameSeries`), or share a director.
+On the 2026-10-07 catalog, 100 seeded draws for each of 31 franchise answers (Star Wars, Harry
+Potter, the MCU, Fast & Furious, Mission: Impossible, Bond, Batman…) held two films of one
+Wikidata series in 171 of 3,100 fours with titles alone (Rogue One with Solo, Furious 7 with Fast &
+Furious 6, Casino Royale with Quantum of Solace, Moonraker with Octopussy as two decoys) and in none
+with the series. `npm run content:movies:recheck-fours -- --dry-run` lists the stored days from
+tomorrow on whose four breaks today's rules (another kind, one series or director, a hidden film)
+and what they would get instead; without `--dry-run` it re-picks those, never a played day.
+`--allow-remote-read` makes the dry run read the hosted database.
+
 **Selection rules** (approved, `design/barcode-film-selection.md`), each refused unless overridden.
 They are the film picker's rules (section 5), checked by the same code (`clashes` in
 `src/games/fade-to-color/picker.ts`), so a hand-picked film obeys them too:
 
 - a film that is another day's answer within 365 days either side (`--allow-repeat`);
 - a director who has another answer within 30 days either side (`--allow-same-director`);
-- a film that looks like the same series as an answer within 30 days either side
-  (`--allow-same-series`). The catalog has no franchise data, so this is `sameSeries` from
-  `src/games/fade-to-color/decoys.ts`, a generous title match: "Dune" and "Dune: Part Two",
-  "Spider-Man: No Way Home" and "The Amazing Spider-Man 2", but also "Star Wars" and "Star Trek"
-  (same first word). Sequels that share no words with their series ("The Empire Strikes Back")
-  slip through;
+- a film of the same series as an answer within 30 days either side (`--allow-same-series`):
+  Wikidata's series (`movie_films.series_qids`, section 1: Fast Five and Furious 7, Casino Royale
+  and Quantum of Solace) or titles that look like one series (`sameSeries` in
+  `src/games/fade-to-color/decoys.ts`, a generous title match for films Wikidata doesn't link:
+  "Dune" and "Dune: Part Two", "Spider-Man: No Way Home" and "The Amazing Spider-Man 2", but also
+  "Star Wars" and "Star Trek", same first word);
 - a black-and-white film (`--allow-monochrome`; checked on the thumbnails, before the full-quality
   frames);
 - a gallery of a single page or under 1,000 caps, not a whole film (`--allow-few-caps`).
@@ -478,7 +558,7 @@ once a day.
 | `--replace-unplayed` | | Take a day whose curated puzzle nobody has played (to re-render it) |
 | `--allow-repeat` | | Allow a film that is another day's answer within 365 days |
 | `--allow-same-director` | | Allow a director with another answer within 30 days |
-| `--allow-same-series` | | Allow a film that looks like the same series as an answer within 30 days |
+| `--allow-same-series` | | Allow a film of the same series as an answer within 30 days |
 | `--allow-monochrome` | | Allow a black-and-white film |
 | `--allow-few-caps` | | Allow a one-page or under-1,000-cap gallery (a short film) |
 | `--dry-run` | | Render and validate, write nothing; with `--out <dir>`, save `level-01.webp` … and `levels.json` for review |
@@ -518,8 +598,13 @@ the catalog grows. Scores depend only on the catalog and the directory.
 below 45 never. Each day draws its tier by those weights, then a film within it.
 
 **Rules.** A film is skipped on a day when it is another day's answer within 365 days either side,
-a director of it directed another answer within 30 days either side, it looks like the same series
-as another answer within 30 days either side (section 4), or it is known to be black and white.
+a director of it directed another answer within 30 days either side, it is of the same series as
+another answer within 30 days either side (Wikidata's series or a title match, section 4), or it is
+known to be black and white. Adult films (`is_adult`) are never candidates. On the 2026-10-07
+local catalog a 366-day dry run from 2026-10-08 had five pairs of one Wikidata series within 30
+days with titles alone (Transformers and Bumblebee 4 days apart, X-Men Origins: Wolverine and
+Deadpool 3 days, Octopussy, From Russia with Love and Casino Royale, The Dark Knight Rises and
+Batman 9 days) and none with the series; 11 of the 366 days changed.
 "Another day's answer" means every stored Fade to Color puzzle (DEV FIXTURES included, as the
 renderer counts them) plus the days planned earlier in the same run. Because "used" is always read
 from the stored puzzles. The launch reset (testing-phase films return to the pool) isn't built
@@ -585,12 +670,12 @@ and planned days.
 | `http.mts` | `fetchWithRetry` (timeouts, backoff with jitter, `Retry-After`, a descriptive User-Agent), `mapPool`, `chunk` |
 | `imdb.mts` | IMDb's datasets: download when newer, streaming gzip line reader, line parsers, compact `IntTable` |
 | `qlever.mts` | QLever (bulk Wikidata) queries, a streaming RFC 4180 CSV parser, cached results with a fallback |
-| `catalog-model.mts` | Pure catalog rules: which films are in, display title and searchable names, genre and director names, IMDb cast depth, `mergeCast` billing |
+| `catalog-model.mts` | Pure catalog rules: which films are in, display title and searchable names, genre and director names, which "part of the series" values are series (`isSeries`, `seriesOfFilm`, `NOT_A_SERIES`), IMDb cast depth, `mergeCast` billing |
 | `catalog-build.mts` | The build step: sources → snapshot (`buildSnapshot`, `matchWikidataItems`) |
 | `catalog-snapshot.mts` | The snapshot format (zod-validated NDJSON) |
 | `catalog-plan.mts` | Pure apply planning: `planCatalogWrites` (ids never change), `planTitles`, `planCredits` |
 | `catalog-apply.mts` | The apply step: plan against the target, write in batches, check |
-| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits; and the stale-par warning (`staleDegreesDays` over `chainNeighbourhood`, the credits a shorter chain could use, read without loading the whole graph) |
+| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits; and two warnings: stale par (`staleDegreesDays` over `chainNeighbourhood`, the credits a shorter chain could use, read without loading the whole graph; hidden films left out) and stored references to films hidden as adult (`hiddenFilms`) |
 | `degrees-graph.mts` | Pure graph code: `buildGraph`, `linkDistances` (BFS), `bestShortestPath`, `actorPool`, `pickPuzzle`, `reparDecision` |
 | `tmdb.mts` | The TMDB client (`tmdbClient`, `fetchFilmStills`, `encodeStill`, `rankBackdrops`) |
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |
@@ -602,6 +687,7 @@ and planned days.
 | `film-picker.mts` | The film picker's inputs, loaded at run time: the pool, fame scores, candidates, stored answers (`loadPickerInputs`, `buildPickerInputs`), and the day's seed (`pickSeed`) |
 | `barcode-day.mts` | `renderBarcodeDay`: one Fade to Color day end to end (rules, render, store); `barcode-levels` and the planner both use it |
 | `barcode-plan.mts` | `pickAndRenderDay` (pick, render, pick again after a refusal) and the plan's printout |
+| `decoys.mts` | The four's look-alike pool (films with a year, 25+ Wikipedia editions, not adult), `finalPickOptions` (seeded, same kind as the answer), and `fourProblems` (what `recheck-fours` re-picks) |
 
 Image encoding is shared with the fixture tooling in `scripts/content/lib/images.mts`
 (`encodeImage`: sharp, sRGB, metadata stripped, 4 MB cap).

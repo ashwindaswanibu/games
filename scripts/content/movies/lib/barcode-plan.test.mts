@@ -17,7 +17,14 @@ const day = (n: number): PuzzleDate => addDays(DAY0, n);
 
 // Sixty films with galleries (popularity 1…60, so pool scores run evenly from 2 to 100), each by
 // its own director.
-const films: CatalogFilm[] = Array.from({ length: 60 }, (_, i) => ({ id: i + 1, title: `Picture${i + 1}x`, year: 2000, directors: [`Director ${i + 1}`], popularity: i + 1 }));
+const films: CatalogFilm[] = Array.from({ length: 60 }, (_, i) => ({
+  id: i + 1,
+  title: `Picture${i + 1}x`,
+  year: 2000,
+  directors: [`Director ${i + 1}`],
+  popularity: i + 1,
+  series_qids: [],
+}));
 const directory = films.map((f) => ({ title: f.title, year: 2000, tags: [], url: `https://movie-screencaps.com/picture${f.id}x-2000/` }));
 const inputs = buildPickerInputs(films, directory, () => undefined);
 const db = {} as ContentDb;
@@ -85,7 +92,7 @@ describe("picking and rendering a day", () => {
 
 describe("printing a plan", () => {
   it("shows stored days as kept, picked days with tier, score and why, and days without a film", () => {
-    const stored = { date: day(1), filmId: 60, title: "Picture60x", directors: ["Director 60"] };
+    const stored = { date: day(1), filmId: 60, title: "Picture60x", directors: ["Director 60"], series: [] };
     const tiny = inputs.candidates.filter((c) => c.id >= 58);
     const plan = planDays([day(0), day(1), day(2), day(3)], tiny, [stored], seedFor);
     const lines = formatPlan(plan, inputs);

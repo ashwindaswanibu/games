@@ -43,12 +43,19 @@ const film = (id: number, score: number, extra: Partial<PickCandidate> = {}): Pi
   title: `Picture${id}x`,
   year: 2000,
   directors: [`Director ${id}`],
+  series: [],
   score,
   monochrome: null,
   ...extra,
 });
 
-const answer = (date: PuzzleDate, f: Pick<PickCandidate, "id" | "title" | "directors">): DayAnswer => ({ date, filmId: f.id, title: f.title, directors: f.directors });
+const answer = (date: PuzzleDate, f: Pick<PickCandidate, "id" | "title" | "directors" | "series">): DayAnswer => ({
+  date,
+  filmId: f.id,
+  title: f.title,
+  directors: f.directors,
+  series: f.series,
+});
 
 /**
  * A pool shaped like the real one (~130 Iconic, ~240 Well-known, ~140 Known, ~340 too obscure),
@@ -186,6 +193,17 @@ describe("rules", () => {
     expect(clashes(amazing, day(0), [answer(day(30), spider)])).toHaveLength(1);
     expect(clashes(amazing, day(0), [answer(day(31), spider)])).toEqual([]);
     expect(clashes(film(6, 80, { title: "Dune" }), day(0), [answer(day(10), dune)])).toEqual([{ rule: "series", date: day(10), title: "Dune: Part Two" }]);
+  });
+
+  it("refuses Wikidata's series within 30 days even when the titles share no words", () => {
+    const FAST = "Q1576873"; // Fast & Furious
+    const fastFive = film(20, 80, { title: "Fast Five", series: [FAST] });
+    const furious7 = film(21, 80, { title: "Furious 7", series: [FAST] });
+    expect(clashes(furious7, day(0), [answer(day(-12), fastFive)])).toEqual([{ rule: "series", date: day(-12), title: "Fast Five" }]);
+    expect(clashes(furious7, day(0), [answer(day(31), fastFive)])).toEqual([]);
+    // Another series, or none: no clash.
+    expect(clashes(furious7, day(0), [answer(day(3), film(22, 80, { title: "Fast Food Nation" }))])).toEqual([]);
+    expect(clashes(furious7, day(0), [answer(day(3), film(23, 80, { title: "Skyfall", series: ["Q2484680"] }))])).toEqual([]);
   });
 
   it("ignores the answer stored on the day being picked, and lists clashes nearest first", () => {

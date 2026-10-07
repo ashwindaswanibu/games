@@ -16,7 +16,7 @@
  * how many films were eligible, whether the era lifted the score). A day that already has a puzzle
  * is kept as it is, never replaced, and counts for the rules like any other answer. The picks follow
  * `src/games/fade-to-color/picker.ts`: tiers by weight, no film within 365 days, no director or
- * series within 30 days either side, no black-and-white film; deterministic for a given database,
+ * series (Wikidata's, or titles that look like one) within 30 days either side, no black-and-white film; deterministic for a given database,
  * directory and PUZZLE_SEED_SECRET.
  *
  * Without --dry-run each planned day is rendered and stored in date order through the same code as
@@ -82,7 +82,7 @@ async function main() {
     for (const day of plan) {
       if (day.kind === "stored") continue;
       const { pick, refused } = await pickAndRenderDay(db, inputs, day.date, { answers, excluded, settings: { pace, concurrency } });
-      answers.push({ date: day.date, filmId: pick.film.id, title: pick.film.title, directors: pick.film.directors });
+      answers.push({ date: day.date, filmId: pick.film.id, title: pick.film.title, directors: pick.film.directors, series: pick.film.series });
       const planned = day.kind === "picked" ? day.pick.film.title : "(no film)";
       const changed = planned !== pick.film.title;
       stored.push({ date: day.date, title: pick.film.title, changed });

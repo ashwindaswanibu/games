@@ -8,9 +8,11 @@ import { OPTION_COUNT } from "./logic";
  * and fame). Pure: the pipeline loads the candidates from the catalog and passes an `Rng`.
  *
  * A decoy must be a different film by a different director from a different series, with a known
- * year. It ranks by shared genres, closeness in year and closeness in fame (Wikipedia language
- * editions, compared as a ratio so a classic and a new release are each measured against films of
- * their own standing). The best few are shuffled so the same answer doesn't always draw the same
+ * year. Two films are one series when Wikidata says so (they share a "part of the series" value,
+ * `series`: Fast Five and Furious 7) or their titles look like it (`sameSeries`: Dune and Dune: Part
+ * Two, for films Wikidata doesn't link). It ranks by shared genres, closeness in year and closeness
+ * in fame (Wikipedia language editions, compared as a ratio so a classic and a new release are each
+ * measured against films of their own standing). The best few are shuffled so the same answer doesn't always draw the same
  * decoys. If the strict bounds leave too few, they widen step by step.
  *
  * The options show their years, so the answer must not stand out by them: all four come from one
@@ -28,6 +30,8 @@ export interface DecoyCandidate {
   directors: readonly string[];
   /** Wikipedia language editions with an article on the film. */
   popularity: number | null;
+  /** Wikidata ids of the film series it is part of (`movie_films.series_qids`). */
+  series: readonly string[];
 }
 
 /** How far apart a decoy may be, from strictest to loosest. */
@@ -67,13 +71,12 @@ export function seriesKey(title: string): string {
 const stem = (word: string) => word.replace(/s$/, "");
 
 /**
- * Whether two titles look like one series. The catalog has no franchise data, so this matches
- * generously, which only ever removes a candidate: the same key, one key starting the other ("the
- * matrix" / "the matrix reloaded"), the same first word ("bourne identity" / "bourne supremacy",
- * "alien" / "aliens"), or a key of two or more words inside the other title ("mad max" in "Furiosa:
- * A Mad Max Saga", "spider man" in "The Amazing Spider-Man", "star wars" in "Rogue One: A Star Wars
- * Story"). Sequels that share no words with their series ("The Empire Strikes Back") still slip
- * through, unless they share a director.
+ * Whether two titles look like one series. It matches generously, which only ever removes a
+ * candidate: the same key, one key starting the other ("the matrix" / "the matrix reloaded"), the
+ * same first word ("bourne identity" / "bourne supremacy", "alien" / "aliens"), or a key of two or
+ * more words inside the other title ("mad max" in "Furiosa: A Mad Max Saga", "spider man" in "The
+ * Amazing Spider-Man", "star wars" in "Rogue One: A Star Wars Story"). Sequels that share no words
+ * ("Fast Five", "Furious 7") are caught by Wikidata's series instead (`shareSeries`).
  */
 export function sameSeries(a: string, b: string): boolean {
   return sameSeriesProfile(seriesProfile(a), seriesProfile(b));
@@ -105,10 +108,19 @@ export function sameSeriesProfile(a: SeriesProfile, b: SeriesProfile): boolean {
   return (a.spacedKey !== null && b.padded.includes(a.spacedKey)) || (b.spacedKey !== null && a.padded.includes(b.spacedKey));
 }
 
+/** Whether two films are part of one series by Wikidata's "part of the series" (their `series` ids). */
+export function shareSeries(a: readonly string[], b: readonly string[]): boolean {
+  return a.length > 0 && b.length > 0 && a.some((series) => b.includes(series));
+}
+
 const lower = (items: readonly string[]) => new Set(items.map((s) => s.trim().toLowerCase()).filter(Boolean));
 
-function related(a: DecoyCandidate, b: DecoyCandidate): boolean {
-  if (a.id === b.id || words(a.title) === words(b.title) || sameSeries(a.title, b.title)) return true;
+/**
+ * Whether two films can't both be among the four: the same film or title, one series (Wikidata's or
+ * by title), or a shared director.
+ */
+export function relatedFilms(a: DecoyCandidate, b: DecoyCandidate): boolean {
+  if (a.id === b.id || words(a.title) === words(b.title) || shareSeries(a.series, b.series) || sameSeries(a.title, b.title)) return true;
   const directors = lower(a.directors);
   return b.directors.some((d) => directors.has(d.trim().toLowerCase()));
 }
@@ -117,7 +129,7 @@ function related(a: DecoyCandidate, b: DecoyCandidate): boolean {
 export function pickDecoys(answer: DecoyCandidate, pool: readonly DecoyCandidate[], rng: Rng, count = OPTION_COUNT - 1): DecoyCandidate[] {
   const answerGenres = lower(answer.genres);
   const answerFame = Math.max(1, answer.popularity ?? 1);
-  const usable = pool.filter((c) => c.year !== null && c.popularity !== null && !related(answer, c));
+  const usable = pool.filter((c) => c.year !== null && c.popularity !== null && !relatedFilms(answer, c));
 
   for (const bound of BOUNDS) {
     // The window of years all four options come from, holding the answer at a random place.
@@ -142,13 +154,13 @@ export function pickDecoys(answer: DecoyCandidate, pool: readonly DecoyCandidate
     const picked: DecoyCandidate[] = [];
     for (const { c } of rng.shuffle(ranked.slice(0, SHORTLIST))) {
       if (picked.length === count) break;
-      if (picked.some((p) => related(p, c))) continue;
+      if (picked.some((p) => relatedFilms(p, c))) continue;
       picked.push(c);
     }
     // The shortlist can hold too many relatives of one another; fill from the rest in rank order.
     for (const { c } of ranked.slice(SHORTLIST)) {
       if (picked.length === count) break;
-      if (picked.some((p) => related(p, c))) continue;
+      if (picked.some((p) => relatedFilms(p, c))) continue;
       picked.push(c);
     }
     if (picked.length === count) return picked;

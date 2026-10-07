@@ -18,7 +18,8 @@ export const degreesServer = defineGameServer(degrees, {
 
     const [films, people] = await Promise.all([services.films.get([move.filmId]), services.people.get([move.personId])]);
     const film = films.get(move.filmId);
-    if (!film) return { ok: false, error: FILM_NOT_FOUND };
+    // A film search never shows (adult) can't be a link: par is computed without it too.
+    if (!film || film.isAdult) return { ok: false, error: FILM_NOT_FOUND };
     const person = people.get(move.personId);
     if (!person) return { ok: false, error: PERSON_NOT_FOUND };
 

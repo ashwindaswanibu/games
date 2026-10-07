@@ -1,7 +1,7 @@
 import { CATALOG_MAX_LIMIT, catalogLimitSchema, catalogQuerySchema, filmIdSchema, personIdSchema } from "./schemas";
-import { catalogSearchKey } from "./search-key";
+import { catalogSearchKey, catalogSplitKey } from "./search-key";
 
-export { catalogSearchKey };
+export { catalogSearchKey, catalogSplitKey };
 
 /**
  * Scoped catalog routes: one person's filmography (`/api/catalog/filmography`) or one film's cast
@@ -10,11 +10,11 @@ export { catalogSearchKey };
  *
  * A filmography is searched in SQL (`search_films` with a person), so films match by every name
  * they are known by. A cast is small (a few dozen people), so it is matched here, in memory, with
- * the same normalization as the SQL `catalog_search_key` and the same match classes and bonuses as
- * `search_people` (`catalog_match_class`), minus the typo-tolerant tier. One difference: a cast
- * ranks by Wikipedia editions, where `search_people` ranks by the votes of each person's films
- * (namesakes in one film's cast are rare, so that lookup isn't worth a query). Pure; safe on both
- * sides of the wire.
+ * the same keys as the SQL `catalog_search_key` and `catalog_split_key` and the same match classes
+ * and bonuses as `search_people` (`catalog_name_match_class`), minus the typo-tolerant tier. One
+ * difference: a cast ranks by Wikipedia editions, where `search_people` ranks by the votes of each
+ * person's films (namesakes in one film's cast are rare, so that lookup isn't worth a query). Pure;
+ * safe on both sides of the wire.
  */
 
 /** The search key without spaces (SQL `compact_key`): "xmen" matches X-Men, "shahrukh" Shah Rukh Khan. */
@@ -25,22 +25,25 @@ export function compactSearchKey(key: string): string {
 /** Prefix matches ignore spaces from this many characters (shorter, "it" would match "I, Tonya"). */
 const COMPACT_PREFIX_MIN = 3;
 
+export type MatchClass = 0 | 1 | 2 | 3 | 4 | 5;
+
 /**
- * How `textKey` matches `queryKey` (both search keys), as SQL `catalog_match_class` classifies it:
+ * How `textKey` matches `queryKey` (both search keys, or both split keys), as SQL
+ * `catalog_match_class` classifies it:
  *
  *  - 0 exact (ignoring spaces);
  *  - 1 the text starts with the query as whole words, or does after a leading "the", "a" or "an"
  *    ("stree" → "stree 2", "dark" → "the dark knight");
  *  - 2 the text starts with the query, ending mid-word ("stree" → "street kings"), also after an
  *    article;
- *  - 3 a later word starts with the query, ending at a word end ("guide" → "the hitchhiker s guide…");
+ *  - 3 a later word starts with the query, ending at a word end ("guide" → "the hitchhikers guide…");
  *  - 4 a later word starts with the query, ending mid-word ("stree" → "the wolf of wall street");
  *  - 5 substring;
  *
  * or null when it doesn't match. Starts ignore spaces from 3 characters of query; later words and
  * substrings need 3 characters.
  */
-export function matchClass(queryKey: string, textKey: string): 0 | 1 | 2 | 3 | 4 | 5 | null {
+export function matchClass(queryKey: string, textKey: string): MatchClass | null {
   const queryCompact = compactSearchKey(queryKey);
   if (!queryCompact) return null;
   if (compactSearchKey(textKey) === queryCompact) return 0;
@@ -59,6 +62,35 @@ export function matchClass(queryKey: string, textKey: string): 0 | 1 | 2 | 3 | 4
   return null;
 }
 
+/**
+ * A name's or a query's two keys: the search key, apostrophes dropped (`key`: "maureen ohara"), and
+ * the split key, apostrophes as spaces (`split`: "maureen o hara").
+ */
+export interface SearchKeys {
+  key: string;
+  split: string;
+}
+
+export function searchKeys(value: string): SearchKeys {
+  return { key: catalogSearchKey(value), split: catalogSplitKey(value) };
+}
+
+/**
+ * How a name matches a query by both keys, as SQL `catalog_name_match_class` decides: the search
+ * keys' `matchClass`, or a later word in the split keys (class 3 or 4) when that is better. So a
+ * word after an apostrophe is a word of its own ("hara" → "maureen o hara", 3) and a later word may
+ * end at one ("cuckoo" → "one flew over the cuckoo s nest", 3). The split keys make no starts:
+ * "don" starts "don t look up" with a whole word, but the word is "dont", and the whole-word bonus
+ * would put Don't Look Up above Don.
+ */
+export function nameMatchClass(query: SearchKeys, name: SearchKeys): MatchClass | null {
+  const joined = matchClass(query.key, name.key);
+  if (query.split === query.key && name.split === name.key) return joined;
+  const split = matchClass(query.split, name.split);
+  if (split !== 3 && split !== 4) return joined;
+  return joined === null ? split : (Math.min(joined, split) as MatchClass);
+}
+
 /** An exact name beats a whole-word start unless that one has ten times the fame (log scale)… */
 const EXACT_BONUS = Math.log(30);
 /** …and a whole-word start beats a start that ends mid-word unless that one has three times. */
@@ -75,9 +107,9 @@ export function rankByQuery<T extends { id: number }>(
   query: string,
   options: { text(item: T): string; popularity(item: T): number; limit: number },
 ): T[] {
-  const queryKey = catalogSearchKey(query);
+  const queryKeys = searchKeys(query);
   const hits = items.flatMap((item) => {
-    const match = matchClass(queryKey, catalogSearchKey(options.text(item)));
+    const match = nameMatchClass(queryKeys, searchKeys(options.text(item)));
     const popularity = options.popularity(item);
     return match === null ? [] : [{ item, match, popularity, fame: Math.log1p(Math.max(0, popularity)) }];
   });
