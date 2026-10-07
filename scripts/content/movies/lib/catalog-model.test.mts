@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  castAreSubjects,
+  castToKeep,
   DEFAULT_RULES,
   directorNames,
   displayTitle,
@@ -18,6 +20,7 @@ import {
   NOT_A_SERIES,
   orderGenresBySpecificity,
   parseImdbId,
+  POSTHUMOUS_YEARS,
   parseTmdbId,
   searchableNames,
   selectionReason,
@@ -253,6 +256,81 @@ describe("imdbCastToKeep", () => {
     expect(imdbCastToKeep(cast, popularity, { always: 4, known: 10 })).toEqual(["nm1", "Q5", "nm2", "Q7", "Q9", "Q10"]);
     expect(imdbCastToKeep(cast, popularity, { always: 0, known: 0 })).toEqual([]);
     expect(imdbCastToKeep(cast, popularity, { always: 10, known: 10 })).toEqual(["nm1", "Q5", "nm2", "nm3", "Q0", "Q7", "Q9", "Q10"]);
+  });
+});
+
+describe("castToKeep", () => {
+  const base = { imdb: [] as string[], imdbActors: [] as { key: string; died: number | null }[], wikidata: [] as string[], archived: new Set<string>(), subjects: false, year: 1994, diedIn: () => null };
+  const none = { archive: 0, subjects: 0, posthumous: 0 };
+
+  it("keeps everyone when nothing says they don't play a role", () => {
+    const kept = castToKeep({ ...base, imdb: ["Q1", "nm2"], wikidata: ["Q1", "Q3"] });
+    expect(kept).toEqual({ imdb: ["Q1", "nm2"], wikidata: ["Q1", "Q3"], dropped: none });
+  });
+
+  it("leaves out anyone IMDb lists in archive footage, from both sources, counting each person once", () => {
+    // Terror in the Aisles: IMDb lists Alan Arkin as archive footage and as an actor; Wikidata lists Grace Kelly.
+    const kept = castToKeep({
+      ...base,
+      imdb: ["host", "arkin"],
+      imdbActors: [{ key: "host", died: null }, { key: "arkin", died: null }],
+      wikidata: ["arkin", "kelly", "allen"],
+      archived: new Set(["arkin", "kelly"]),
+    });
+    expect(kept.imdb).toEqual(["host"]);
+    expect(kept.wikidata).toEqual(["allen"]);
+    expect(kept.dropped).toEqual({ ...none, archive: 2 });
+  });
+
+  it("keeps a documentary's cast only where IMDb lists them as an actor, billed or not", () => {
+    const kept = castToKeep({
+      ...base,
+      subjects: true,
+      imdb: ["narrator"],
+      imdbActors: [{ key: "narrator", died: null }, { key: "reenactor", died: null }],
+      wikidata: ["narrator", "reenactor", "subject"],
+    });
+    expect(kept.wikidata).toEqual(["narrator", "reenactor"]);
+    expect(kept.dropped).toEqual({ ...none, subjects: 1 });
+  });
+
+  it("leaves out Wikidata's cast in a film released years after they died", () => {
+    const died: Record<string, number> = { lennon: 1980, walker: 2013 };
+    const diedIn = (key: string) => died[key] ?? null;
+    // Forrest Gump (1994): John Lennon is archive footage.
+    expect(castToKeep({ ...base, wikidata: ["lennon", "hanks"], diedIn }).wikidata).toEqual(["hanks"]);
+    // Furious 7 (2015): released POSTHUMOUS_YEARS after Paul Walker died, still his film.
+    expect(castToKeep({ ...base, year: 2013 + POSTHUMOUS_YEARS, wikidata: ["walker"], diedIn }).wikidata).toEqual(["walker"]);
+    expect(castToKeep({ ...base, year: 2013 + POSTHUMOUS_YEARS + 1, wikidata: ["walker"], diedIn }).dropped.posthumous).toBe(1);
+    // No year, no rule.
+    expect(castToKeep({ ...base, year: null, wikidata: ["lennon"], diedIn }).wikidata).toEqual(["lennon"]);
+  });
+
+  it("keeps everyone IMDb lists as an actor, whenever they died", () => {
+    // Game of Death (1978): Bruce Lee, who died in 1973, is IMDb's top billing.
+    const kept = castToKeep({ ...base, year: 1978, imdb: ["lee"], imdbActors: [{ key: "lee", died: 1973 }], wikidata: ["lee"], diedIn: () => 1973 });
+    expect(kept).toEqual({ imdb: ["lee"], wikidata: ["lee"], dropped: none });
+  });
+
+  it("doesn't apply the rule on the dead to a delayed release", () => {
+    // The Other Side of the Wind (shot in the 1970s, released 2018): John Huston (died 1987) is IMDb's
+    // top billing, so Dennis Hopper (died 2010), from Wikidata alone, played his part alive too.
+    const kept = castToKeep({ ...base, year: 2018, imdb: ["huston"], imdbActors: [{ key: "huston", died: 1987 }], wikidata: ["hopper"], diedIn: () => 2010 });
+    expect(kept.wikidata).toEqual(["hopper"]);
+  });
+});
+
+describe("castAreSubjects", () => {
+  it("goes by IMDb's genres when IMDb has any", () => {
+    // Once Upon a Time in America: Wikidata lists "documentary film" among 14 genres; IMDb says Crime, Drama.
+    expect(castAreSubjects(["Crime", "Drama"], ["Crime", "Documentary", "Drama"])).toBe(false);
+    expect(castAreSubjects(["Documentary", "Horror"], ["Horror"])).toBe(true);
+    expect(castAreSubjects(["Documentary", "Music"], ["Concert"])).toBe(true);
+  });
+
+  it("falls back to the catalog's genres", () => {
+    expect(castAreSubjects([], ["Music documentary"])).toBe(true);
+    expect(castAreSubjects([], ["Mockumentary"])).toBe(false);
   });
 });
 

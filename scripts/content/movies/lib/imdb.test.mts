@@ -70,8 +70,10 @@ describe("lines", () => {
       nconst: 451321,
       name: "Shah Rukh Khan",
       professions: ["actor", "producer"],
+      deathYear: null,
     });
     expect(parseNameLine("nm0000001\tSomeone\t\\N\t\\N\t\\N\t\\N")?.professions).toEqual([]);
+    expect(parseNameLine("nm0001426\tJohn Lennon\t1940\t1980\tmusic_artist,actor\ttt0058182")?.deathYear).toBe(1980);
   });
 });
 
