@@ -17,6 +17,13 @@ const FLY = 340;
 const FLY_EASE = "cubic-bezier(.65,0,.2,1)";
 const PHONE = "(max-width: 760px)";
 
+/** A label's width in League Gothic ems, near enough to fit it: figures and capitals ~.36em, spaces ~.2em. */
+function labelEm(text: string): number {
+  let em = 0;
+  for (const ch of text) em += ch === " " ? 0.2 : ch === "·" ? 0.25 : 0.37;
+  return Math.max(1, em);
+}
+
 /** The set-in's beats (spec §8.3) for a mark of `pieces` pieces. */
 export function setInBeats(pieces: number) {
   const s = Math.min(72, 360 / Math.max(1, pieces));
@@ -254,7 +261,7 @@ export function SetIn({
           <Mark model={model} style={{ "--mark-u": `min(clamp(40px, 8vh, 84px), calc(86cqi / ${model.w.toFixed(3)}))` } as CSSProperties} />
         </span>
         <span className={styles.cardResult}>
-          <span className={styles.bigLabel} data-si-label="">
+          <span className={styles.bigLabel} data-si-label="" style={{ "--label-em": labelEm(text) } as CSSProperties}>
             <span className={styles.bigLabelPlate}>{text}</span>
             {text}
           </span>

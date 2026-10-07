@@ -171,7 +171,9 @@ function framesForm(form: Extract<MarkForm, { kind: "frames" }>, marks: readonly
     slots.push({ keyline, piece, unused });
   }
   let w = form.count * fw + (form.count - 1) * gap;
-  if (form.finalPick) {
+  // A finished game that never reached the final pick leaves its disc out, and its room with it.
+  const pickReached = marks === null || marks.length > form.count;
+  if (form.finalPick && pickReached) {
     const d = 0.72;
     const cx = w + 0.5 + d / 2;
     const keyline: MarkShape = { d: circle(u(cx), u(0.5), u(d / 2)) };
@@ -181,7 +183,6 @@ function framesForm(form: Extract<MarkForm, { kind: "frames" }>, marks: readonly
       const p = pieceFor(m);
       piece = { kind: p === "earned" ? "earned" : p === "skip" ? "skip" : "spent", shape: { d: cutDisc(r, u(cx), u(0.5), u(d / 2)) }, rotate: tilt(r) };
     }
-    // Never reached: the disc is left out (no keyline, no hairline) once the game is finished.
     slots.push({ keyline, piece, unused: null });
     w = cx + d / 2;
   }
@@ -206,7 +207,15 @@ function chainForm(par: number | null, marks: readonly ShareMarkKind[] | null, r
     slots.push({ keyline, piece: finished ? { kind: "spent", shape: film(u(cx), cy, u(0.62), u(0.5), r), rotate: 0 } : null, unused: null });
   }
   const endX = x0 + (links + 1) * step;
-  joins.push({ d: `M${fixed(u(x0))} ${fixed(cy)}H${fixed(u(endX))}`, done: finished });
+  if (finished) joins.push({ d: `M${fixed(u(x0))} ${fixed(cy)}H${fixed(u(endX))}`, done: true });
+  else {
+    // The empty form: dashed joins between the pieces, never through them.
+    const halves = [0.18, ...Array.from({ length: links }, () => 0.31), 0.45];
+    const centres = halves.map((_, i) => x0 + i * step);
+    let d = "";
+    for (let i = 0; i < centres.length - 1; i++) d += `M${fixed(u(centres[i] + halves[i] + 0.06))} ${fixed(cy)}H${fixed(u(centres[i + 1] - halves[i + 1] - 0.06))}`;
+    joins.push({ d, done: false });
+  }
   const starD = (rr: Rng) => star(u(endX), cy, u(0.45), u(0.2), rr);
   if (!finished) {
     slots.push({ keyline: { d: starD(rng(0)) }, piece: null, unused: null });

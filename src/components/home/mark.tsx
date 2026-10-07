@@ -23,18 +23,22 @@ export function Mark({ model, label, className, style }: { model: MarkModel; lab
       focusable="false"
     >
       <g className={styles.keylines} data-keyline="">
-        {model.joins.map((j, i) => (
-          <path key={`j${i}`} d={j.d} className={styles.joinKey} />
-        ))}
+        {model.joins
+          .filter((j) => !j.done)
+          .map((j, i) => (
+            <path key={`j${i}`} d={j.d} className={styles.joinKey} />
+          ))}
         {model.slots.map((s, i) => (
           <path key={i} d={s.keyline.d} className={styles.keyline} />
         ))}
       </g>
       {model.finished && (
         <g data-result="">
-          {model.joins.map((j, i) => (
-            <path key={`j${i}`} d={j.d} className={styles.join} data-join="" />
-          ))}
+          {model.joins
+            .filter((j) => j.done)
+            .map((j, i) => (
+              <path key={`j${i}`} d={j.d} className={styles.join} data-join="" />
+            ))}
           {model.slots.map((s, i) =>
             s.unused ? <path key={`u${i}`} d={s.unused.d} className={s.unused.dot ? styles.dot : styles.unused} data-unused="" /> : null,
           )}

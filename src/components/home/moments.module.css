@@ -263,15 +263,18 @@
 
 .cardResult {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
-  gap: clamp(18px, 2.4vw, 36px);
+  gap: 12px clamp(18px, 2.4vw, 36px);
   min-width: 0;
+  max-width: 100%;
 }
 
+/* As big as the card allows: never wider than the card (a long label like "3 LINKS · PAR 2"). */
 .bigLabel {
   position: relative;
   isolation: isolate;
-  font: 400 var(--label-size) / 0.8 var(--f-display);
+  font: 400 min(var(--label-size), calc(92cqi / var(--label-em, 2))) / 0.8 var(--f-display);
   letter-spacing: 0.01em;
   white-space: nowrap;
   color: var(--label-face);
@@ -296,6 +299,7 @@
 
 .asideLine {
   font: italic 400 clamp(20px, 2.8vh, 30px) / 1.15 var(--f-voice);
+  white-space: nowrap;
 }
 
 .asidePts {

@@ -33,7 +33,8 @@ describe("mark forms (spec §6.2)", () => {
   });
 
   it("Fade to Color 3/10: spent, spent, earned, then hairlines; the pick never reached is left out", () => {
-    expect(kinds(FTC, ["miss", "miss", "hit"])).toEqual(["spent", "spent", "earned", "hair", "hair", "hair", "hair", "hair", "hair", "hair", "none"]);
+    expect(kinds(FTC, ["miss", "miss", "hit"])).toEqual(["spent", "spent", "earned", "hair", "hair", "hair", "hair", "hair", "hair", "hair"]);
+    expect(buildMark(FTC, "finished", ["miss", "miss", "hit"], "t").w).toBeCloseTo(12.42);
   });
 
   it("Fade to Color on the final pick: eleven marks, the pick a cut disc", () => {
