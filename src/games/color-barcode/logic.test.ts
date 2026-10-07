@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { referencedAssetIds } from "@/core/assets";
 import { attemptsScore } from "@/core/scoring";
-import type { FilmDetails } from "@/games/_movies/schemas";
+import type { FilmDetails, FilmRef } from "@/games/_movies/schemas";
 import {
   colorBarcode,
   colorBarcodeStateSchema,
@@ -33,7 +33,8 @@ const puzzle: Puzzle = { fixture: false, maxGuesses: MAX_GUESSES, first: LEVELS[
 const solution: Solution = { answer, levels: LEVELS, pace: "normal", credit: { source: "movie-screencaps.com", url: "https://movie-screencaps.com/collateral-2004/" } };
 const initial = colorBarcode.initialState(puzzle);
 
-const guess = (film: FilmDetails): ResolvedMove => ({ type: "guess", film });
+const ref = ({ id, title, year }: FilmDetails): FilmRef => ({ id, title, year });
+const guess = (film: FilmDetails): ResolvedMove => ({ type: "guess", film: ref(film) });
 const skip: ResolvedMove = { type: "skip" };
 const decoy = (n: number): FilmDetails => ({ ...up, id: 100 + n, title: `Decoy ${n}` });
 
@@ -95,30 +96,29 @@ describe("color-barcode applyMove", () => {
     expect(outcome(initial)).toBe("in_progress");
   });
 
-  it("records a wrong guess with year, genre and director clues and unlocks level 2", () => {
+  it("records a wrong guess as the film and a miss, with no clues, and unlocks level 2", () => {
     const state = play([guess(heat)]);
-    expect(state.turns).toEqual([
-      {
-        film: { id: 11, title: "Heat", year: 1995 },
-        correct: false,
-        clues: [
-          { kind: "year", guessYear: 1995, direction: "later" },
-          { kind: "genres", shared: ["Crime"], match: "some" },
-          { kind: "director", shared: ["Michael Mann"], match: "same" },
-        ],
-      },
-    ]);
+    expect(state.turns).toEqual([{ film: { id: 11, title: "Heat", year: 1995 }, correct: false }]);
     expect(state.unlocked).toEqual([LEVELS[1]]);
     expect(colorBarcodeStateSchema.parse(state)).toEqual(state);
   });
 
-  it("stores only the guessed film's ref in the state, never its or the answer's facts", () => {
-    const json = JSON.stringify(play([guess(heat)]));
-    expect(json).not.toContain("Collateral");
-    expect(json).not.toContain("Drama");
+  it("gives nothing away about the answer in the state (no clues of any kind)", () => {
+    const json = JSON.stringify(play([guess(heat), skip, guess(up)]));
+    for (const secret of ["Collateral", "2004", "Michael Mann", "Crime", "Thriller", "clues"]) expect(json).not.toContain(secret);
   });
 
-  it("unlocks a level on a skip, with no clues", () => {
+  it("refuses a turn with clues in it", () => {
+    const withClues = { turns: [{ film: ref(heat), correct: false, clues: [] }], unlocked: [LEVELS[1]] };
+    expect(colorBarcodeStateSchema.safeParse(withClues).success).toBe(false);
+  });
+
+  it("keeps only the film's ref from a resolved guess, whatever else it carries", () => {
+    const state = play([{ type: "guess", film: heat } as ResolvedMove]);
+    expect(state.turns).toEqual([{ film: { id: 11, title: "Heat", year: 1995 }, correct: false }]);
+  });
+
+  it("unlocks a level on a skip", () => {
     expect(play([skip])).toEqual({ turns: [{ skipped: true }], unlocked: [LEVELS[1]] });
   });
 
@@ -138,7 +138,7 @@ describe("color-barcode applyMove", () => {
   it("unlocks nothing more on a correct guess", () => {
     const state = play([skip, guess(answer)]);
     expect(state.unlocked).toEqual([LEVELS[1]]);
-    expect(state.turns.at(-1)).toEqual({ film: { id: 10, title: "Collateral", year: 2004 }, correct: true, clues: [] });
+    expect(state.turns.at(-1)).toEqual({ film: { id: 10, title: "Collateral", year: 2004 }, correct: true });
   });
 
   it("rejects a film already guessed, without using a turn", () => {

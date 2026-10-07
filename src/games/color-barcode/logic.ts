@@ -2,8 +2,7 @@ import { z } from "zod";
 import { assetRefSchema } from "@/core/assets";
 import { defineGame } from "@/core/game";
 import { attemptsScore } from "@/core/scoring";
-import { computeClues } from "@/games/_movies/hints";
-import { filmDetailsSchema, filmGuessSchema, filmIdSchema, type ClueKind, type FilmDetails, type FilmGuess } from "@/games/_movies/schemas";
+import { filmDetailsSchema, filmIdSchema, filmRefSchema, type FilmDetails, type FilmRef } from "@/games/_movies/schemas";
 
 /**
  * Color Barcode: name the film from pictures of the whole film, start to finish, in ten levels.
@@ -13,12 +12,12 @@ import { filmDetailsSchema, filmGuessSchema, filmIdSchema, type ClueKind, type F
  * fewer and wider each level, cut first at the frames' edges and drifting toward their centres (so
  * faces arrive late). A wrong guess or a skip reveals the next level, which replaces the current
  * one on screen (earlier levels stay viewable). Ten attempts; solving on attempt N scores
- * `attemptsScore(N, 10)`. Wrong guesses also earn clues: release year earlier or later, shared
- * genres, same director.
+ * `attemptsScore(N, 10)`. There are no clues of any kind (owner decision, 2026-10-06): a wrong
+ * guess only unreels the film a little further.
  *
  * Secrecy: the puzzle carries only level 1. Levels 2–10 sit in the solution, and `applyMove` copies
  * each into the state as it is earned, so `/api/assets/[id]` serves exactly the unlocked levels.
- * The answer reaches the browser only as clues until the play ends and `reveal` hands over the
+ * Nothing about the answer reaches the browser until the play ends and `reveal` hands over the
  * film and every level. The pictures come from the content pipeline
  * (`scripts/content/movies/barcode-levels.mts`) or, in development, the DEV FIXTURE generator.
  */
@@ -26,8 +25,6 @@ import { filmDetailsSchema, filmGuessSchema, filmIdSchema, type ClueKind, type F
 export const LEVEL_COUNT = 10;
 /** One attempt per level: a miss or skip on level N reveals level N + 1; a miss on level 10 ends the play. */
 export const MAX_GUESSES = LEVEL_COUNT;
-/** What a wrong guess tells you, in the order the chips are shown. */
-export const CLUE_KINDS: readonly ClueKind[] = ["year", "genres", "director"];
 
 /** A colour as stored: lowercase `#rrggbb`. */
 export const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, "Expected a lowercase #rrggbb color");
@@ -82,15 +79,16 @@ const moveSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("skip") }),
 ]);
 
-/** A guess with the guessed film's facts looked up on the server (see ./server.ts). */
+/** A guess with the guessed film looked up in the catalog on the server (see ./server.ts). */
 const resolvedMoveSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("guess"), film: filmDetailsSchema }),
+  z.strictObject({ type: z.literal("guess"), film: filmRefSchema }),
   z.strictObject({ type: z.literal("skip") }),
 ]);
 
+const guessTurnSchema = z.strictObject({ film: filmRefSchema, correct: z.boolean() });
 const skippedTurnSchema = z.strictObject({ skipped: z.literal(true) });
-/** One attempt: a guess (with its clues) or a skip. Shaped like the kit's `GuessLogEntry`. */
-export const turnSchema = z.union([filmGuessSchema, skippedTurnSchema]);
+/** One attempt: a guess (the film and whether it was right, nothing more) or a skip. */
+export const turnSchema = z.union([guessTurnSchema, skippedTurnSchema]);
 const stateSchema = z.strictObject({
   turns: z.array(turnSchema).max(MAX_GUESSES),
   /** Levels 2… earned so far, in order. Only ever copied from the solution by `applyMove`. */
@@ -102,6 +100,7 @@ export type Solution = z.infer<typeof solutionSchema>;
 export type Move = z.infer<typeof moveSchema>;
 export type ResolvedMove = z.infer<typeof resolvedMoveSchema>;
 export type Turn = z.infer<typeof turnSchema>;
+export type GuessTurn = z.infer<typeof guessTurnSchema>;
 export type State = z.infer<typeof stateSchema>;
 
 export interface Reveal {
@@ -121,7 +120,7 @@ export function isSkip(turn: Turn): turn is { skipped: true } {
   return "skipped" in turn;
 }
 
-export function isGuess(turn: Turn): turn is FilmGuess {
+export function isGuess(turn: Turn): turn is GuessTurn {
   return !isSkip(turn);
 }
 
@@ -150,7 +149,6 @@ export const colorBarcode = defineGame<Puzzle, Solution, State, Move, Reveal, Re
   rules: [
     "You see the whole film at once: every frame squeezed into a thin stripe, from the opening shot on the left to the end on the right.",
     `A wrong guess or a skip reveals the next level: real frames, in wider strips that move toward the middle of the picture. There are ${LEVEL_COUNT} levels.`,
-    "Every wrong guess earns clues: whether the film came out earlier or later, shared genres, and whether it has the same director.",
     "The fewer levels you need, the more points you score.",
   ],
   accent: "#8c8c8c",
@@ -172,14 +170,9 @@ export const colorBarcode = defineGame<Puzzle, Solution, State, Move, Reveal, Re
     if (move.type === "skip") {
       turn = { skipped: true };
     } else {
-      const { film } = move;
+      const film: FilmRef = { id: move.film.id, title: move.film.title, year: move.film.year };
       if (guessedFilmIds(state).includes(film.id)) return { ok: false, error: `You already guessed ${film.title}.` };
-      const correct = film.id === solution.answer.id;
-      turn = {
-        film: { id: film.id, title: film.title, year: film.year },
-        correct,
-        clues: correct ? [] : computeClues(film, solution.answer, CLUE_KINDS),
-      };
+      turn = { film, correct: film.id === solution.answer.id };
     }
 
     const turns = [...state.turns, turn];

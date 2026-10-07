@@ -7,6 +7,7 @@ import {
   FilmSearch,
   GuessLog,
   LastGuess,
+  type GuessLogEntry,
   LiveStatus,
   MoviesButton,
   MoviesStage,
@@ -21,12 +22,18 @@ import { connectGameUi } from "../game-ui-context";
 
 /**
  * A deliberately plain Color Barcode board: the current level, a strip to look back at earlier
- * ones, the search, and the guess log. The real board (the in-place "wow" transition between
+ * ones, the search, and the films already tried. No clues of any kind: a wrong guess only reveals
+ * the next level. The real board (the in-place "wow" transition between
  * levels, the ambient colour from each level's `average`/`dominant`) is being designed with the
  * owner; this keeps the game playable against the ten-level model until then.
  */
 
 type Props = GameUiProps<typeof colorBarcode>;
+
+/** Turns as the kit's guess log reads them: a guess with no clue chips, or a skip. */
+function logEntries(turns: readonly Turn[]): GuessLogEntry[] {
+  return turns.map((t) => (isSkip(t) ? t : { ...t, clues: [] }));
+}
 
 function turnStatus(turn: Turn): RevealStepStatus {
   if (isSkip(turn)) return "skipped";
@@ -54,7 +61,7 @@ function announcement(state: State, playing: boolean, quit: boolean): string {
   if (quit) return "You gave up.";
   const left = MAX_GUESSES - state.turns.length;
   const next = playing ? ` Level ${state.turns.length + 1} of ${LEVEL_COUNT} is showing. ${left} ${left === 1 ? "attempt" : "attempts"} left.` : "";
-  return `${spokenGuess(last)}${next}`;
+  return `${spokenGuess(isSkip(last) ? last : { ...last, clues: [] })}${next}`;
 }
 
 export function ColorBarcodeUi({ view, submitMove, pending }: Props) {
@@ -66,6 +73,7 @@ export function ColorBarcodeUi({ view, submitMove, pending }: Props) {
   const latest = playing ? state.turns.length : Math.max(0, state.turns.length - 1);
   const onLastLevel = playing && state.turns.length === MAX_GUESSES - 1;
   const attemptsLeft = MAX_GUESSES - state.turns.length;
+  const entries = logEntries(state.turns);
 
   // Looking back at an earlier level lasts until the next level is earned or the play ends.
   const viewKey = `${status}:${levels.length}`;
@@ -144,7 +152,7 @@ export function ColorBarcodeUi({ view, submitMove, pending }: Props) {
               excludeIds={guessedFilmIds(state)}
               onSelect={(film) => void send({ type: "guess", filmId: film.id })}
             />
-            <LastGuess entries={state.turns} />
+            <LastGuess entries={entries} />
             {onLastLevel ? (
               confirmGiveUp ? (
                 <div className={styles.confirm} role="group" aria-label="Give up?">
@@ -178,7 +186,7 @@ export function ColorBarcodeUi({ view, submitMove, pending }: Props) {
 
         <section className={styles.log} aria-label="Your guesses">
           <h3>Your guesses</h3>
-          <GuessLog entries={state.turns} gaveUp={quit} emptyText="No guesses yet. Every wrong guess earns clues." />
+          <GuessLog entries={entries} gaveUp={quit} emptyText="No guesses yet. Each miss or skip reveals the next level." />
         </section>
       </div>
 

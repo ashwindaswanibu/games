@@ -48,20 +48,14 @@ const ctx = (filmId: number) => ({
 });
 
 describe("colorBarcodeServer.resolveMove", () => {
-  it("attaches the guessed film's catalog facts to the move", async () => {
+  it("attaches the guessed film's catalog title and year to the move, and nothing more", async () => {
     const services = createFakeGameServices({ films: [heat, collateral] });
     const result = await colorBarcodeServer.resolveMove(ctx(1), services);
     expect(result).toEqual({
       ok: true,
       move: {
         type: "guess",
-        film: {
-          id: 1,
-          title: "Heat",
-          year: 1995,
-          genres: ["crime film", "thriller"],
-          directors: ["Michael Mann"],
-        },
+        film: { id: 1, title: "Heat", year: 1995 },
       },
     });
     expect(services.calls).toEqual(["films.get(1)"]);
@@ -102,7 +96,7 @@ describe("the full move pipeline", () => {
     elapsedMs: 0,
   };
 
-  it("turns a wrong guess into clues from trusted facts, and unlocks level 2", async () => {
+  it("records a wrong guess from the catalog's facts, with no clues, and unlocks level 2", async () => {
     const step = await advancePlay({
       ...base,
       services: createFakeGameServices({ films: [heat, collateral] }),
@@ -111,15 +105,7 @@ describe("the full move pipeline", () => {
     });
     expect(step.ok && step.outcome).toBe("in_progress");
     if (!step.ok) throw new Error(step.error);
-    expect((step.state as State).turns[0]).toMatchObject({
-      film: { id: 1, title: "Heat", year: 1995 },
-      correct: false,
-      clues: [
-        { kind: "year", direction: "later" },
-        { kind: "genres", shared: ["thriller"] },
-        { kind: "director", match: "same" },
-      ],
-    });
+    expect((step.state as State).turns).toEqual([{ film: { id: 1, title: "Heat", year: 1995 }, correct: false }]);
     expect((step.state as State).unlocked).toEqual([levels[1]]);
   });
 

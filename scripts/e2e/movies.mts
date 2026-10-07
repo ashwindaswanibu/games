@@ -17,6 +17,7 @@
  */
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import type { Browser, Page } from "puppeteer-core";
 import { z } from "zod";
 import { assetUrl, referencedAssetIds } from "@/core/assets";
@@ -26,7 +27,7 @@ import { attemptsScore } from "@/core/scoring";
 import { describeClue, spokenClues } from "@/games/_movies/clue-text";
 import { computeClues } from "@/games/_movies/hints";
 import type { ClueKind, FilmDetails, PersonRef } from "@/games/_movies/schemas";
-import { colorBarcode, CLUE_KINDS as BARCODE_CLUES, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES } from "@/games/color-barcode/logic";
+import { colorBarcode, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES } from "@/games/color-barcode/logic";
 import { colorGrade, CLUE_KINDS as GRADE_CLUES, MAX_TRIES } from "@/games/color-grade/logic";
 import { chainScore, degrees, maxLinks } from "@/games/degrees/logic";
 import { FRAME_COUNT, frameByFrame, CLUE_KINDS as FRAME_CLUES } from "@/games/frame-by-frame/logic";
@@ -207,7 +208,7 @@ async function checkLogRow(
     return;
   }
   ctx.report.check(`${name} is marked as a miss`, row.text.includes("Miss"), row.text);
-  ctx.report.equal(`${name} shows the right clues`, row.chips, expected.chips);
+  ctx.report.equal(expected.chips.length > 0 ? `${name} shows the right clues` : `${name} shows no clues`, row.chips, expected.chips);
 }
 
 /**
@@ -238,8 +239,9 @@ async function checkLastGuess(ctx: Ctx, game: string, guess: FilmDetails, answer
     return { text: (box.textContent ?? "").replace(/\s+/g, " "), top: rect.top, bottom: rect.bottom, floor, status };
   });
   report.check(`${game}: the last guess names ${guess.title} as a miss`, seen.text.includes(`Not ${guess.title}`), seen.text);
-  report.check(`${game}: the last guess and its clues are in view without scrolling`, seen.top >= 0 && seen.bottom <= seen.floor, seen);
-  report.check(`${game}: a screen reader hears the clues`, seen.status.includes(`${guess.title} isn't it. ${spokenClues(clues)}`), seen.status);
+  const what = clues.length > 0 ? "the clues" : "the miss (no clues)";
+  report.check(`${game}: the last guess ${clues.length > 0 ? "and its clues are" : "is"} in view without scrolling`, seen.top >= 0 && seen.bottom <= seen.floor, seen);
+  report.check(`${game}: a screen reader hears ${what}`, seen.status.includes(`${guess.title} isn't it. ${spokenClues(clues)}`), seen.status);
 }
 
 /** The platform result card: outcome line, score, label and share grid, matched against the stored play. */
@@ -529,13 +531,21 @@ async function playColorBarcode(ctx: Ctx): Promise<void> {
   await checkAssetAccess(ctx, "level 1", { shown: [levels[0]!], hidden: levels.slice(1) });
   await spoilerCheckpoint(ctx, colorBarcode, loaded, "on level 1", secrets);
 
-  // --- A wrong guess: clues, and level 2 replaces level 1. ---
+  // --- A wrong guess: no clues of any kind, and level 2 replaces level 1. ---
   const [decoy] = await decoyFilms(ctx.db, 1, [answer.id]);
-  await playMove(ctx, colorBarcode, 1, () =>
+  const missed = await playMove(ctx, colorBarcode, 1, () =>
     pickFromSearch(page, "Name the film", decoy.title, { primary: decoy.title, secondaryPrefix: String(decoy.year) }),
   );
-  await checkLogRow(ctx, "Your guesses", 0, { kind: "miss", film: decoy, chips: expectedChips(decoy, answer, BARCODE_CLUES) });
-  await checkLastGuess(ctx, "color barcode", decoy, answer, BARCODE_CLUES);
+  await checkLogRow(ctx, "Your guesses", 0, { kind: "miss", film: decoy, chips: [] });
+  await checkLastGuess(ctx, "color barcode", decoy, answer, []);
+  report.equal("no clue chips anywhere on the board", await page.$$eval('ul[aria-label^="Clues"]', (lists) => lists.length), 0);
+  // Deep equality: the stored state is jsonb, which doesn't keep key order.
+  const storedTurns = (missed.state as { turns: unknown[] }).turns;
+  report.check(
+    "the stored miss is just the film and the verdict",
+    isDeepStrictEqual(storedTurns, [{ film: { id: decoy.id, title: decoy.title, year: decoy.year }, correct: false }]),
+    storedTurns,
+  );
   await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(levels[1]!));
   report.check("the miss reveals level 2", true);
   await checkAssetAccess(ctx, "level 2", { shown: levels.slice(0, 2), hidden: levels.slice(2) });
@@ -548,7 +558,8 @@ async function playColorBarcode(ctx: Ctx): Promise<void> {
   await playMove(ctx, colorBarcode, 2, () => clickButton(page, { pattern: "Skip to level 3$" }));
   await checkLogRow(ctx, "Your guesses", 1, { kind: "skip" });
   await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(levels[2]!));
-  await checkAssetAccess(ctx, "level 3", { shown: [levels[2]!], hidden: levels.slice(3) });
+  // Levels 1 and 2 stay viewable for looking back.
+  await checkAssetAccess(ctx, "level 3", { shown: levels.slice(0, 3), hidden: levels.slice(3) });
   await spoilerCheckpoint(ctx, colorBarcode, loaded, "after the skip", secrets);
 
   // --- The answer. ---

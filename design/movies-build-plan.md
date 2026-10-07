@@ -11,7 +11,7 @@ There are four games, all in the new **Movies** bucket:
 | `degrees` | Degrees of Separation | Link today's start actor to the end actor through films they shared, in as few links as possible |
 | `frame-by-frame` | Frame by Frame | Guess the film from a frame; each miss or skip reveals another frame |
 | `color-grade` | Color Grade | Guess the film from its look: palette, then a neutral photo graded like the film, then a blurred still, then the still |
-| `color-barcode` | Color Barcode | Guess the film from ten levels of the whole film: a squeezed-frame barcode, then real frame strips that widen and move from the frame edges to the centre, with clues on wrong guesses |
+| `color-barcode` | Color Barcode | Guess the film from ten levels of the whole film: a squeezed-frame barcode, then real frame strips that widen and move from the frame edges to the centre. No clues |
 
 - **[DECISION]** All four ship with `availability: "testing"`. They're visible only to admins and don't count on leaderboards until Ashwin promotes them.
 - **[DECISION]** No changes to how global scores are calculated. Plain sum is unchanged. How buckets add up into the global score is still Ashwin's call (A/B/C from the chat).
@@ -64,7 +64,7 @@ Curated puzzles go into `puzzles` ahead of time. These games have no `generate`,
 - **Degrees.** Move = pick a film the current actor was in, then a co-star from it. The server checks both links. Undo the last link is free; you can also give up. The game is won on reaching the end actor. Max links = par + 4. Score: 100 at par, minus 15 for each extra link, never below 40; 0 if lost or given up. Share grid: one 🎞 per link plus ⭐ at the end. Reveal: one optimal path.
 - **Frame by Frame.** 6 frames, revealed from hardest to easiest. A wrong guess or a skip reveals the next one. A wrong guess also gives clues: release year higher or lower, shared genres, same director. Score: `attemptsScore(frameUsed, 6)`.
 - **Color Grade.** Stages: palette, graded neutral photo, blurred still, still, then one last guess, for 5 tries. Same clue system. Score: `attemptsScore(try, 5)`. **The play area is neutral gray.**
-- **Color Barcode.** (Revised 2026-10-06.) Ten levels, level 1 (the squeezed-frame barcode) shown at the start; a wrong guess or a skip reveals the next level, which replaces the current one (earlier levels can be viewed again). 10 attempts. Clues on wrong guesses: year higher or lower, shared genres, same director. Score: `attemptsScore(attempt, 10)`. Share grid: one mark per attempt. Reveal: all levels plus title, year and director.
+- **Color Barcode.** (Revised 2026-10-06.) Ten levels, level 1 (the squeezed-frame barcode) shown at the start; a wrong guess or a skip reveals the next level, which replaces the current one (earlier levels can be viewed again). 10 attempts. No clues of any kind (Ashwin, 2026-10-06): the screen shows only the level, the attempt number and attempts left. Score: `attemptsScore(attempt, 10)`. Share grid: one mark per attempt. Reveal: all levels plus title, year and director.
 
 ## Front end
 - Shared Movies-world kit (`src/games/_movies/ui/`):
