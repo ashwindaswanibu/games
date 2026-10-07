@@ -207,7 +207,9 @@ Names and queries have two keys, each the same in SQL and TypeScript
   query, as are "oceans eleven" and "ocean's eleven";
 - the **split key** (`catalog_split_key`, `catalogSplitKey`) makes them spaces: "don t look up",
   "maureen o hara" (stored as `split_key` on titles and people where it differs,
-  `20261014000200_catalog_search_split_key.sql`).
+  `20261014000200_catalog_search_split_key.sql`; `20261014000300_catalog_split_key_stats.sql`
+  analyzes the new columns, or the planner walks every person by popularity for the split-key
+  words: ~40 ms for "sam" instead of ~13 ms).
 
 A name matches by its search key, and its split key adds later words (classes 3 and 4): a word
 after an apostrophe is a word of its own ("hara" → Catherine O'Hara, "connell" → Jack and Jerry
