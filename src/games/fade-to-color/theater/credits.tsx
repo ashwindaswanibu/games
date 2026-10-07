@@ -4,35 +4,32 @@ import { useEffect, useState } from "react";
 import { useShare } from "@/components/share-button";
 import { APP_NAME } from "@/config";
 import type { PuzzleDate } from "@/core/day";
+import type { Outcome } from "@/core/game";
 import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
 import type { FilmDetails } from "@/games/_movies/schemas";
-import { fadeToColor, LEVEL_COUNT } from "../logic";
+import { fadeToColor, LEVEL_COUNT, type State } from "../logic";
+import { describeGrid, endKicker, parseGrid } from "./grid";
 import styles from "./theater.module.css";
 import { BarcodeTitle } from "./wordmark";
 
-/** The share grid's marks, drawn as the strip's frames instead of emoji. */
-const MARKS: Record<string, "solved" | "missed" | "skipped" | "picked"> = { "🟩": "solved", "🟥": "missed", "⬛": "skipped", "🟨": "picked" };
-
-/** One result as ten little frames (how each reel went, then unexposed film) and, if it came to it, the final pick. */
+/**
+ * One result as ten little frames: how each reel went, then unexposed film. A pick is a round mark:
+ * inside the frame of the reel the film was stopped on (the rest stayed in the can), or set a
+ * little apart after the tenth when the reels ran out. Filled with the light if right; a dark ring
+ * if wrong.
+ */
 export function ResultFrames({ grid, label }: { grid: string; label?: string }) {
-  const marks = Array.from(grid)
-    .map((ch) => MARKS[ch])
-    .filter(Boolean);
-  const pick = marks[LEVEL_COUNT];
+  const marks = parseGrid(grid);
+  const stoppedAt = marks.pick && marks.reels.length < LEVEL_COUNT ? marks.reels.length : null;
   return (
     <span className={styles.frames} role="img" aria-label={label ?? describeGrid(marks)}>
       {Array.from({ length: LEVEL_COUNT }, (_, i) => (
-        <span key={i} data-mark={marks[i] ?? "none"} />
+        <span key={i} data-mark={marks.reels[i] ?? "none"} data-pick={i === stoppedAt ? marks.pick : undefined} />
       ))}
-      {pick && <span className={styles.pickMark} data-mark={pick} />}
+      {marks.pick && stoppedAt === null && <span className={styles.pickMark} data-pick={marks.pick} />}
     </span>
   );
-}
-
-function describeGrid(marks: readonly string[]): string {
-  if (marks.length > LEVEL_COUNT) return marks.at(-1) === "picked" ? "Named on the final pick" : "Not named, even on the final pick";
-  return marks.at(-1) === "solved" ? `Named on reel ${marks.length}` : `Not named in ${marks.length} reels`;
 }
 
 /**
@@ -42,18 +39,15 @@ function describeGrid(marks: readonly string[]): string {
  */
 export function Credits(props: {
   film: FilmDetails;
-  won: boolean;
-  /** Named in the final pick rather than by a guess. */
-  pickedIt: boolean;
-  gaveUp: boolean;
-  attempts: number;
+  state: State;
+  status: Outcome;
   result: { score: number; label: string; shareGrid: string };
   fill: string | null;
   date: PuzzleDate;
   friends: readonly FriendResult[] | null;
   viewerId: string;
 }) {
-  const { film, won, pickedIt, gaveUp, attempts, result, fill, date, friends, viewerId } = props;
+  const { film, state, status, result, fill, date, friends, viewerId } = props;
   const { share, copied } = useShare(
     shareText({
       appName: APP_NAME,
@@ -66,19 +60,13 @@ export function Credits(props: {
     }),
   );
   const [showFriends, setShowFriends] = useState(false);
-  const kicker = pickedIt
-    ? "Named on the final pick"
-    : won
-      ? `Named on reel ${attempts}`
-      : gaveUp
-        ? "You gave up · the film was"
-        : "Out of reels · the film was";
   const byline = [film.directors.slice(0, 2).join(" & "), film.year].filter(Boolean).join(" · ");
 
   return (
     <section className={styles.credits} aria-label="Today's film">
-      <p className={styles.kicker}>{kicker}</p>
-      <BarcodeTitle text={film.title} fill={fill} />
+      <p className={styles.kicker}>{endKicker(state, status)}</p>
+      {/* Colour is what you earn: a film that got away is titled in plain ink. */}
+      <BarcodeTitle text={film.title} fill={status === "won" ? fill : null} />
       {byline && <p className={styles.byline}>{byline}</p>}
       <div className={styles.creditActions}>
         <span className={styles.result}>

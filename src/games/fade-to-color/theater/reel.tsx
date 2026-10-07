@@ -37,6 +37,12 @@ export function Reel(props: {
   /** Edge print along the top rail. */
   edgeStart: string;
   edgeEnd: string;
+  /**
+   * What `edgeEnd` says, apart from the reel number: `count` (`REEL 04 ◂ 10`), `held` (the film was
+   * stopped: `REEL 04 ◂ HELD`) or `runout` (the reels ran out: `REEL 10 ◂ RUN-OUT`). A change after
+   * the first render prints the new label in, once.
+   */
+  edgeVariant?: "count" | "held" | "runout";
   /** Edge print along the bottom rail (the frames' source, once the film is known). */
   edgeBottom?: ReactNode;
   /** The barcode as light (a data URL), spilling into the room around the reel. */
@@ -49,7 +55,9 @@ export function Reel(props: {
   /** Drawn on the screen before the first frame: the leader. */
   leader?: ReactNode;
 }) {
-  const { frame, move, waiting } = props;
+  const { frame, move, waiting, edgeVariant = "count" } = props;
+  // The label the page opened with is simply there; a later one prints in.
+  const [firstVariant] = useState(edgeVariant);
   const screen = useRef<HTMLDivElement>(null);
   const cur = useRef<HTMLImageElement>(null);
   const wipe = useRef<HTMLDivElement>(null);
@@ -167,10 +175,12 @@ export function Reel(props: {
 
   return (
     <div className={styles.reelBox}>
-      <Crossfade src={props.spill} className={styles.spill} />
+      <div className={styles.spillLight} aria-hidden>
+        <Crossfade src={props.spill} className={styles.spill} />
+      </div>
       <div className={styles.glow} aria-hidden />
       <div className={styles.reel}>
-        <Rail edgeStart={props.edgeStart} edgeEnd={props.edgeEnd} />
+        <Rail edgeStart={props.edgeStart} edgeEnd={props.edgeEnd} edgeKey={edgeVariant} fresh={edgeVariant !== firstVariant} />
         <div ref={screen} className={styles.screen} data-waiting={waiting || undefined}>
           {/* eslint-disable-next-line @next/next/no-img-element -- a same-origin asset drawn and animated by hand */}
           <img ref={cur} className={styles.frame} alt="" hidden={!hasPicture} />
@@ -191,13 +201,21 @@ export function Reel(props: {
   );
 }
 
-/** A sprocket rail with its edge print: two labels at the ends, or one (`children`) at the right. */
-function Rail({ edgeStart, edgeEnd, children }: { edgeStart?: string; edgeEnd?: string; children?: ReactNode }) {
+/**
+ * A sprocket rail with its edge print: two labels at the ends, or one (`children`) at the right.
+ * A new `edgeKey` replaces the end label with a fresh one, printed in when `fresh`.
+ */
+function Rail(props: { edgeStart?: string; edgeEnd?: string; edgeKey?: string; fresh?: boolean; children?: ReactNode }) {
+  const { edgeStart, edgeEnd, edgeKey, fresh, children } = props;
   return (
     <div className={styles.rail}>
       <div className={styles.holes} />
       {edgeStart !== undefined && <span className={styles.edge}>{edgeStart}</span>}
-      {edgeEnd !== undefined && <span className={styles.edge}>{edgeEnd}</span>}
+      {edgeEnd !== undefined && (
+        <span key={edgeKey} className={styles.edge} data-fresh={fresh || undefined}>
+          {edgeEnd}
+        </span>
+      )}
       {children && <span className={`${styles.edge} ${styles.edgeEnd}`}>{children}</span>}
     </div>
   );

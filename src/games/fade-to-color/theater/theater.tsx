@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
 import { formatPuzzleDate } from "@/core/day";
+import type { Outcome } from "@/core/game";
 import type { ImmersiveGameUiProps } from "@/core/view";
-import type { FilmSearchHit } from "@/games/_movies/schemas";
-import { awaitingPick, fadeToColor, guessedFilmIds, isSkip, LEVEL_COUNT, levelsInView, MAX_GUESSES, OPTION_COUNT, type State } from "../logic";
+import type { FilmRef, FilmSearchHit } from "@/games/_movies/schemas";
+import { fadeToColor, guessedFilmIds, isGuess, isSkip, LEVEL_COUNT, levelsInView, MAX_GUESSES, OPTION_COUNT, pickWorth, reelOf, stoppedEarly, type State } from "../logic";
 import { ContactStrip } from "./contact-strip";
 import { Credits } from "./credits";
 import { Crossfade } from "./crossfade";
-import { FinalPick } from "./final-pick";
+import { FourPick } from "./four-pick";
 import { THEATER_FONT_VARS } from "./fonts";
+import { endKicker } from "./grid";
 import { Reel, type ReelMove } from "./reel";
-import { Slate } from "./slate";
+import { FadingSlate, Slate } from "./slate";
 import styles from "./theater.module.css";
 import { HOUSE_ACCENT, useLevelArt } from "./use-level-art";
 import { Wordmark } from "./wordmark";
@@ -22,11 +24,26 @@ type Props = ImmersiveGameUiProps<typeof fadeToColor>;
 const pad = (n: number) => String(n).padStart(2, "0");
 /** How long "Not <film>" stays under the guess line after a miss. */
 const WHISPER_MS = 3600;
+/** The stop, seen live, from the server's answer to the last tile up (see the stylesheet's `.four[data-live]`). */
+const STOP_SEQUENCE_MS = 2400;
+/** A pick's result lands no sooner than this after the press: the held beat in the dark. */
+const PICK_BEAT_MS = 1200;
+/** The four fade away (the stylesheet's `.four[data-leaving]`) while the film rolls on to its last reel. */
+const FOUR_LEAVE_MS = 450;
+/** Once the result has been read, the four wait at most this long for the last reel's picture before the film rolls on anyway. */
+const LAST_REEL_WAIT_MS = 2500;
 
-/** The play ended because the player gave up on the last reel rather than missing it. */
-function gaveUp(state: State, status: string): boolean {
-  const last = state.turns.at(-1);
-  return status === "lost" && last !== undefined && isSkip(last);
+/**
+ * A pick in flight. `waiting`: pressed, the other titles fading and the room dipping, the result
+ * not yet shown. `landed`: the result is playing on the tiles. `held`: it has been read, and waits
+ * for the last reel's picture. `leaving`: the four fade as the reel unreels to the last reel.
+ * `gone`: the end card has the console.
+ */
+interface Resolve {
+  filmId: number;
+  pressedAt: number;
+  result: { right: boolean; answerId: number } | null;
+  stage: "waiting" | "landed" | "held" | "leaving" | "gone";
 }
 
 /** What the last move did, in words: for the whisper under the guess line and screen readers. */
@@ -37,10 +54,20 @@ function lastMoveText(state: State): string | null {
   return last.correct ? null : `Not ${last.film.title}`;
 }
 
+/** How the play ended, in a sentence, then the film. */
+function endWords(state: State, status: Outcome, title: string): string {
+  const how = state.pick && !state.pick.correct ? "Wrong pick" : status === "won" && !state.pick ? `You named it on reel ${state.turns.length}` : endKicker(state, status).replace(" · the film was", "");
+  return `${how}. The film was ${title}.`;
+}
+
 /**
  * Fade to Color, full screen: a dark projection room lit only by today's film. The film's whole run
  * is on the reel as a barcode; each miss or skip unreels a level with more of the real picture.
  * Nothing else is on screen but the attempts: no clues of any kind.
+ *
+ * On any reel the player may stop the film instead: the unseen reels stay in the can and the four
+ * come up (`FourPick`) for one pick, worth half of naming it on that reel. A wrong guess on the
+ * last reel brings them up too (the run-out).
  */
 export function FadeToColorTheater(props: Props) {
   const { view, start, submitMove, pending, notice, date, friends, viewerId } = props;
@@ -49,16 +76,27 @@ export function FadeToColorTheater(props: Props) {
   const finished = status === "won" || status === "lost";
   const state = view?.state ?? null;
   const turns = state?.turns ?? [];
-  const levels = view ? (view.reveal?.levels ?? levelsInView(view.puzzle, view.state)) : [];
-  const art = useLevelArt(levels);
+  const reveal = view?.reveal ?? null;
+
+  // A pick plays out on the four before the film rolls on: the screen holds the play as it was
+  // until the result has been shown (`over`), and the console until the four have gone (`ending`).
+  const [resolve, setResolve] = useState<Resolve | null>(null);
+  const over = finished && (resolve === null || resolve.stage === "leaving" || resolve.stage === "gone");
+  const ending = finished && (resolve === null || resolve.stage === "gone");
+
+  const inView = view ? levelsInView(view.puzzle, view.state) : [];
+  // Every level is fetched once revealed (so the last reel is ready when the film rolls on), but
+  // only those in view are shown until then.
+  const levels = view ? (over && reveal ? reveal.levels : inView) : [];
+  const art = useLevelArt(view ? (reveal?.levels ?? inView) : []);
 
   // The newest reel: the one being played, or the film's last once it's over (the payoff).
-  const latest = finished ? LEVEL_COUNT - 1 : Math.max(0, levels.length - 1);
+  const latest = over ? LEVEL_COUNT - 1 : Math.max(0, levels.length - 1);
 
   // Looking back at an earlier reel lasts until the next one is earned or the play ends.
-  const [picked, setPicked] = useState<{ index: number; latest: number; finished: boolean } | null>(null);
-  const target = picked && picked.latest === latest && picked.finished === finished && picked.index < levels.length ? picked.index : latest;
-  const lookAt = (index: number) => setPicked({ index, latest, finished });
+  const [picked, setPicked] = useState<{ index: number; latest: number; over: boolean } | null>(null);
+  const target = picked && picked.latest === latest && picked.over === over && picked.index < levels.length ? picked.index : latest;
+  const lookAt = (index: number) => setPicked({ index, latest, over });
 
   // What the reel shows moves to the target once its art is in; how it gets there depends on why.
   const [rolled, setRolled] = useState(false);
@@ -79,6 +117,32 @@ export function FadeToColorTheater(props: Props) {
   const litArt = litKey ? art.get(litKey) : undefined;
   const firstArt = levels[0] ? art.get(levels[0].id) : undefined;
 
+  // The stake for stopping ticks over once the newest reel has settled on screen.
+  const attempt = turns.length + 1;
+  const [stakeReel, setStakeReel] = useState<number | null>(null);
+  if (playing && settledKey !== null && settledKey === levels[latest]?.id && stakeReel !== latest + 1) setStakeReel(latest + 1);
+
+  // The four: up once the film is stopped (or ran out), until the end card takes the console.
+  const fourUp = state !== null && state.options.length > 0 && !ending;
+  const runOut = state !== null && fourUp && !stoppedEarly(state);
+  const reel = state ? reelOf(state) : 1;
+  const worth = pickWorth(reel);
+  // The stop plays once, and only when it happens in front of the player: a reload shows the rest.
+  const optionsUp = (state?.options.length ?? 0) > 0;
+  const [seenUp, setSeenUp] = useState(optionsUp);
+  const [stopLive, setStopLive] = useState(false);
+  if (optionsUp !== seenUp) {
+    setSeenUp(optionsUp);
+    setStopLive(optionsUp && playing);
+  }
+  useEffect(() => {
+    if (!stopLive) return;
+    const timer = setTimeout(() => setStopLive(false), STOP_SEQUENCE_MS);
+    return () => clearTimeout(timer);
+  }, [stopLive]);
+  const lastTurn = turns.at(-1);
+  const missed = runOut && lastTurn && isGuess(lastTurn) ? lastTurn.film.title : null;
+
   // "Not <film>" under the guess line for a moment after each miss.
   const [seenTurns, setSeenTurns] = useState(turns.length);
   const [whisper, setWhisper] = useState<string | null>(null);
@@ -93,21 +157,54 @@ export function FadeToColorTheater(props: Props) {
   }, [whisper, seenTurns]);
 
   const [error, setError] = useState<string | null>(null);
-  async function send(move: { type: "guess" | "pick"; filmId: number } | { type: "skip" }): Promise<boolean> {
+  async function send(move: { type: "guess" | "pick"; filmId: number } | { type: "skip" } | { type: "stop" }): Promise<boolean> {
     setError(null);
     const result = await submitMove(move);
     if (!result.ok) setError(result.message);
     return result.ok;
   }
 
-  // ← and → step through the reels the player has seen, unless they're typing.
+  async function pick(film: FilmRef) {
+    setResolve({ filmId: film.id, pressedAt: performance.now(), result: null, stage: "waiting" });
+    if (!(await send({ type: "pick", filmId: film.id }))) setResolve(null);
+  }
+
+  // The result lands at the later of the server's answer and the held beat after the press.
+  const pickMade = state?.pick ?? null;
+  const answerId = reveal?.film.id ?? null;
+  useEffect(() => {
+    if (resolve?.stage !== "waiting" || !pickMade || answerId === null) return;
+    const result = { right: pickMade.correct, answerId };
+    const timer = setTimeout(
+      () => setResolve((r) => (r && r.stage === "waiting" ? { ...r, result, stage: "landed" } : r)),
+      Math.max(0, PICK_BEAT_MS - (performance.now() - resolve.pressedAt)),
+    );
+    return () => clearTimeout(timer);
+  }, [resolve, pickMade, answerId]);
+  // The film rolls on once its last reel is ready to unreel (or after a while regardless: the reel
+  // then waits at the gate), so the four never leave an empty console behind them.
+  const lastLevel = reveal?.levels[LEVEL_COUNT - 1];
+  const lastReady = lastLevel !== undefined && art.has(lastLevel.id);
+  if (resolve?.stage === "held" && lastReady) setResolve({ ...resolve, stage: "leaving" });
+  useEffect(() => {
+    if (resolve?.stage !== "held") return;
+    const timer = setTimeout(() => setResolve((r) => (r && r.stage === "held" ? { ...r, stage: "leaving" } : r)), LAST_REEL_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [resolve]);
+  useEffect(() => {
+    if (resolve?.stage !== "leaving") return;
+    const timer = setTimeout(() => setResolve((r) => (r && r.stage === "leaving" ? { ...r, stage: "gone" } : r)), FOUR_LEAVE_MS);
+    return () => clearTimeout(timer);
+  }, [resolve]);
+
+  // ← and → step through the reels the player has seen, unless they're typing or choosing a film.
   useEffect(() => {
     if (!view) return;
     const onKey = (event: KeyboardEvent) => {
       const el = document.activeElement;
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || event.metaKey || event.ctrlKey || event.altKey) return;
-      // Not while a dialog (everyone's results) is open over the reel.
-      if (event.target instanceof Element && event.target.closest('[role="dialog"]')) return;
+      // Not while a dialog (everyone's results) is open over the reel, nor in the four.
+      if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="radiogroup"]')) return;
       const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
       if (!step) return;
       const next = Math.min(levels.length - 1, Math.max(0, target + step));
@@ -118,35 +215,53 @@ export function FadeToColorTheater(props: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // `lookAt` closes over `latest` and `finished`, both listed.
+    // `lookAt` closes over `latest` and `over`, both listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, levels.length, target, latest, finished]);
+  }, [view, levels.length, target, latest, over]);
 
   const accent = litArt?.accent ?? HOUSE_ACCENT;
-  const picking = playing && state !== null && awaitingPick(state);
-  const attempt = turns.length + 1;
   const left = MAX_GUESSES - turns.length;
   const showing = display?.index ?? null;
-  const creditsReady = finished && shownRef !== undefined && settledKey === shownRef.id && display?.index === latest;
-  const reveal = view?.reveal ?? null;
-  const quit = state && status ? gaveUp(state, status) : false;
+  const creditsReady = ending && shownRef !== undefined && settledKey === shownRef.id && display?.index === latest;
+  // While a pick resolves the room dips; it relights as the film rolls on to its last reel.
+  const dipped = resolve !== null && !(over && litKey !== null && litKey === levels[LEVEL_COUNT - 1]?.id);
   const today = formatPuzzleDate(date, { weekday: "short", month: "short", day: "numeric" });
 
-  const pickedIt = state?.pick?.correct === true;
+  const guessed = new Map<number, number>();
+  turns.forEach((turn, i) => {
+    if (isGuess(turn)) guessed.set(turn.film.id, i + 1);
+  });
+
+  const edgeVariant = fourUp && !over ? (runOut ? "runout" : "held") : "count";
+  const edgeEnd =
+    showing === null
+      ? `Leader ◂ ${LEVEL_COUNT}`
+      : `Reel ${pad(showing + 1)} ◂ ${edgeVariant === "held" ? "Held" : edgeVariant === "runout" ? "Run-out" : LEVEL_COUNT}`;
+
   const announcement = !state
     ? ""
-    : finished && reveal
-      ? `${pickedIt ? "You picked it at the end" : status === "won" ? `You named it on reel ${turns.length}` : quit ? "You gave up" : "Out of reels"}. The film was ${reveal.film.title}.`
-      : picking
-        ? `${lastMoveText(state) ?? ""}. Every reel is used. Final pick: choose one of ${OPTION_COUNT} films.`
-        : turns.length > 0
+    : finished && reveal && (ending || resolve?.result)
+      ? endWords(state, status!, reveal.film.title)
+      : fourUp && !resolve
+        ? runOut
+          ? `${lastMoveText(state) ?? ""}. Out of reels. The four are up: one pick from ${OPTION_COUNT} films, worth ${worth} points.`
+          : `Film stopped on reel ${reel}. The four are up: one pick from ${OPTION_COUNT} films, worth ${worth} points.`
+        : playing && turns.length > 0 && !fourUp
           ? `${lastMoveText(state) ?? ""}. Reel ${attempt} of ${LEVEL_COUNT} is showing. ${left} ${left === 1 ? "reel" : "reels"} left.`
           : "";
 
   return (
-    <div className={`${THEATER_FONT_VARS} ${styles.theater}`} style={{ "--accent": accent } as CSSProperties} data-finished={finished || undefined} data-picking={picking || undefined}>
+    <div
+      className={`${THEATER_FONT_VARS} ${styles.theater}`}
+      style={{ "--accent": accent } as CSSProperties}
+      data-finished={ending || undefined}
+      data-four={fourUp || undefined}
+      data-dip={dipped || undefined}
+    >
       <div className={styles.room} aria-hidden>
-        <Crossfade src={litArt?.bands || null} className={styles.wash} />
+        <div className={styles.washLight}>
+          <Crossfade src={litArt?.bands || null} className={styles.wash} />
+        </div>
         <div className={styles.beam} />
         <div className={styles.vignette} />
         <div className={styles.grain} />
@@ -171,22 +286,25 @@ export function FadeToColorTheater(props: Props) {
                   key: shownRef.id,
                   src: shownArt.src,
                   accent: shownArt.accent,
-                  alt: reveal
-                    ? `Reel ${display!.index + 1} of ${LEVEL_COUNT} of ${reveal.film.title}`
-                    : `Reel ${display!.index + 1} of ${LEVEL_COUNT}: today's film as a strip of color`,
+                  alt:
+                    reveal && over
+                      ? `Reel ${display!.index + 1} of ${LEVEL_COUNT} of ${reveal.film.title}`
+                      : `Reel ${display!.index + 1} of ${LEVEL_COUNT}: today's film as a strip of color`,
                 }
               : null
           }
           move={display?.move ?? "none"}
           edgeStart={`▸ ${fadeToColor.name} · ${today}`}
-          edgeEnd={showing === null ? `Leader ◂ ${LEVEL_COUNT}` : `Reel ${pad(showing + 1)} ◂ ${LEVEL_COUNT}`}
+          edgeEnd={edgeEnd}
+          edgeVariant={edgeVariant}
           spill={litArt?.bands || null}
           reflection={litArt?.reflection || null}
           waiting={waiting && (rolled || playing || finished)}
           onLight={setLitKey}
           onSettled={setSettledKey}
           edgeBottom={
-            reveal?.credit && (
+            reveal?.credit &&
+            over && (
               <a href={reveal.credit.url} target="_blank" rel="noreferrer">
                 Frames · {reveal.credit.source} ↗
               </a>
@@ -218,22 +336,28 @@ export function FadeToColorTheater(props: Props) {
             </div>
           )}
 
-          {view && !finished && (
+          {view && (
+            <ContactStrip
+              thumbs={levels.map((l) => art.get(l.id)?.thumb)}
+              showing={showing}
+              current={over ? null : latest}
+              closed={fourUp && !over}
+              closing={stopLive}
+              onPick={lookAt}
+            />
+          )}
+
+          {view && !ending && (
             <>
-              <ContactStrip
-                thumbs={levels.map((l) => art.get(l.id)?.thumb)}
-                showing={showing}
-                current={playing ? latest : null}
-                onPick={lookAt}
-              />
-              <p className={styles.status}>
-                {picking ? (
-                  <>
-                    Reel <em>{MAX_GUESSES}</em> of {MAX_GUESSES} <span className={styles.dot}>·</span> final pick
-                  </>
+              <p className={styles.status} data-leaving={resolve?.stage === "leaving" || undefined}>
+                Reel <em>{fourUp ? reel : attempt}</em> of {MAX_GUESSES}{" "}
+                {fourUp ? (
+                  <span key="four" className={stopLive ? styles.statusFresh : undefined}>
+                    <span className={styles.dot}>·</span> {runOut ? "run-out" : "stopped"}
+                  </span>
                 ) : (
                   <>
-                    Reel <em>{attempt}</em> of {MAX_GUESSES} <span className={styles.dot}>·</span> <em>{left}</em> left
+                    <span className={styles.dot}>·</span> <em>{left}</em> left
                   </>
                 )}
                 {target !== latest && (
@@ -242,48 +366,50 @@ export function FadeToColorTheater(props: Props) {
                   </button>
                 )}
               </p>
-              {picking && state && (
-                <FinalPick
-                  options={state.options}
-                  guessedIds={guessedFilmIds(state)}
-                  disabled={pending}
-                  onPick={(film) => void send({ type: "pick", filmId: film.id })}
-                />
+              {fourUp && state ? (
+                <div className={styles.fourSlot}>
+                  {stopLive && <FadingSlate reel={reel} worth={worth} lastReel={reel === LEVEL_COUNT} missed={missed} />}
+                  <FourPick
+                    options={state.options}
+                    guessed={guessed}
+                    worth={worth}
+                    disabled={pending}
+                    live={stopLive}
+                    fill={firstArt?.bands || null}
+                    resolve={resolve && { filmId: resolve.filmId, result: resolve.result, leaving: resolve.stage === "leaving" }}
+                    onPick={(film) => void pick(film)}
+                    onDone={() => setResolve((r) => (r && r.stage === "landed" ? { ...r, stage: "held" } : r))}
+                  />
+                </div>
+              ) : (
+                playing &&
+                state && (
+                  <Slate
+                    disabled={pending}
+                    excludeIds={guessedFilmIds(state)}
+                    reel={attempt}
+                    lastReel={turns.length === MAX_GUESSES - 1}
+                    stake={pickWorth(attempt)}
+                    stakeReady={stakeReel === attempt}
+                    onGuess={(film: FilmSearchHit) => send({ type: "guess", filmId: film.id })}
+                    onSkip={() => void send({ type: "skip" })}
+                    onStop={() => void send({ type: "stop" })}
+                  />
+                )
               )}
-              {playing && !picking && (
-                <Slate
-                  disabled={pending}
-                  excludeIds={state ? guessedFilmIds(state) : []}
-                  lastReel={turns.length === MAX_GUESSES - 1}
-                  onGuess={(film: FilmSearchHit) => send({ type: "guess", filmId: film.id })}
-                  onSkip={() => void send({ type: "skip" })}
-                />
+              {!fourUp && (
+                <p className={styles.whisper} data-show={whisper ? "" : undefined} aria-hidden>
+                  {whisper ?? " "}
+                </p>
               )}
-              <p className={styles.whisper} data-show={whisper ? "" : undefined} aria-hidden>
-                {whisper ?? " "}
-              </p>
             </>
           )}
 
-          {finished && reveal && view?.result && (
-            <>
-              <ContactStrip thumbs={levels.map((l) => art.get(l.id)?.thumb)} showing={showing} current={null} onPick={lookAt} />
-              {/* Inert until the last reel has unreeled and the card has come up. */}
-              <div className={styles.creditsWrap} data-show={creditsReady || undefined} inert={!creditsReady}>
-                <Credits
-                  film={reveal.film}
-                  won={status === "won"}
-                  pickedIt={pickedIt}
-                  gaveUp={quit}
-                  attempts={turns.length}
-                  result={view.result}
-                  fill={firstArt?.bands || null}
-                  date={date}
-                  friends={friends}
-                  viewerId={viewerId}
-                />
-              </div>
-            </>
+          {ending && reveal && view?.result && state && status && (
+            // Inert until the last reel has unreeled and the card has come up.
+            <div className={styles.creditsWrap} data-show={creditsReady || undefined} inert={!creditsReady}>
+              <Credits film={reveal.film} state={state} status={status} result={view.result} fill={firstArt?.bands || null} date={date} friends={friends} viewerId={viewerId} />
+            </div>
           )}
 
           {(error ?? notice) && (
