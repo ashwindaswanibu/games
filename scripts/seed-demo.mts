@@ -10,12 +10,21 @@
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --scenario B
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --scenario A --at now
  *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --clean
+ *   npx tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.mts --clean --adopt-untagged
  *
  * `--at HH:MM` (New York time today) or `--at now` moves the scenario's clock; every timestamp keeps
  * its distance from it (the presence windows are relative). Default: the scenario's own time. View
  * it with the home's `?qa_t=HH:MM` so the page's clock agrees.
  *
- * What it writes (every account is `demo_`-prefixed; anything else is refused):
+ * Whose accounts it touches: only the ones it created. Each is tagged at creation in its auth
+ * `app_metadata` (`seed: "home-demo"`, writable by the admin API only, never by the user), and a
+ * `demo_` username alone proves nothing (anyone can sign up as demo_jess on a shared local
+ * database): an existing account without the tag is refused before anything is written, and
+ * `--clean` skips it with a warning. Accounts from before the tag are adopted only on purpose:
+ * `--adopt-untagged` treats untagged `demo_` accounts of the cast as the seed's own for that run
+ * (a seed run tags them; `--clean` removes them).
+ *
+ * What it writes (every account is `demo_`-prefixed and tagged; anything else is refused):
  *  - Six password accounts on the `.invalid` domain: demo_priya, demo_marco, demo_jess, demo_dev,
  *    demo_sam, demo_ashwin (admin). demo_jess and demo_ashwin are the viewers; they share one
  *    password, kept in .env.local as HOME_DEMO_PASSWORD (generated once, never printed). Passwords
@@ -46,6 +55,8 @@ import { db } from "@/server/supabase/admin";
 import { isLocalSupabase, supabaseEnv } from "./content/lib/env.mjs";
 
 const PREFIX = "demo_";
+/** The tag on every account this script creates (auth `app_metadata`, admin-writable only). */
+const SEED_TAG = "home-demo";
 /** Same synthetic domain as `emailForUsername` in src/server/auth.ts (password accounts). */
 const PASSWORD_ACCOUNT_DOMAIN = "users.daily.invalid";
 const ENV_FILE = new URL("../.env.local", import.meta.url);
@@ -57,6 +68,7 @@ const { values: args } = parseArgs({
     scenario: { type: "string" },
     at: { type: "string" },
     clean: { type: "boolean", default: false },
+    "adopt-untagged": { type: "boolean", default: false },
   },
   strict: true,
 });
@@ -416,6 +428,29 @@ function assertDemo(username: string): void {
 
 const emailFor = (username: string) => `${username}@${PASSWORD_ACCOUNT_DOMAIN}`;
 
+/** The account was created by this script (its auth user carries the seed's tag). */
+async function isSeedAccount(id: string): Promise<boolean> {
+  const { data, error } = await db().auth.admin.getUserById(id);
+  if (error || !data.user) throw new Error(`Failed to read auth user ${id}: ${error?.message ?? "not found"}`);
+  return data.user.app_metadata?.seed === SEED_TAG;
+}
+
+/**
+ * An existing `demo_` account may be written only if this script created it, or the developer
+ * adopts untagged ones on purpose (`--adopt-untagged`, which tags it). Called before any write.
+ */
+async function assertSeedAccount(id: string, username: string): Promise<void> {
+  if (await isSeedAccount(id)) return;
+  if (!args["adopt-untagged"]) {
+    throw new Error(
+      `Refusing to reuse @${username}: it exists but wasn't created by seed-demo; rename it or delete it yourself. ` +
+        `(Demo accounts made before seed-demo tagged its own: run --clean --adopt-untagged once.)`,
+    );
+  }
+  const { error } = await db().auth.admin.updateUserById(id, { app_metadata: { seed: SEED_TAG } });
+  if (error) throw new Error(`Failed to tag ${username} as a seed account: ${error.message}`);
+}
+
 async function findAuthUserId(email: string): Promise<string | null> {
   for (let page = 1; ; page++) {
     const { data, error } = await db().auth.admin.listUsers({ page, perPage: 200 });
@@ -444,12 +479,14 @@ async function ensureAccount(player: DemoPlayer, password: string | null): Promi
   if (error) throw new Error(`Failed to look up ${player.username}: ${error.message}`);
 
   let id = existing?.id ?? (await findAuthUserId(email));
+  if (id) await assertSeedAccount(id, player.username);
   if (!id) {
     const { data, error: createError } = await db().auth.admin.createUser({
       email,
       password: password ?? randomBytes(24).toString("base64url"),
       email_confirm: true,
       user_metadata: { username: player.username },
+      app_metadata: { seed: SEED_TAG },
     });
     if (createError || !data.user) throw new Error(`Failed to create ${player.username}: ${createError?.message}`);
     id = data.user.id;
@@ -488,11 +525,19 @@ function viewerPassword(): { password: string; isNew: boolean } {
   return { password, isNew: true };
 }
 
+/** The `demo_` profiles this script created (with `--adopt-untagged`, untagged ones too); the rest are named and left alone. */
 async function demoProfiles(): Promise<{ id: string; username: string }[]> {
   const { data, error } = await db().from("profiles").select("id, username").like("username", `${PREFIX.replace("_", "\\_")}%`);
   if (error) throw new Error(`Failed to list demo profiles: ${error.message}`);
-  for (const p of data) assertDemo(p.username);
-  return data;
+  const ours: { id: string; username: string }[] = [];
+  const skipped: string[] = [];
+  for (const p of data) {
+    assertDemo(p.username);
+    if (args["adopt-untagged"] || (await isSeedAccount(p.id))) ours.push(p);
+    else skipped.push(`@${p.username}`);
+  }
+  if (skipped.length > 0) console.warn(`Leaving ${skipped.join(", ")} alone: not created by seed-demo (--adopt-untagged removes them too).`);
+  return ours;
 }
 
 async function deletePlays(userIds: readonly string[]): Promise<number> {
@@ -516,10 +561,13 @@ async function clean(): Promise<void> {
   }
   for (const player of CAST) {
     const orphan = await findAuthUserId(emailFor(player.username));
-    if (orphan) {
-      const { error } = await db().auth.admin.deleteUser(orphan);
-      if (error) throw new Error(`Failed to delete ${player.username}: ${error.message}`);
+    if (!orphan) continue;
+    if (!args["adopt-untagged"] && !(await isSeedAccount(orphan))) {
+      console.warn(`Leaving the auth user for ${player.username} alone: not created by seed-demo.`);
+      continue;
     }
+    const { error } = await db().auth.admin.deleteUser(orphan);
+    if (error) throw new Error(`Failed to delete ${player.username}: ${error.message}`);
   }
   console.log(`Removed ${profiles.length} demo accounts and ${plays} plays.`);
 }
