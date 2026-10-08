@@ -395,7 +395,7 @@ async function playFrameByFrame(ctx: Ctx): Promise<void> {
   report.equal("the puzzle has six stored frames", (await assetIdsFor(ctx.db, frameByFrame.id, ctx.date)).size, FRAME_COUNT);
 
   await openAndStart(ctx, frameByFrame, loaded, secrets);
-  report.check("frame 1 is on screen", await assetOnScreen(page, frames[0]!));
+  report.check("frame 1 is on screen", await waitForAsset(page, frames[0]!).then(() => true, () => false));
   await checkAssetAccess(ctx, "frame 1", { shown: [frames[0]], hidden: frames.slice(1) });
   const signedOut = await assetStatus(ctx, frames[0], false);
   report.equal("signed out, even an earned frame needs sign-in (401)", signedOut.status, 401);
@@ -670,14 +670,7 @@ async function playFadeToColorWinKeySkipped(ctx: Ctx): Promise<void> {
   await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the win, skipped with a key");
 }
 
-/** Whether a loaded picture of asset `id` is on the page (images are object URLs; each carries its asset id). */
-function assetOnScreen(page: Page, id: string): Promise<boolean> {
-  return page.evaluate(
-    (asset) => [...document.querySelectorAll<HTMLImageElement>("img[data-asset]")].some((img) => img.dataset.asset === asset && img.complete && img.naturalWidth > 0),
-    id,
-  );
-}
-
+/** Waits until a loaded picture of asset `id` is on the page (images are object URLs; each carries its asset id). */
 async function waitForAsset(page: Page, id: string): Promise<void> {
   await page.waitForFunction(
     (asset) => [...document.querySelectorAll<HTMLImageElement>("img[data-asset]")].some((img) => img.dataset.asset === asset && img.complete && img.naturalWidth > 0),

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { today } from "@/core/day";
 import type { MoveResponse, PlayView } from "@/core/view";
 import { canPlay, getGame } from "@/games/registry";
-import { requireProfile } from "@/server/auth";
+import { requireProfile, requireUser } from "@/server/auth";
 import { applyMove, startPlay } from "@/server/plays";
 import { takeRateLimit } from "@/server/rate-limit";
 import { PuzzleUnavailableError } from "@/server/puzzles";
@@ -23,10 +23,11 @@ const TOO_FAST = "Slow down a little and try again.";
 
 /** The caller and the game, plus whether they're within the moves rate limit. */
 async function authorize(gameId: string) {
-  const profile = await requireProfile();
+  // The session is checked locally (a signed token), so the profile and the rate limit can be read at once.
+  const user = await requireUser();
+  const [profile, withinLimit] = await Promise.all([requireProfile(), takeRateLimit(user.id, "moves")]);
   const game = getGame(gameId);
   if (!game || !canPlay(game, profile.is_admin)) notFound();
-  const withinLimit = await takeRateLimit(profile.id, "moves");
   return { profile, game, withinLimit };
 }
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import { cache } from "react";
 import type { PuzzleDate } from "@/core/day";
 import type { AnyGame } from "@/core/game";
 import { createRng, type RngSeed } from "@/core/random";
@@ -45,9 +46,10 @@ async function selectPuzzle(game: AnyGame, date: PuzzleDate): Promise<LoadedPuzz
 /**
  * The puzzle for a game on a date. Stored puzzles always win (that's how curated puzzles and
  * past days stay stable across code changes); otherwise it is generated and persisted. Concurrent
- * first requests are safe: generation is deterministic and the insert ignores duplicates.
+ * first requests are safe: generation is deterministic and the insert ignores duplicates. Read once
+ * per request (React `cache`): a play page asks for it for the view and for its images.
  */
-export async function getOrCreatePuzzle(game: AnyGame, date: PuzzleDate): Promise<LoadedPuzzle> {
+export const getOrCreatePuzzle = cache(async (game: AnyGame, date: PuzzleDate): Promise<LoadedPuzzle> => {
   const stored = await selectPuzzle(game, date);
   if (stored) return stored;
   if (!game.generate) throw new PuzzleUnavailableError(game.id, date);
@@ -67,4 +69,4 @@ export async function getOrCreatePuzzle(game: AnyGame, date: PuzzleDate): Promis
   const saved = await selectPuzzle(game, date);
   if (!saved) throw new Error(`Puzzle for ${game.id} on ${date} vanished after insert`);
   return saved;
-}
+});

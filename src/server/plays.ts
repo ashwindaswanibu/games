@@ -58,9 +58,12 @@ export async function preloadAssets(game: AnyGame, date: PuzzleDate): Promise<st
 }
 
 export async function getPlayView(userId: string, game: AnyGame, date: PuzzleDate): Promise<PlayView | null> {
+  // Both at once: the puzzle is needed whenever there's a play (and by a start screen's images).
+  const puzzle = getOrCreatePuzzle(game, date);
+  puzzle.catch(() => {}); // without a play, a missing puzzle is only the start screen's problem
   const row = await loadPlay(userId, game.id, date);
   if (!row) return null;
-  return toView(game, row, await getOrCreatePuzzle(game, date));
+  return toView(game, row, await puzzle);
 }
 
 /** Idempotent: starting a play that already exists returns it unchanged. */
