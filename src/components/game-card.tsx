@@ -11,6 +11,7 @@ export function GameCard({ game, play, finishedCount }: { game: AnyGame; play?: 
   return (
     <Link
       href={`/play/${game.id}`}
+      prefetch={true}
       style={{ "--accent": game.accent } as CSSProperties}
       className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border bg-surface p-4 transition hover:border-accent active:scale-[0.99]"
     >

@@ -45,7 +45,7 @@ export async function PlayScreen({ gameId, children }: { gameId: string; childre
   return (
     <div className="grid gap-6" style={{ "--accent": game.accent } as CSSProperties}>
       <header className="flex items-center gap-3">
-        <Link href="/" aria-label="Back to today" className="-ml-2 rounded-full p-2 text-muted hover:text-fg">
+        <Link href="/" prefetch={true} aria-label="Back to today" className="-ml-2 rounded-full p-2 text-muted hover:text-fg">
           <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>

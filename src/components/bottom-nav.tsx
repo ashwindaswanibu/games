@@ -24,6 +24,7 @@ export function BottomNav({ username }: { username: string }) {
           <li key={item.href} className="flex-1">
             <Link
               href={item.href}
+              prefetch={true}
               aria-current={item.active ? "page" : undefined}
               className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
                 item.active ? "text-fg" : "text-muted hover:text-fg"

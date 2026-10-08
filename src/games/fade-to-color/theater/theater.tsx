@@ -363,7 +363,7 @@ export function FadeToColorTheater(props: Props) {
       </div>
 
       <header className={styles.top}>
-        <Link href="/" className={styles.back} aria-label="Back to today's games">
+        <Link href="/" prefetch={true} className={styles.back} aria-label="Back to today's games">
           <svg viewBox="0 0 16 16" aria-hidden>
             <path d="M10 3L5 8l5 5" />
           </svg>

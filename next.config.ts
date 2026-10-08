@@ -16,6 +16,13 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // Keep pages the player has seen (or that were loaded ahead, below) in the browser for a while,
+    // so going back to Today or the leaderboard is instant. Starting or finishing a game calls
+    // refresh() (src/app/_play/actions.ts), which drops these copies, so Today never shows a stale
+    // result. Loaded ahead: the bottom nav, the game cards and "back to today" (prefetch={true}).
+    staleTimes: { dynamic: 60, static: 300 },
+  },
   // Dev only: let phones on the same Wi-Fi open the dev server via the laptop's LAN IP.
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*"],
   async headers() {

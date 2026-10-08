@@ -41,8 +41,9 @@ export async function startGame(gameId: string, date: string): Promise<StartResp
 
   try {
     const view = await startPlay(profile.id, game, current);
-    // Already finished (in another tab or on another device): re-render the server parts too.
-    if (view.status !== "in_progress") refresh();
+    // Today's cards change ("Continue", or a result if it was already finished in another tab or
+    // on another device): refresh, which also drops the browser's kept copy of Today (staleTimes).
+    refresh();
     return { ok: true, view };
   } catch (error) {
     if (error instanceof PuzzleUnavailableError) return { ok: false, message: "Today's puzzle isn't ready yet. Check back soon." };
