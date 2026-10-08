@@ -134,7 +134,22 @@ where films stop being something a friend would guess; 500 would give ~76,000 fi
 **Cast and billing** (`imdbCastToKeep`, `mergeCast`). IMDb's billed cast (actors and actresses in
 `title.principals`, up to 10 a film; "self" and archive footage are left out, so documentary
 subjects aren't lead actors): the first 4 always, places 5–10 when the person has a Wikipedia
-article. Plus Wikidata's cast list (P161). `billing` (0 = top billed) is IMDb's order first, then
+article. Plus Wikidata's cast list (P161), which has no categories, so three rules hold it to the
+same idea of cast, someone who plays a role in the film (`castToKeep`): anyone IMDb lists in the
+film's archive footage or archive sound is out from both sources (IMDb often lists them as an actor
+too: Alan Arkin in Terror in the Aisles); a documentary's or concert film's Wikidata cast is out
+unless IMDb lists them as an actor (`castAreSubjects`, by IMDb's Documentary genre when IMDb has
+genres: Wikidata's lists carry stray "documentary film" statements, Once Upon a Time in America);
+and so is Wikidata's cast that IMDb doesn't list as an actor, in a film released more than 2 years
+after they died (Wikidata's date of death: John Lennon in Forrest Gump, Lionel Barrymore on a
+television in Home Alone). The year is the earlier of IMDb's and Wikidata's (a shelved film's
+release doesn't count), and a film whose IMDb cast has someone who died that long before is a
+delayed release the rule leaves alone (The Other Side of the Wind). On the 2026-10-07 data: 455,
+5,315 and 897 credits; 726 more films have no cast (documentaries, mostly). Each was a Degrees
+link between people who never shared a film: 4 of 60 days the generator planned before had par 2
+only through one (Fred Astaire in Billy Elliot, Judy Garland in P.S. I Love You, Cary Grant in
+Terror in the Aisles, the real Chaplin in Chaplin). Wikidata errors these rules can't see stay
+(Grace Kelly in The Courtship of Eddie's Father, 1963). `billing` (0 = top billed) is IMDb's order first, then
 the film's stored order (for films imported before IMDb, Wikidata's credited order), then Wikidata
 cast with no known order (no billing). At most 30 credits; over that, the least known unordered
 ones go. People are Wikidata's (English label, else the language-neutral one, else IMDb's name;
@@ -168,14 +183,18 @@ snapshot writes nothing.
   holds it. Nothing is merged or moved: when the two ids point at two stored rows, the Wikidata
   match wins and the other row is left alone (`planCatalogWrites`, property-tested).
 - Films and people are never deleted. A credit no source lists any more is removed, except one a
-  stored Degrees chain uses (solutions and players' chains replay).
+  stored Degrees chain uses: players' chains, and the solutions of days someone played, of
+  tomorrow and before (tomorrow can go live before the re-par runs), and of DEV FIXTURE days (they
+  replay). A solution of a later day that nobody has played doesn't keep its credits: `degrees --repar-unplayed` gives that day the chain the
+  catalog has now (and catalog-check warns until it has).
 - Triggers refuse any update that changes a film's or person's id.
 - Before writing, apply saves every film's and person's ids to
   `<cache-dir>/baselines/catalog-ids-<time>.json`; afterwards it checks that every one still exists
   with the same non-empty Wikidata, IMDb and TMDB ids, that every catalog id a stored puzzle or play
   references exists, and that every link of a stored Degrees solution is still a credit. Any
-  failure exits non-zero. It also warns about unplayed Degrees days whose par is now stale and
-  about stored puzzles or plays that reference a film now hidden as adult. The same checks run
+  failure exits non-zero. It also warns about unplayed Degrees days whose par is now stale or
+  whose solution lost a credit, and about stored puzzles or plays that reference a film now hidden
+  as adult. The same checks run
   read-only with `npm run content:movies:catalog-check [-- --baseline <file>]`.
 - A run that would remove more than 20% of the stored credits of the films it covers stops (a
   source was probably incomplete); `--allow-mass-removal` overrides.
@@ -342,23 +361,25 @@ must be a real pair of credits.
 **Never overwrites a real puzzle.** A date that already has a `degrees` puzzle is skipped, whoever
 wrote it. Pass `--replace-fixtures` to let real puzzles take over DEV FIXTURE days nobody has played
 (for example after `content:movies:fixtures` filled the coming week). The one rewrite of a curated
-day is `--repar-unplayed` (below), and only for a day nobody has played whose par the catalog made
-stale. To regenerate an unplayed curated day for any other reason, delete that row yourself first.
+day is `--repar-unplayed` (below), and only for a day nobody has played whose par or solution the
+catalog made stale. To regenerate an unplayed curated day for any other reason, delete that row yourself first.
 
 **Stale par after a catalog import** (`--repar-unplayed`). More credits can give a stored day's
 pair a chain shorter than its par (locally, after the 60k-film import: 13 of 29 unplayed days;
-Justin Timberlake and Julie Andrews became co-stars through Shrek the Third). `catalog-check`
-lists such days as warnings. `--repar-unplayed` goes through every stored day from `--from`
+Justin Timberlake and Julie Andrews became co-stars through Shrek the Third). Fewer can take away a
+link of a stored solution of a day still to come (the archive-footage rules above: Eva Green →
+Cary Grant went through Terror in the Aisles). `catalog-check` lists such days as warnings. `--repar-unplayed` goes through every stored day from `--from`
 (default today) on and recomputes the shortest chain over the current credits
 (`reparDecision` in `lib/degrees-graph.mts`, unit-tested):
 
 - a day someone has played is never touched (its results already count against that par);
 - a DEV FIXTURE day is left alone (`--replace-fixtures` replaces those with real puzzles);
-- par still the shortest: kept;
-- shorter but still 2+ links: par and solution rewritten, same start and end (and the names
-  players were shown);
-- the pair are now co-stars: the day is regenerated by the rules above (seeded by its date,
-  `--spacing` respected).
+- par still the shortest, and every link of the stored solution still a credit (`chainIntact`):
+  kept;
+- otherwise, 2 or 3 links: par and solution rewritten, same start and end (and the names players
+  were shown);
+- the pair are now co-stars, or more than 3 links apart: the day is regenerated by the rules above
+  (seeded by its date, `--spacing` respected).
 
 Writes go through the database function `replace_unplayed_puzzle`, which locks the day, refuses
 it if anyone has started it (even a moment ago) or if it changed since it was read, and only then
@@ -670,12 +691,12 @@ and planned days.
 | `http.mts` | `fetchWithRetry` (timeouts, backoff with jitter, `Retry-After`, a descriptive User-Agent), `mapPool`, `chunk` |
 | `imdb.mts` | IMDb's datasets: download when newer, streaming gzip line reader, line parsers, compact `IntTable` |
 | `qlever.mts` | QLever (bulk Wikidata) queries, a streaming RFC 4180 CSV parser, cached results with a fallback |
-| `catalog-model.mts` | Pure catalog rules: which films are in, display title and searchable names, genre and director names, which "part of the series" values are series (`isSeries`, `seriesOfFilm`, `NOT_A_SERIES`), IMDb cast depth, `mergeCast` billing |
+| `catalog-model.mts` | Pure catalog rules: which films are in, display title and searchable names, genre and director names, which "part of the series" values are series (`isSeries`, `seriesOfFilm`, `NOT_A_SERIES`), IMDb cast depth, who is cast (`castToKeep`: no archive footage, documentaries' own people (`castAreSubjects`) or footage of the dead), `mergeCast` billing |
 | `catalog-build.mts` | The build step: sources → snapshot (`buildSnapshot`, `matchWikidataItems`) |
 | `catalog-snapshot.mts` | The snapshot format (zod-validated NDJSON) |
 | `catalog-plan.mts` | Pure apply planning: `planCatalogWrites` (ids never change), `planTitles`, `planCredits` |
 | `catalog-apply.mts` | The apply step: plan against the target, write in batches, check |
-| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits; and two warnings: stale par (`staleDegreesDays` over `chainNeighbourhood`, the credits a shorter chain could use, read without loading the whole graph; hidden films left out) and stored references to films hidden as adult (`hiddenFilms`) |
+| `catalog-check.mts` | The id contract: baseline comparison, references in stored puzzles and plays, Degrees solution credits (`loadStoredReferences`: kept for days played, tomorrow and before; later days can be redone); and three warnings: solutions of days still to come that lost a credit, stale par (`staleDegreesDays` over `chainNeighbourhood`, the credits a shorter chain could use, read without loading the whole graph; hidden films left out) and stored references to films hidden as adult (`hiddenFilms`) |
 | `degrees-graph.mts` | Pure graph code: `buildGraph`, `linkDistances` (BFS), `bestShortestPath`, `actorPool`, `pickPuzzle`, `reparDecision` |
 | `tmdb.mts` | The TMDB client (`tmdbClient`, `fetchFilmStills`, `encodeStill`, `rankBackdrops`) |
 | `stills-cache.mts` | Layout of the stills cache: `readCachedStills`, plus the manifest schema |

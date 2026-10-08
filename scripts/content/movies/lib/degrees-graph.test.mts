@@ -142,34 +142,43 @@ describe("isNonFictionFilm", () => {
 });
 
 describe("reparDecision", () => {
-  const day = { par: 3, shortest: 3, played: false, fixture: false };
+  const day = { par: 3, shortest: 3, intact: true, played: false, fixture: false };
 
   it("never touches a played day, whatever the graph says now", () => {
-    for (const shortest of [1, 2, 3, null]) expect(reparDecision({ ...day, shortest, played: true }, 2)).toEqual({ action: "skip", reason: "played" });
+    for (const shortest of [1, 2, 3, null]) expect(reparDecision({ ...day, shortest, played: true }, 2, 3)).toEqual({ action: "skip", reason: "played" });
   });
 
   it("leaves DEV FIXTURE days to the fixture tooling", () => {
-    expect(reparDecision({ ...day, shortest: 1, fixture: true }, 2)).toEqual({ action: "skip", reason: "fixture" });
+    expect(reparDecision({ ...day, shortest: 1, fixture: true }, 2, 3)).toEqual({ action: "skip", reason: "fixture" });
   });
 
   it("keeps a day whose par is still the shortest chain", () => {
-    expect(reparDecision(day, 2)).toEqual({ action: "keep" });
-    expect(reparDecision({ ...day, par: 2, shortest: 2 }, 2)).toEqual({ action: "keep" });
+    expect(reparDecision(day, 2, 3)).toEqual({ action: "keep" });
+    expect(reparDecision({ ...day, par: 2, shortest: 2 }, 2, 3)).toEqual({ action: "keep" });
   });
 
   it("lowers par (same start and end) when the shorter chain is still long enough", () => {
-    expect(reparDecision({ ...day, shortest: 2 }, 2)).toEqual({ action: "repar", par: 2 });
+    expect(reparDecision({ ...day, shortest: 2 }, 2, 3)).toEqual({ action: "repar", par: 2 });
+  });
+
+  it("gives a day a new solution at the same par when its stored chain lost a credit", () => {
+    expect(reparDecision({ ...day, par: 2, shortest: 2, intact: false }, 2, 3)).toEqual({ action: "repar", par: 2 });
+  });
+
+  it("raises par (same start and end) when the stored chain lost a credit and a longer one is allowed", () => {
+    // Eva Green → Cary Grant went through Terror in the Aisles, where Cary Grant is archive footage.
+    expect(reparDecision({ ...day, par: 2, shortest: 3 }, 2, 3)).toEqual({ action: "repar", par: 3 });
   });
 
   it("regenerates the day when start and end are now closer than any allowed par", () => {
-    expect(reparDecision({ ...day, shortest: 1 }, 2)).toEqual({ action: "regenerate" });
-    expect(reparDecision({ ...day, par: 2, shortest: 1 }, 2)).toEqual({ action: "regenerate" });
-    expect(reparDecision({ ...day, shortest: 0 }, 2)).toEqual({ action: "regenerate" });
+    expect(reparDecision({ ...day, shortest: 1 }, 2, 3)).toEqual({ action: "regenerate" });
+    expect(reparDecision({ ...day, par: 2, shortest: 1 }, 2, 3)).toEqual({ action: "regenerate" });
+    expect(reparDecision({ ...day, shortest: 0 }, 2, 3)).toEqual({ action: "regenerate" });
   });
 
-  it("flags a day whose stored chain no longer exists instead of guessing", () => {
-    expect(reparDecision({ ...day, shortest: null }, 2)).toEqual({ action: "skip", reason: "broken" });
-    expect(reparDecision({ ...day, par: 2, shortest: 3 }, 2)).toEqual({ action: "skip", reason: "broken" });
+  it("regenerates the day when start and end are now further apart than any allowed par", () => {
+    expect(reparDecision({ ...day, shortest: null }, 2, 3)).toEqual({ action: "regenerate" });
+    expect(reparDecision({ ...day, shortest: 4 }, 2, 3)).toEqual({ action: "regenerate" });
   });
 });
 

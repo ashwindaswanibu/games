@@ -131,6 +131,13 @@ export function parsePrincipalLine(line: string): ImdbPrincipal | null {
 /** Principal credits that make someone a cast member: playing a role, not appearing as themselves or in archive footage. */
 export const CAST_CATEGORIES: ReadonlySet<string> = new Set(["actor", "actress"]);
 
+/**
+ * Principal credits for someone seen or heard only in footage from elsewhere (another film, the
+ * news). IMDb often lists the same person as an actor too (Alan Arkin in Terror in the Aisles, a
+ * horror compilation, is both), so these take precedence: see `castToKeep` in `catalog-model.mts`.
+ */
+export const ARCHIVE_CATEGORIES: ReadonlySet<string> = new Set(["archive_footage", "archive_sound"]);
+
 export interface ImdbCrew {
   tconst: number;
   directors: number[];
@@ -153,13 +160,14 @@ export interface ImdbName {
   name: string;
   /** primaryProfession: up to three, e.g. ["music_artist", "actor", "composer"] (not ranked by prominence). */
   professions: string[];
+  deathYear: number | null;
 }
 
 /** name.basics: nconst, primaryName, birthYear, deathYear, primaryProfession, knownForTitles. */
 export function parseNameLine(line: string): ImdbName | null {
-  const [id, name, , , professions] = tsvFields(line);
+  const [id, name, , death, professions] = tsvFields(line);
   const nconst = parseNconst(id);
-  return nconst === null || !name ? null : { nconst, name, professions: professions ? professions.split(",").filter(Boolean) : [] };
+  return nconst === null || !name ? null : { nconst, name, professions: professions ? professions.split(",").filter(Boolean) : [], deathYear: int(death ?? null) };
 }
 
 // ---------------------------------------------------------------------------------------------

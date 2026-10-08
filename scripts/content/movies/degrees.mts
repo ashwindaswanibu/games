@@ -5,7 +5,7 @@
  *   npm run content:movies:degrees -- --from 2026-11-01 --days 7
  *   npm run content:movies:degrees -- --replace-fixtures    also take over DEV FIXTURE days nobody has played
  *   npm run content:movies:degrees -- --dry-run             pick and print, write nothing
- *   npm run content:movies:degrees -- --repar-unplayed      fix stored days the catalog made easier (below)
+ *   npm run content:movies:degrees -- --repar-unplayed      fix stored days a catalog import changed (below)
  *
  * Builds the bipartite actor–film graph from every catalog credit, then for each date picks a
  * start and an end actor among the best-known actors so that the shortest chain between them is
@@ -19,12 +19,14 @@
  * --spacing days (default 45), counting puzzles already stored around the range.
  *
  * `--repar-unplayed` (instead of generating new days): a catalog import that adds credits can give
- * a stored day's pair a chain shorter than its par. For every stored day from --from (default
- * today) on that nobody has played, it recomputes the shortest chain over the current credits;
- * when that is shorter, it rewrites par and the solution (same start and end) if the new par is
- * still at least 2 links, and otherwise (the pair are now co-stars) regenerates the day by the
- * rules above. A played day is never touched: the write goes through `replace_unplayed_puzzle`,
- * which refuses a day with a play (even one started mid-run). DEV FIXTURE days are left alone.
+ * a stored day's pair a chain shorter than its par, and one that drops credits (archive footage)
+ * can take away its stored chain (imports keep the credits of played days' solutions and of
+ * tomorrow's and before, not of later days). For every stored day from --from (default today) on that nobody has
+ * played, it recomputes the shortest chain over the current credits; when that differs from par,
+ * it rewrites par and the solution (same start and end) if the new par is still 2 or 3 links, and
+ * otherwise (the pair are now co-stars, or further apart) regenerates the day by the rules above.
+ * A played day is never touched: the write goes through `replace_unplayed_puzzle`, which refuses a
+ * day with a play (even one started mid-run). DEV FIXTURE days are left alone.
  *
  * A non-local database needs `--allow-remote` to write, or `--allow-remote-read` for a dry run.
  */
@@ -47,6 +49,7 @@ import {
   actorPool,
   bestShortestPath,
   buildGraph,
+  chainIntact,
   isNonFictionFilm,
   linkDistances,
   pickPuzzle,
@@ -265,8 +268,8 @@ async function generateRange(db: ContentDb, gen: Generator, dates: readonly Puzz
 
 /** `--repar-unplayed`: every stored day from `from` on, against today's credits (see the header). */
 async function reparUnplayed(db: ContentDb, gen: Generator, from: PuzzleDate, dryRun: boolean): Promise<{ written: number; failures: number }> {
-  const rows = await selectAllPages<{ puzzle_date: string; payload: Json }>((first, last) =>
-    db.from("puzzles").select("puzzle_date, payload").eq("game_id", GAME_ID).gte("puzzle_date", from).order("puzzle_date").range(first, last),
+  const rows = await selectAllPages<{ puzzle_date: string; payload: Json; solution: Json }>((first, last) =>
+    db.from("puzzles").select("puzzle_date, payload, solution").eq("game_id", GAME_ID).gte("puzzle_date", from).order("puzzle_date").range(first, last),
   );
   const plays = await selectAllPages<{ puzzle_date: string; user_id: string }>((first, last) =>
     db.from("plays").select("puzzle_date, user_id").eq("game_id", GAME_ID).gte("puzzle_date", from).order("puzzle_date").order("user_id").range(first, last),
@@ -288,23 +291,20 @@ async function reparUnplayed(db: ContentDb, gen: Generator, from: PuzzleDate, dr
       continue;
     }
     const { start, end, par } = parsed.data;
-    const shortest = linkDistances(gen.graph, start.id, par).get(end.id) ?? null;
-    const decision = reparDecision({ par, shortest, played: played.has(date), fixture: isFixturePayload(row.payload) }, DEGREES_MIN_PAR);
+    const shortest = linkDistances(gen.graph, start.id, DEGREES_MAX_PAR).get(end.id) ?? null;
+    const stored = degreesSolutionSchema.safeParse(row.solution);
+    const intact = stored.success && chainIntact(gen.graph, start.id, stored.data.path);
+    const decision = reparDecision({ par, shortest, intact, played: played.has(date), fixture: isFixturePayload(row.payload) }, DEGREES_MIN_PAR, DEGREES_MAX_PAR);
     const pair = `${start.name} → ${end.name}`;
     if (decision.action === "keep") {
       counts.kept++;
       console.log(`· ${date} ${pair}: par ${par} is still the shortest chain`);
       continue;
     }
+    const now = shortest === null ? `no chain within ${DEGREES_MAX_PAR} links` : `${shortest} link${shortest === 1 ? "" : "s"}`;
     if (decision.action === "skip") {
-      const now = shortest === null ? `no chain within ${par} links` : `${shortest} link${shortest === 1 ? "" : "s"} now`;
-      if (decision.reason === "broken") {
-        failures++;
-        console.error(`✗ ${date} ${pair}: par ${par}, but ${now}. A credit of the stored solution is gone; run content:movies:catalog-check.`);
-      } else {
-        counts[decision.reason === "played" ? "played" : "fixtures"]++;
-        console.log(`· ${date} ${pair}: par ${par}, ${now}; ${decision.reason === "played" ? "played, never touched" : "DEV FIXTURE, left alone"}`);
-      }
+      counts[decision.reason === "played" ? "played" : "fixtures"]++;
+      console.log(`· ${date} ${pair}: par ${par}, ${now} now; ${decision.reason === "played" ? "played, never touched" : "DEV FIXTURE, left alone"}`);
       continue;
     }
     try {
@@ -318,8 +318,10 @@ async function reparUnplayed(db: ContentDb, gen: Generator, from: PuzzleDate, dr
       }
       const what =
         decision.action === "repar"
-          ? `par ${par} → ${next.puzzle.par} (a shorter chain exists)`
-          : `${pair} are ${shortest} link${shortest === 1 ? "" : "s"} apart now (par ${par}): regenerated`;
+          ? next.puzzle.par === par
+            ? `par ${par}, a new solution (a credit of the old chain is gone)`
+            : `par ${par} → ${next.puzzle.par} (${next.puzzle.par < par ? "a shorter chain exists" : "a credit of the old chain is gone"})`
+          : `${pair}: ${now} apart now (par ${par}): regenerated`;
       const chain = describeChain(next.puzzle, next.solution);
       if (dryRun) {
         console.log(`✓ ${date} ${what}: ${chain} (dry run)`);

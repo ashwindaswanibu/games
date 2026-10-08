@@ -128,6 +128,20 @@ SELECT ?person ?en ?mul ?links ?nm WHERE {
   OPTIONAL { ?person wdt:P345 ?nm FILTER(STRSTARTS(?nm, "nm")) }
 }`,
   },
+  castDeaths: {
+    name: "cast-deaths",
+    columns: ["person", "died"],
+    // The year each film cast member died (date of death, P570, at least year precision; the latest
+    // when there are several), for the cast rule on footage of the dead (`castToKeep`).
+    sparql: `${PREFIXES}
+SELECT ?person (MAX(YEAR(?date)) AS ?died) WHERE {
+  { SELECT DISTINCT ?person WHERE { ${FILM} ?item wdt:P161 ?person . } }
+  ?person p:P570 ?statement . ?statement psv:P570 ?value ; wikibase:rank ?rank .
+  ?value wikibase:timeValue ?date ; wikibase:timePrecision ?precision .
+  FILTER(?precision >= 9 && ?rank != wikibase:DeprecatedRank)
+}
+GROUP BY ?person`,
+  },
   actors: {
     name: "actors",
     columns: ["person"],
