@@ -5,11 +5,13 @@ import type { HTTPResponse, Page } from "puppeteer-core";
  *
  * It records the body of every document, fetch and XHR response from the app (page loads, RSC
  * payloads, server action results, API calls). At each checkpoint the suite says what is still
- * secret (asset ids not yet in the player's view, answer titles while the play is in progress) and
- * the watch checks both the live page HTML and every response received since the last checkpoint.
+ * secret (the keys of sealed images not yet in the player's view, answer titles while the play is in
+ * progress) and the watch checks both the live page HTML and every response received since the last
+ * checkpoint. Image ids themselves are not secret: a view lists every image of its puzzle, sealed,
+ * for preloading (see src/core/assets.ts); only a key opens one.
  *
- * Catalog search responses are the player's own searches, so they are checked for asset ids but not
- * for titles (typing the answer into the search box shows the answer, by design).
+ * Catalog search responses are the player's own searches, so they are checked for keys but not for
+ * titles (typing the answer into the search box shows the answer, by design).
  */
 
 interface Captured {
@@ -20,14 +22,15 @@ interface Captured {
 }
 
 export interface Secrets {
-  /** Asset ids the player's view doesn't contain yet. */
-  assetIds: Iterable<string>;
+  /** Keys of the sealed images the player's view doesn't contain yet. */
+  assetKeys: Iterable<string>;
   /**
-   * Positive control: asset ids the player has earned. Each must have turned up in something the
-   * watch scanned (the page HTML or a response, at this checkpoint or an earlier one). If one
-   * hasn't, the watch isn't seeing the channel ids arrive on, and a clean result would mean nothing.
+   * Positive control: keys of the images the player has earned. Each must have turned up in
+   * something the watch scanned (the page HTML or a response, at this checkpoint or an earlier
+   * one). If one hasn't, the watch isn't seeing the channel keys arrive on, and a clean result would
+   * mean nothing.
    */
-  earnedAssetIds?: Iterable<string>;
+  earnedAssetKeys?: Iterable<string>;
   /** Strings that would give the answer away (titles, names). Short ones are skipped as too ambiguous. */
   texts?: Iterable<string>;
 }
@@ -49,7 +52,7 @@ function htmlEscaped(text: string): string {
 export class SpoilerWatch {
   private pending: Promise<Captured | null>[] = [];
   private readonly unreadable: string[] = [];
-  /** Earned ids found in scanned material so far (for the positive control). */
+  /** Earned keys found in scanned material so far (for the positive control). */
   private readonly seen = new Set<string>();
 
   constructor(
@@ -67,7 +70,9 @@ export class SpoilerWatch {
     if (!["document", "fetch", "xhr"].includes(response.request().resourceType())) return;
     const status = response.status();
     if (status >= 300 && status < 400) return; // redirects have no body
-    if ((response.headers()["content-type"] ?? "").startsWith("image/")) return;
+    const type = response.headers()["content-type"] ?? "";
+    // Images, and sealed images (ciphertext, see src/app/api/assets/[id]/sealed/route.ts).
+    if (type.startsWith("image/") || type.startsWith("application/octet-stream")) return;
     this.pending.push(
       response.text().then(
         (body) => ({ path, body, search: path.startsWith("/api/catalog/") }),
@@ -91,16 +96,15 @@ export class SpoilerWatch {
   async checkpoint(page: Page, secrets: Secrets): Promise<{ leaks: Leak[]; unseen: string[] }> {
     const responses = (await Promise.all(this.pending.splice(0))).filter((r): r is Captured => r !== null);
     const html = await page.content();
-    const ids = [...secrets.assetIds].map((id) => id.toLowerCase());
+    // Keys are base64url: case matters.
+    const keys = [...secrets.assetKeys];
     const texts = [...(secrets.texts ?? [])].filter((text) => text.length >= MIN_SECRET_TEXT);
-
-    const earned = [...(secrets.earnedAssetIds ?? [])].map((id) => id.toLowerCase());
+    const earned = [...(secrets.earnedAssetKeys ?? [])];
 
     const leaks: Leak[] = [];
     const scan = (where: string, body: string, checkTexts: boolean) => {
-      const lower = body.toLowerCase();
-      for (const id of ids) if (lower.includes(id)) leaks.push({ where, secret: `asset ${id}` });
-      for (const id of earned) if (lower.includes(id)) this.seen.add(id);
+      for (const key of keys) if (body.includes(key)) leaks.push({ where, secret: `key ${key.slice(0, 8)}…` });
+      for (const key of earned) if (body.includes(key)) this.seen.add(key);
       if (!checkTexts) return;
       for (const text of texts) {
         if (body.includes(text) || body.includes(htmlEscaped(text)) || body.includes(JSON.stringify(text).slice(1, -1))) {
@@ -110,6 +114,6 @@ export class SpoilerWatch {
     };
     scan("page HTML", html, true);
     for (const response of responses) scan(`response ${response.path}`, response.body, !response.search);
-    return { leaks, unseen: earned.filter((id) => !this.seen.has(id)) };
+    return { leaks, unseen: earned.filter((key) => !this.seen.has(key)).map((key) => `${key.slice(0, 8)}…`) };
   }
 }

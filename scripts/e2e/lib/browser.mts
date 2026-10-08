@@ -80,7 +80,10 @@ export async function clickButton(page: Page, text: TextMatch): Promise<void> {
     m.pattern,
     m.flags,
   );
-  await (handle.asElement() as ElementHandle<HTMLButtonElement>).click();
+  const button = handle.asElement() as ElementHandle<HTMLButtonElement>;
+  // To the middle of the screen first: "if needed" scrolling can leave it under the fixed bottom nav.
+  await button.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await button.click();
 }
 
 /** Waits until some element matching `selector` has exactly this (normalized) text. */

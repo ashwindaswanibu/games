@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { PuzzleDate } from "@/core/day";
 import type { PlayView } from "@/core/view";
+import { receiveSealed } from "@/lib/sealed-assets";
 import { startGame, submitMove } from "./actions";
 
 export type SessionResult = { ok: true } | { ok: false; message: string };
@@ -13,9 +14,14 @@ export type SessionResult = { ok: true } | { ok: false; message: string };
  *
  * `notice` carries platform-level problems (connection, rate limit, the day rolling over); a move
  * the game itself rejects is returned to the caller instead, for the game's UI to show.
+ *
+ * Every view's sealed images go to `receiveSealed` as it arrives (during render, before any image
+ * asks for them; it's idempotent), and `preload` (the puzzle's images, for the start screen, which
+ * has no view yet) starts downloading at once.
  */
-export function useGameSession({ gameId, date, initialView }: { gameId: string; date: PuzzleDate; initialView: PlayView | null }) {
+export function useGameSession({ gameId, date, initialView, preload = [] }: { gameId: string; date: PuzzleDate; initialView: PlayView | null; preload?: string[] }) {
   const [view, setView] = useState(initialView);
+  receiveSealed(view?.sealed ?? { preload, keys: {} });
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 

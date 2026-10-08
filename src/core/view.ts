@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { SealedAssets } from "./assets";
 import type { PuzzleDate } from "./day";
 import type { AnyGame, FriendDetail, MoveOf, Outcome, PuzzleOf, RevealOf, StateOf } from "./game";
 
@@ -14,6 +15,8 @@ export interface PlayView<Puzzle = unknown, State = unknown, Reveal = unknown> {
   result: { score: number; label: string; shareGrid: string } | null;
   /** Populated only after the play has finished. */
   reveal: Reveal | null;
+  /** The puzzle's images, sealed: all to preload, keys for the ones this view shows (`src/core/assets.ts`). */
+  sealed?: SealedAssets;
 }
 
 export type MoveFailureReason =

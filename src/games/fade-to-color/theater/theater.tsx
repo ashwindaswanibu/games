@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { assetUrl } from "@/core/assets";
+import { useAssetSrc } from "@/lib/sealed-assets";
 import { formatPuzzleDate } from "@/core/day";
 import type { Outcome } from "@/core/game";
 import type { ImmersiveGameUiProps } from "@/core/view";
@@ -171,6 +172,8 @@ export function FadeToColorTheater(props: Props) {
   }
   const lastLevel = reveal?.levels[LEVEL_COUNT - 1];
   const lastArt = lastLevel ? art.get(lastLevel.id) : undefined;
+  // The last reel, opened from its sealed copy as soon as the winning move brings its key.
+  const lastSrc = useAssetSrc(lastLevel?.id ?? null).src;
   // The card unreels onto the last reel only once its picture is decoded and its art is in.
   const [lastDecoded, setLastDecoded] = useState(false);
   const winReady = lastArt !== undefined && (win?.shown === LEVEL_COUNT - 1 || lastDecoded);
@@ -413,7 +416,7 @@ export function FadeToColorTheater(props: Props) {
                 title={win.title}
                 picture={win.picture}
                 fill={firstArt?.graded || null}
-                next={win.shown !== LEVEL_COUNT - 1 && lastLevel ? assetUrl(lastLevel.id) : null}
+                next={win.shown !== LEVEL_COUNT - 1 && lastLevel ? (lastSrc ?? assetUrl(lastLevel.id)) : null}
                 reduced={win.reduced}
                 onNextReady={setLastDecoded}
               />
