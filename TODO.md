@@ -46,6 +46,6 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 ## Infrastructure and cost
 - [ ] **Connect Vercel to the GitHub repo** for auto-deploys (Ashwin grants Vercel's GitHub access).
 - [ ] **Purge old puzzle images nightly**, keeping yesterday (a Supabase scheduled job). Needed before launch: images grow 1–2 MB a day, and the bigger catalog takes ~140 MB of the free tier's 500 MB.
-- [ ] **Serve level images from Cloudflare R2** behind signed links, so there are no egress costs.
+- [x] **Fast puzzle images** (2026-10-08, instead of R2 signed links): images travel sealed (AES-GCM, `/api/assets/[id]/sealed`, CDN-cached; keys only in the play view for earned images), every level downloads as the game opens, an earned one appears the moment its move returns. Film search runs in the browser from a once-a-day film list (~2 MB gzipped, 4 parts), pages stay in the browser for a minute and the nav loads ahead. Still open: R2 only if Postgres image storage gets tight (see the purge item).
 - [ ] **Cache leaderboards** (recompute on finish or every minute) instead of recalculating on every view.
 - [ ] Decide the global scoring rule across buckets (plain sum vs equal-weight buckets vs best-N).
