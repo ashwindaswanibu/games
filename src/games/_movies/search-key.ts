@@ -57,3 +57,32 @@ const APOSTROPHES = /['ʹʻʼʽˈ‘’‛′]/g;
 
 /** Shortest normalized query worth sending to the catalog ("e." normalizes to "e", too short). */
 export const CATALOG_MIN_QUERY_KEY = 2;
+
+const SEQUEL_WORDS = new Set(["part", "pt", "chapter", "vol", "volume", "episode"]);
+const ROMAN: Readonly<Record<string, string>> = {
+  i: "1", ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7", viii: "8", ix: "9", x: "10",
+  xi: "11", xii: "12", xiii: "13", xiv: "14", xv: "15", xvi: "16", xvii: "17", xviii: "18", xix: "19", xx: "20",
+};
+const SPELLED: Readonly<Record<string, string>> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9", ten: "10" };
+
+/**
+ * A search key with sequel numbering as digits, the same as the SQL `catalog_number_key`: "the
+ * godfather part ii" → "the godfather 2", "kill bill vol 1" → "kill bill 1", "rocky ii" →
+ * "rocky 2". Roman numerals count when they are two letters or more, or follow "part", "vol" and
+ * the like (which then drop out); spelled numbers only after those words. Pure.
+ */
+export function catalogNumberKey(key: string): string {
+  const words = key.split(" ");
+  if (!words.some((word) => SEQUEL_WORDS.has(word) || /^[ivx]{2,5}$/.test(word))) return key;
+  const numbers = words.map((word, i) => {
+    const afterSequelWord = i > 0 && SEQUEL_WORDS.has(words[i - 1]!);
+    if (/^[0-9]+$/.test(word)) return word;
+    const roman = Object.hasOwn(ROMAN, word) ? ROMAN[word]! : null;
+    if (roman !== null && (word.length > 1 || afterSequelWord)) return roman;
+    const spelled = Object.hasOwn(SPELLED, word) ? SPELLED[word]! : null;
+    return spelled !== null && afterSequelWord ? spelled : null;
+  });
+  return words
+    .flatMap((word, i) => (SEQUEL_WORDS.has(word) && numbers[i + 1] != null ? [] : [numbers[i] ?? word]))
+    .join(" ");
+}

@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { z } from "zod";
 import { CATALOG_MIN_QUERY_KEY, catalogSearchKey } from "../search-key";
+import { searchFilmsLocally, startFilmIndex } from "./film-index-client";
 
 export type CatalogEndpoint = "/api/catalog/films" | "/api/catalog/people" | "/api/catalog/filmography" | "/api/catalog/cast";
 
@@ -27,6 +28,8 @@ const searchable = (value: string) => catalogSearchKey(value).length >= CATALOG_
 const DEBOUNCE_MS = 160;
 const LIMIT = 8;
 const CACHE_SIZE = 60;
+/** Typo-tolerant matches (the server's) start at 4 characters, as in SQL `search_films`. */
+const TYPO_MIN_KEY = 4;
 
 export type CatalogSearchStatus = "idle" | "loading" | "ready" | "error";
 
@@ -35,6 +38,10 @@ export type CatalogSearchStatus = "idle" | "loading" | "ready" | "error";
  * cancels stale requests, caches recent queries, and supports ↑/↓ to move, Enter to choose, Escape
  * to close (then to clear), Tab to leave. `CatalogCombobox` is the kit's rendering of it; a game
  * with its own look renders it itself.
+ *
+ * Film search (`/api/catalog/films`, unscoped) runs in the browser once the film list has arrived
+ * (`film-index-client.ts`): every keystroke answers at once, and the server is asked only for typo
+ * matches when the list comes up short, which go after the real ones, as on the server.
  */
 export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSearchConfig<Hit>) {
   const { endpoint, scope, responseSchema, onSelect, excludeIds = [], clearOnSelect = true, disabled = false, emptyNote, noun } = config;
@@ -56,14 +63,17 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inflight = useRef<AbortController | null>(null);
   const cache = useRef(new Map<string, Hit[]>());
+  /** Counts searches, so a local answer to an older one is dropped. */
+  const latest = useRef(0);
+  const local = endpoint === "/api/catalog/films" && !scope;
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    if (local) startFilmIndex();
+    return () => {
       clearTimeout(timer.current);
       inflight.current?.abort();
-    },
-    [],
-  );
+    };
+  }, [local]);
 
   const scopeKey = scope ? new URLSearchParams(scope).toString() : "";
   const excluded = new Set(excludeIds);
@@ -76,7 +86,8 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
     setActive(hits.findIndex((h) => !excluded.has(h.id)));
   }
 
-  async function fetchHits(q: string, key: string) {
+  /** The server's hits for `q`; with `first`, the local hits, which stay first (the server adds its typo matches). */
+  async function fetchHits(q: string, key: string, first?: Hit[]) {
     const controller = new AbortController();
     inflight.current = controller;
     try {
@@ -88,18 +99,27 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
       const parsed = responseSchema.safeParse(await response.json());
       if (!parsed.success) throw new Error("Search returned something unexpected. Try again.");
       if (controller.signal.aborted) return;
-      cache.current.set(key, parsed.data.results);
-      if (cache.current.size > CACHE_SIZE) cache.current.delete(cache.current.keys().next().value!);
-      show(parsed.data.results);
+      const ids = new Set(first?.map((hit) => hit.id));
+      const hits = first ? [...first, ...parsed.data.results.filter((hit) => !ids.has(hit.id))].slice(0, LIMIT) : parsed.data.results;
+      remember(key, hits);
+      show(hits);
     } catch (err) {
       if (controller.signal.aborted) return;
+      // The local hits are still right; only the extra typo matches are missing.
+      if (first) return;
       setResults([]);
       setStatus("error");
       setError(err instanceof Error ? err.message : "Search failed.");
     }
   }
 
+  function remember(key: string, hits: Hit[]) {
+    cache.current.set(key, hits);
+    if (cache.current.size > CACHE_SIZE) cache.current.delete(cache.current.keys().next().value!);
+  }
+
   function search(value: string) {
+    const ticket = ++latest.current;
     clearTimeout(timer.current);
     inflight.current?.abort();
     const q = value.trim();
@@ -115,6 +135,22 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
     const cached = cache.current.get(key);
     if (cached) {
       show(cached);
+      return;
+    }
+    if (local) {
+      void searchFilmsLocally(q, LIMIT).then((found) => {
+        if (ticket !== latest.current) return;
+        const parsed = found === null ? null : responseSchema.safeParse({ results: found });
+        if (!parsed?.success) {
+          setStatus("loading");
+          timer.current = setTimeout(() => void fetchHits(q, key), DEBOUNCE_MS);
+          return;
+        }
+        const hits = parsed.data.results;
+        show(hits);
+        if (hits.length < LIMIT && catalogSearchKey(q).length >= TYPO_MIN_KEY) timer.current = setTimeout(() => void fetchHits(q, key, hits), DEBOUNCE_MS);
+        else remember(key, hits);
+      });
       return;
     }
     setStatus("loading");
@@ -138,6 +174,7 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
    * when `clearOnSelect` is false.
    */
   function fill(value: string) {
+    latest.current++;
     clearTimeout(timer.current);
     inflight.current?.abort();
     setQuery(value);
