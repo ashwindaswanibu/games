@@ -87,7 +87,8 @@ async function spoilerCheckpoint(
   secretTexts: readonly string[] = [],
 ): Promise<void> {
   const row = await loadPlay(ctx.db, ctx.userId, game.id, ctx.date);
-  const visible = new Set<string>();
+  // The puzzle's own pictures are shown from the start (the play's opening screen, the home's tile).
+  const visible = new Set<string>(referencedAssetIds(loaded.puzzle));
   if (row) {
     const finished = row.status !== "in_progress";
     const reveal = finished && game.reveal ? game.reveal({ puzzle: loaded.puzzle, solution: loaded.solution }) : null;
@@ -1011,24 +1012,22 @@ async function playFadeToColorRunOut(ctx: Ctx): Promise<void> {
 async function checkToday(ctx: Ctx): Promise<void> {
   const { page, report } = ctx;
   await page.goto(`${ctx.baseUrl}/`, { waitUntil: "networkidle0" });
-  const movies = await page.evaluate(() => {
-    const heading = document.getElementById("bucket-movies");
-    const section = heading?.closest("section");
-    return {
-      heading: (heading?.textContent ?? "").trim(),
-      cards: [...(section?.querySelectorAll<HTMLAnchorElement>('a[href^="/play/"]') ?? [])].map((a) => ({
-        href: a.getAttribute("href"),
-        text: (a.textContent ?? "").replace(/\s+/g, " "),
-      })),
-    };
-  });
-  report.equal("Today has a Movies bucket", movies.heading, "Movies");
+  await page.waitForSelector("[data-ready] a[data-state]");
+  const tiles = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLAnchorElement>("a[data-state]")].map((a) => ({ href: a.getAttribute("href"), state: a.dataset.state, label: a.getAttribute("aria-label") ?? "" })),
+  );
   for (const game of MOVIES_GAMES) {
-    const card = movies.cards.find((c) => c.href === `/play/${game.id}`);
-    report.check(`Movies lists ${game.name}`, card !== undefined && card.text.includes(game.name), movies.cards);
-    report.check(`${game.name} is marked Testing and ready to play`, card !== undefined && card.text.includes("Testing") && card.text.includes("Play"), card?.text);
+    const tile = tiles.find((t) => t.href === `/play/${game.id}`);
+    report.check(`Today has a tile for ${game.name}`, tile !== undefined && tile.label.startsWith(game.name), tiles);
+    report.equal(`${game.name}'s tile is still to play`, tile?.state, "unplayed");
   }
-  report.equal("Movies holds exactly the three Movies games", movies.cards.length, MOVIES_GAMES.length);
+  report.equal("Today holds exactly the three Movies games", tiles.length, MOVIES_GAMES.length);
+  // The tiles show each puzzle's opening picture, never a later one, and never an answer.
+  for (const game of MOVIES_GAMES) {
+    const loaded = await loadPuzzle(ctx.db, game, ctx.date);
+    const answer = (loaded.solution as { answer?: { title?: string } }).answer?.title;
+    await spoilerCheckpoint(ctx, game, loaded, `on Today (${game.name})`, answer ? [answer] : []);
+  }
   await checkNoSidewaysScroll(ctx, "Today");
   await shot(ctx, "today");
 }
