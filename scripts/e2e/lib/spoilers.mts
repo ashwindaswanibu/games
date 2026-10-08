@@ -73,11 +73,15 @@ export class SpoilerWatch {
     const type = response.headers()["content-type"] ?? "";
     // Images, and sealed images (ciphertext, see src/app/api/assets/[id]/sealed/route.ts).
     if (type.startsWith("image/") || type.startsWith("application/octet-stream")) return;
+    const search = path.startsWith("/api/catalog/");
     this.pending.push(
       response.text().then(
-        (body) => ({ path, body, search: path.startsWith("/api/catalog/") }),
+        (body) => ({ path, body, search }),
         (error: unknown) => {
-          this.unreadable.push(`${path} (${error instanceof Error ? error.message : String(error)})`);
+          const message = error instanceof Error ? error.message : String(error);
+          // A search the page cancelled (the player typed on) never reached it, so it can't leak.
+          if (search && message.includes("No data found for resource")) return null;
+          this.unreadable.push(`${path} (${message})`);
           return null;
         },
       ),
