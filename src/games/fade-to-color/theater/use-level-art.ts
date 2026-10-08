@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { assetUrl, type AssetRef } from "@/core/assets";
+import { assetBlob, assetObjectUrl } from "@/lib/sealed-assets";
 import { accentOf, cssTriplet, gradeRgb, litBands, type Rgb } from "../palette";
 
 /** Everything the screen draws from one level, derived once in the browser from the image. */
@@ -129,10 +130,9 @@ function whenIdle<T>(priority: number, work: () => T): Promise<T> {
 }
 
 async function load(ref: AssetRef, priority: number): Promise<LevelArt> {
-  const src = assetUrl(ref.id);
-  const response = await fetch(src);
-  if (!response.ok) throw new Error(`Level ${ref.id} didn't load (${response.status})`);
-  const bitmap = await createImageBitmap(await response.blob(), { resizeWidth: SOURCE.w, resizeHeight: SOURCE.h, resizeQuality: "medium" });
+  // Usually already downloaded (sealed) when the game opened; its key came with this level.
+  const [blob, src] = await Promise.all([assetBlob(ref.id), assetObjectUrl(ref.id)]);
+  const bitmap = await createImageBitmap(blob, { resizeWidth: SOURCE.w, resizeHeight: SOURCE.h, resizeQuality: "medium" });
   try {
     return await whenIdle(priority, () => derive(bitmap, src));
   } finally {

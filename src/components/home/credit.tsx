@@ -101,6 +101,7 @@ export function Credit({
 
   return (
     <Link
+      prefetch={true}
       href={game.href}
       className={styles.credit}
       data-credit={game.id}

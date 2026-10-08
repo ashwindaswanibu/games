@@ -30,13 +30,13 @@ import type { ClueKind, FilmDetails, PersonRef } from "@/games/_movies/schemas";
 import { fadeToColor, LAST_REEL_SCORE, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES, OPTION_COUNT, pickWorth } from "@/games/fade-to-color/logic";
 import { chainScore, degrees, maxLinks } from "@/games/degrees/logic";
 import { FRAME_COUNT, frameByFrame, CLUE_KINDS as FRAME_CLUES } from "@/games/frame-by-frame/logic";
+import { assetKey } from "@/server/asset-seal";
 import type { PlayRow } from "@/server/database.types";
 import {
   clickButton,
   collectPageErrors,
   cookieHeader,
   hasText,
-  imageSrcs,
   launchChrome,
   newPhonePage,
   pageSays,
@@ -76,8 +76,8 @@ interface Ctx {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Checks the spoiler wall at this point of the play: every stored asset not in the player's current
- * view (puzzle, state and, once finished, reveal) is secret, and so are `secretTexts`.
+ * Checks the spoiler wall at this point of the play: the key of every stored image not in the
+ * player's current view (puzzle, state and, once finished, reveal) is secret, and so are `secretTexts`.
  */
 async function spoilerCheckpoint(
   ctx: Ctx,
@@ -96,9 +96,9 @@ async function spoilerCheckpoint(
   const stored = [...(await assetIdsFor(ctx.db, game.id, ctx.date))];
   const hidden = stored.filter((id) => !visible.has(id));
   const earned = stored.filter((id) => visible.has(id));
-  const { leaks, unseen } = await ctx.watch.checkpoint(ctx.page, { assetIds: hidden, texts: secretTexts, earnedAssetIds: earned });
-  ctx.report.check(`no spoilers ${label} (${hidden.length} secret assets, ${secretTexts.length} secret titles)`, leaks.length === 0, leaks);
-  if (earned.length > 0) ctx.report.check(`spoiler scan has seen all ${earned.length} earned assets arrive (positive control) ${label}`, unseen.length === 0, unseen);
+  const { leaks, unseen } = await ctx.watch.checkpoint(ctx.page, { assetKeys: hidden.map(assetKey), texts: secretTexts, earnedAssetKeys: earned.map(assetKey) });
+  ctx.report.check(`no spoilers ${label} (${hidden.length} images still sealed, ${secretTexts.length} secret titles)`, leaks.length === 0, leaks);
+  if (earned.length > 0) ctx.report.check(`spoiler scan has seen the keys of all ${earned.length} earned images arrive (positive control) ${label}`, unseen.length === 0, unseen);
 }
 
 async function assetStatus(ctx: Ctx, id: string, signedIn = true): Promise<{ status: number; type: string }> {
@@ -395,7 +395,7 @@ async function playFrameByFrame(ctx: Ctx): Promise<void> {
   report.equal("the puzzle has six stored frames", (await assetIdsFor(ctx.db, frameByFrame.id, ctx.date)).size, FRAME_COUNT);
 
   await openAndStart(ctx, frameByFrame, loaded, secrets);
-  report.check("frame 1 is on screen", (await imageSrcs(page)).includes(assetUrl(frames[0])));
+  report.check("frame 1 is on screen", await waitForAsset(page, frames[0]!).then(() => true, () => false));
   await checkAssetAccess(ctx, "frame 1", { shown: [frames[0]], hidden: frames.slice(1) });
   const signedOut = await assetStatus(ctx, frames[0], false);
   report.equal("signed out, even an earned frame needs sign-in (401)", signedOut.status, 401);
@@ -408,7 +408,7 @@ async function playFrameByFrame(ctx: Ctx): Promise<void> {
   );
   await checkLogRow(ctx, "Your guesses", 0, { kind: "miss", film: decoy, chips: expectedChips(decoy, answer, FRAME_CLUES) });
   await checkLastGuess(ctx, "frame by frame", decoy, answer, FRAME_CLUES);
-  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(frames[1]));
+  await waitForAsset(page, frames[1]!);
   report.check("the miss reveals frame 2", true);
   await checkAssetAccess(ctx, "frame 2", { shown: frames.slice(0, 2), hidden: frames.slice(2) });
   await spoilerCheckpoint(ctx, frameByFrame, loaded, "after the wrong guess", secrets);
@@ -419,7 +419,7 @@ async function playFrameByFrame(ctx: Ctx): Promise<void> {
   // --- A skip: frame 3. ---
   await playMove(ctx, frameByFrame, 2, () => clickButton(page, { pattern: "Skip to frame 3$" }));
   await checkLogRow(ctx, "Your guesses", 1, { kind: "skip" });
-  await page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(frames[2]));
+  await waitForAsset(page, frames[2]!);
   await checkAssetAccess(ctx, "frame 3", { shown: [frames[2]], hidden: frames.slice(3) });
   await spoilerCheckpoint(ctx, frameByFrame, loaded, "after the skip", secrets);
 
@@ -462,7 +462,7 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
   report.equal("level 1 is the puzzle's only image", puzzle.first.id, levels[0]);
 
   const onScreen = (id: string) =>
-    page.waitForFunction((src) => [...document.images].some((img) => img.getAttribute("src") === src), {}, assetUrl(id));
+    waitForAsset(page, id);
   const status = () => fadeStatus(page);
 
   // --- Before the film: no app chrome, the leader, three rules and "Roll film". ---
@@ -476,6 +476,8 @@ async function playFadeToColor(ctx: Ctx): Promise<void> {
   report.equal("the play starts in progress", started.status, "in_progress");
   await onScreen(levels[0]!);
   report.check("level 1 is on screen", true);
+  const sealed = await page.evaluate(() => new Set(performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.endsWith("/sealed"))).size);
+  report.equal("all ten levels were downloaded sealed as the game opened", sealed, LEVEL_COUNT);
   await page.waitForFunction(() => (document.querySelector("main p")?.textContent ?? "").includes("Reel 1 of 10"));
   report.check("the status line shows the reel and what's left", (await status()).startsWith(`Reel 1 of ${BARCODE_GUESSES} · ${BARCODE_GUESSES} left`), await status());
   await checkAssetAccess(ctx, "level 1", { shown: [levels[0]!], hidden: levels.slice(1) });
@@ -668,16 +670,25 @@ async function playFadeToColorWinKeySkipped(ctx: Ctx): Promise<void> {
   await spoilerCheckpoint(ctx, fadeToColor, loaded, "after the win, skipped with a key");
 }
 
+/** Waits until a loaded picture of asset `id` is on the page (images are object URLs; each carries its asset id). */
+async function waitForAsset(page: Page, id: string): Promise<void> {
+  await page.waitForFunction(
+    (asset) => [...document.querySelectorAll<HTMLImageElement>("img[data-asset]")].some((img) => img.dataset.asset === asset && img.complete && img.naturalWidth > 0),
+    { timeout: WAIT_MS },
+    id,
+  );
+}
+
 /** Looks back at reel `reel` (1-based) from the contact strip; waits until its picture (`id`) is on screen and still. */
 async function lookBackAt(page: Page, reel: number, id: string): Promise<void> {
   await page.click(`ol[aria-label="Reels"] li:nth-child(${reel}) button`);
   await page.waitForFunction(
-    (src) => {
+    (asset) => {
       const img = document.querySelector<HTMLImageElement>('[class*="__screen"] > img');
-      return img !== null && img.getAttribute("src") === src && img.getAnimations().length === 0;
+      return img !== null && img.dataset.asset === asset && img.complete && img.naturalWidth > 0 && img.getAnimations().length === 0;
     },
     { timeout: WAIT_MS },
-    assetUrl(id),
+    id,
   );
 }
 

@@ -12,6 +12,13 @@ import { z } from "zod";
  *   - unlocked during play      → in the solution, copied into the state by `applyMove` when earned
  *   - shown once the play ends  → in the solution, surfaced through `reveal`
  * An id that is only in the solution can never be fetched.
+ *
+ * Images also travel **sealed** (`GET /api/assets/[id]/sealed`): AES-GCM ciphertext anyone may
+ * fetch and every cache may keep, under a key only the server can derive. A play view lists every
+ * image id of its puzzle in `sealed.preload`, so the browser downloads them all as the game opens,
+ * and carries in `sealed.keys` the key of exactly the ids the rule above would serve. Earning a
+ * level then shows it at once: its key comes back with the move. `GET /api/assets/[id]` stays the
+ * fallback for browsers without WebCrypto (plain-http pages).
  */
 
 export const ASSET_MIMES = ["image/webp", "image/jpeg", "image/png", "image/avif"] as const;
@@ -30,6 +37,22 @@ export type AssetRef = z.infer<typeof assetRefSchema>;
 export function assetUrl(id: string): string {
   return `/api/assets/${encodeURIComponent(id)}`;
 }
+
+/** The encrypted copy of an asset; anyone may fetch it, only a key from a play view opens it. */
+export function sealedAssetUrl(id: string): string {
+  return `/api/assets/${encodeURIComponent(id)}/sealed`;
+}
+
+/** A play view's sealed images (see the module comment). Keys are base64url AES-256 keys. */
+export interface SealedAssets {
+  /** Every image id of the puzzle, for downloading sealed ahead of time. */
+  preload: string[];
+  /** Asset id → key, for the ids the view shows. */
+  keys: Record<string, string>;
+}
+
+/** How a sealed asset is laid out: a random 12-byte AES-GCM nonce, then the ciphertext and its 16-byte tag. */
+export const SEALED_NONCE_BYTES = 12;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Views are small JSON documents; this only guards against pathological nesting.

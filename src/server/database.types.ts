@@ -387,6 +387,10 @@ export type Database = {
         Args: { value: string };
         Returns: string;
       };
+      catalog_film_index: {
+        Args: { p_part: number; p_parts: number };
+        Returns: string;
+      };
       catalog_number_key: {
         Args: { key: string };
         Returns: string;

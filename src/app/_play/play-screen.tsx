@@ -5,7 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { formatPuzzleDate, today } from "@/core/day";
 import { canPlay, getGame } from "@/games/registry";
 import { requireProfile } from "@/server/auth";
-import { getFriendsResults, getPlayView } from "@/server/plays";
+import { getFriendsResults, getPlayView, preloadAssets } from "@/server/plays";
 import { FriendsResults, LockedResults } from "./friends-results";
 import { GameHost } from "./game-host";
 import { ImmersiveHost } from "./immersive-host";
@@ -33,18 +33,19 @@ async function loadPlayScreen(gameId: string) {
   const date = today();
   const view = await getPlayView(profile.id, game, date);
   const finished = view !== null && view.status !== "in_progress";
-  const friends = finished ? await getFriendsResults(profile.id, game, date) : null;
-  return { profile, game, date, view, friends };
+  // Before the play starts there's no view to list the puzzle's images, so list them here.
+  const [friends, preload] = await Promise.all([finished ? getFriendsResults(profile.id, game, date) : null, view ? [] : preloadAssets(game, date)]);
+  return { profile, game, date, view, friends, preload };
 }
 
 /** The play screen for `gameId`; `children` is that game's connected UI (see `connectGameUi`). */
 export async function PlayScreen({ gameId, children }: { gameId: string; children: ReactNode }) {
-  const { profile, game, date, view, friends } = await loadPlayScreen(gameId);
+  const { profile, game, date, view, friends, preload } = await loadPlayScreen(gameId);
 
   return (
     <div className="grid gap-6" style={{ "--accent": game.accent } as CSSProperties}>
       <header className="flex items-center gap-3">
-        <Link href="/" aria-label="Back to today" className="-ml-2 rounded-full p-2 text-muted hover:text-fg">
+        <Link href="/" prefetch={true} aria-label="Back to today" className="-ml-2 rounded-full p-2 text-muted hover:text-fg">
           <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -59,7 +60,7 @@ export async function PlayScreen({ gameId, children }: { gameId: string; childre
       </header>
 
       {/* Keyed so client state resets when switching games or when the day rolls over. */}
-      <GameHost key={`${game.id}:${date}`} gameId={game.id} gameName={game.name} emoji={game.emoji} rules={game.rules} date={date} initialView={view}>
+      <GameHost key={`${game.id}:${date}`} gameId={game.id} gameName={game.name} emoji={game.emoji} rules={game.rules} date={date} initialView={view} preload={preload}>
         {children}
       </GameHost>
 
@@ -73,10 +74,10 @@ export async function PlayScreen({ gameId, children }: { gameId: string; childre
  * (`children`, see `connectImmersiveGameUi`). Render it from a route outside the app's chrome.
  */
 export async function ImmersivePlayScreen({ gameId, children }: { gameId: string; children: ReactNode }) {
-  const { profile, game, date, view, friends } = await loadPlayScreen(gameId);
+  const { profile, game, date, view, friends, preload } = await loadPlayScreen(gameId);
   return (
     // Keyed so client state resets when the day rolls over.
-    <ImmersiveHost key={`${game.id}:${date}`} gameId={game.id} date={date} initialView={view} viewerId={profile.id} friends={friends}>
+    <ImmersiveHost key={`${game.id}:${date}`} gameId={game.id} date={date} initialView={view} preload={preload} viewerId={profile.id} friends={friends}>
       {children}
     </ImmersiveHost>
   );

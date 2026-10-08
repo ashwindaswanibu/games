@@ -129,6 +129,8 @@ answer's facts reach it only as clues.
 
 ## Secret images (`puzzle_assets`)
 
+Images reach the browser sealed: every level of the day downloads encrypted as the game opens (`GET /api/assets/[id]/sealed`, cached by the CDN), and a view carries the keys of exactly the images it shows, so an earned level appears the moment its move returns. See `src/core/assets.ts` and `src/lib/sealed-assets.ts`; the authorized route below stays as the fallback.
+
 The table is service-role only (RLS on, no policies). `GET /api/assets/[id]` serves an image
 **only if its id appears in the caller's current play view** of that game and date: the puzzle,
 the state, or the reveal. Unknown and forbidden ids both get a 404. So you decide when an image
@@ -235,7 +237,7 @@ Import everything from `@/games/_movies/ui`. Every component is a typed client c
 | `variant="neutral"` | **Required for color games** (`fade-to-color`): a neutral-gray (R = G = B) colorist's suite, so the surrounding UI doesn't bias how colors read. Kit components inside inherit the variant. |
 | `PuzzleImage` | An asset by ref. Reserves the aspect ratio, shows a loading note and a retry button, and never draws over the picture. |
 | `IrisReveal` | Wrap the image in it, keyed by `revealKey={ref.id}`, to open each new image with a gun-barrel iris. It doesn't animate on first render or under reduced motion. |
-| `FilmSearch` / `PersonSearch` | Autocomplete over `/api/catalog/films` and `/api/catalog/people`: debounced, cancels stale requests, caches results, ARIA combobox with ↑ ↓ Enter Esc. `excludeIds` shows already-used items struck through and unselectable. `placement="above"` for a field low on the screen. A film found by another of its names shows it ("also: K3G"). Spaces and punctuation don't matter ("xmen" finds X-Men), nor how a sequel is numbered ("godfather 2" finds The Godfather Part II). The IMDb credit sits at the dropdown's foot, outside the scrolling hits, so it is always in view. |
+| `FilmSearch` / `PersonSearch` | Autocomplete over `/api/catalog/films` and `/api/catalog/people`: debounced, cancels stale requests, caches results, ARIA combobox with ↑ ↓ Enter Esc. `excludeIds` shows already-used items struck through and unselectable. `placement="above"` for a field low on the screen. A film found by another of its names shows it ("also: K3G"). Spaces and punctuation don't matter ("xmen" finds X-Men), nor how a sequel is numbered ("godfather 2" finds The Godfather Part II). The IMDb credit sits at the dropdown's foot, outside the scrolling hits, so it is always in view. Film search runs in the browser: a worker (`ui/film-index.worker.ts`) downloads the film list once a day (`/api/catalog/films/index`, 4 parts, SQL `catalog_film_index`) and ranks as `search_films` does (`film-index.ts`); the server is asked only for typo matches when the list comes up short, and for everything until the list has arrived. |
 | `RevealStrip` | Stage progress as film frames. Each step has a `status` of `locked`, `current`, `seen`, `missed`, `skipped` or `solved`, shown by glyph and border as well as color. `onSelect` lets the player flip back through revealed stages. `showLabels` prints short stage names. |
 | `ClueChips` | A guess's clues, using arrows and shapes (↑ ↓ = ■ □ ◆ ◇ ● ○ ?) plus words. A long list of shared genres is shortened on the chip ("Shares Epic · Crime drama +1"); screen readers get the full list. |
 | `GuessLog` | Numbered guesses with verdicts and clue chips; takes `FilmGuess` entries or `{ skipped: true }`. `gaveUp` labels a final skip "Gave up". |

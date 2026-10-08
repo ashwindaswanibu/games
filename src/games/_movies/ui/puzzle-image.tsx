@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { assetUrl, type AssetRef } from "@/core/assets";
+import type { AssetRef } from "@/core/assets";
+import { forgetAsset, useAssetSrc } from "@/lib/sealed-assets";
 import { MOVIES_FONT_VARS } from "./fonts";
 import styles from "./movies.module.css";
 import { useMoviesVariant, type MoviesVariant } from "./variant";
@@ -18,17 +19,19 @@ export interface PuzzleImageProps {
 }
 
 /**
- * A puzzle image served by `/api/assets/[id]`. Plain `<img>`: the asset route authorizes with the
- * player's cookies, which the Next image optimizer wouldn't forward. Nothing is ever drawn over the
- * picture; while it loads (or if it fails) a note sits in the empty frame instead.
+ * A puzzle image, opened from its sealed copy (downloaded when the game opened; its key comes with
+ * the view that shows it), else served by `/api/assets/[id]` (see `src/lib/sealed-assets.ts`).
+ * Plain `<img>` on an object URL. Nothing is ever drawn over the picture; while it loads (or if it
+ * fails) a note sits in the empty frame instead.
  */
 export function PuzzleImage({ asset, alt, aspectRatio, variant, className = "" }: PuzzleImageProps) {
   const resolved = useMoviesVariant(variant);
   const [attempt, setAttempt] = useState(0);
+  const opened = useAssetSrc(asset.id, attempt);
+  const src = opened.src;
   // Load state is tracked per source so a new asset (or retry) starts from "loading".
-  const src = attempt === 0 ? assetUrl(asset.id) : `${assetUrl(asset.id)}?retry=${attempt}`;
   const [status, setStatus] = useState<{ src: string; state: "loaded" | "error" } | null>(null);
-  const state = status?.src === src ? status.state : "loading";
+  const state = opened.failed ? "error" : src !== null && status?.src === src ? status.state : "loading";
 
   return (
     <figure
@@ -38,21 +41,24 @@ export function PuzzleImage({ asset, alt, aspectRatio, variant, className = "" }
       className={`${MOVIES_FONT_VARS} ${styles.root} ${styles.frame} ${className}`}
       style={{ aspectRatio: aspectRatio ?? asset.width / asset.height }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- see the component comment */}
-      <img
-        src={src}
-        alt={alt}
-        width={asset.width}
-        height={asset.height}
-        decoding="async"
-        draggable={false}
-        // A cached image can finish before hydration attaches onLoad; catch that case here.
-        ref={(img) => {
-          if (img?.complete && img.naturalWidth > 0 && status?.src !== src) setStatus({ src, state: "loaded" });
-        }}
-        onLoad={() => setStatus({ src, state: "loaded" })}
-        onError={() => setStatus({ src, state: "error" })}
-      />
+      {src !== null && (
+        // eslint-disable-next-line @next/next/no-img-element -- see the component comment
+        <img
+          src={src}
+          data-asset={asset.id}
+          alt={alt}
+          width={asset.width}
+          height={asset.height}
+          decoding="async"
+          draggable={false}
+          // A decoded image can finish before onLoad attaches; catch that case here.
+          ref={(img) => {
+            if (img?.complete && img.naturalWidth > 0 && status?.src !== src) setStatus({ src, state: "loaded" });
+          }}
+          onLoad={() => setStatus({ src, state: "loaded" })}
+          onError={() => setStatus({ src, state: "error" })}
+        />
+      )}
       {state === "loading" && (
         <span className={styles.frameNote} aria-hidden>
           Loading
@@ -61,7 +67,15 @@ export function PuzzleImage({ asset, alt, aspectRatio, variant, className = "" }
       {state === "error" && (
         <span className={styles.frameNote} role="alert">
           This image didn&apos;t load.
-          <button type="button" className={styles.button} data-kind="secondary" onClick={() => setAttempt((n) => n + 1)}>
+          <button
+            type="button"
+            className={styles.button}
+            data-kind="secondary"
+            onClick={() => {
+              forgetAsset(asset.id);
+              setAttempt((n) => n + 1);
+            }}
+          >
             Try again
           </button>
         </span>

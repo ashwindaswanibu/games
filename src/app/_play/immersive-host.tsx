@@ -14,12 +14,14 @@ export function ImmersiveHost(props: {
   gameId: string;
   date: PuzzleDate;
   initialView: PlayView | null;
+  /** The puzzle's images to download sealed before the play starts (see `useGameSession`). */
+  preload: string[];
   viewerId: string;
   friends: readonly FriendResult[] | null;
   children: ReactNode;
 }) {
   const { gameId, date, viewerId, friends } = props;
-  const { view, pending, notice, start, move } = useGameSession({ gameId, date, initialView: props.initialView });
+  const { view, pending, notice, start, move } = useGameSession({ gameId, date, initialView: props.initialView, preload: props.preload });
   return (
     <ImmersiveGameUiProvider value={{ view, start, submitMove: move, pending, notice, date, viewerId, friends }}>
       {props.children}

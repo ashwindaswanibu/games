@@ -56,7 +56,7 @@ export const Strip = memo(function Strip({ viewer, onReplay }: { viewer: HomeVie
       </div>
       <nav className={styles.nav} aria-label="Main">
         {navItems(viewer).map((item) => (
-          <Link key={item.href} href={item.href} aria-current={item.current ? "page" : undefined}>
+          <Link key={item.href} href={item.href} prefetch={true} aria-current={item.current ? "page" : undefined}>
             {item.label}
           </Link>
         ))}

@@ -22,11 +22,13 @@ export function GameHost(props: {
   rules: readonly string[];
   date: PuzzleDate;
   initialView: PlayView | null;
+  /** The puzzle's images to download sealed before the play starts (see `useGameSession`). */
+  preload: string[];
   /** The game's connected UI (see `connectGameUi`). */
   children: ReactNode;
 }) {
   const { gameId, gameName, emoji, rules, date } = props;
-  const { view, pending, notice, start, move } = useGameSession({ gameId, date, initialView: props.initialView });
+  const { view, pending, notice, start, move } = useGameSession({ gameId, date, initialView: props.initialView, preload: props.preload });
 
   if (!view) {
     return (

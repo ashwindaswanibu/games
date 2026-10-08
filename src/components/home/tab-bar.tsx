@@ -21,7 +21,7 @@ export const TabBar = memo(function TabBar({ viewer, tear, inert }: { viewer: Ho
       <span className={styles.tabEdge} aria-hidden="true" />
       <span className={styles.tabBg} aria-hidden="true" />
       {navItems(viewer).map((item) => (
-        <Link key={item.href} href={item.href} aria-current={item.current ? "page" : undefined}>
+        <Link key={item.href} href={item.href} prefetch={true} aria-current={item.current ? "page" : undefined}>
           {item.label}
         </Link>
       ))}

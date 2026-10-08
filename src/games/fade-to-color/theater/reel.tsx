@@ -104,6 +104,8 @@ export function Reel(props: {
       const img = cur.current!;
       img.src = target.src;
       img.alt = target.alt;
+      // Which level this is (the src is an object URL; see src/lib/sealed-assets.ts).
+      img.dataset.asset = target.key;
       await img.decode().catch(() => {});
     };
 
@@ -142,6 +144,7 @@ export function Reel(props: {
       // Unreel.
       const nxt = next.current!;
       nxt.src = target.src;
+      nxt.dataset.asset = target.key;
       await nxt.decode().catch(() => {});
       if (cancelled) return;
       screen.current!.style.setProperty("--incoming", target.accent);

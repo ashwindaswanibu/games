@@ -5,6 +5,7 @@ import type { FriendResult, MoveResponse, PlayView } from "@/core/view";
 import { getGameServer } from "@/games/server-registry";
 import { db } from "./supabase/admin";
 import { gameServices, type GameServices } from "./game-services";
+import { sealedAssets } from "./asset-seal";
 import { advancePlay, parseMove } from "./move-pipeline";
 import { getOrCreatePuzzle, type LoadedPuzzle } from "./puzzles";
 import type { Json, PlayRow } from "./database.types";
@@ -33,6 +34,7 @@ export async function loadPlaysForDay(userId: string, date: PuzzleDate): Promise
 /** The only place a play is turned into what the browser sees. The solution stays here. */
 export function toView(game: AnyGame, row: PlayRow, loaded: LoadedPuzzle): PlayView {
   const finished = row.status !== "in_progress";
+  const reveal = finished && game.reveal ? game.reveal({ puzzle: loaded.puzzle, solution: loaded.solution }) : null;
   return {
     gameId: game.id,
     date: parsePuzzleDate(row.puzzle_date),
@@ -44,14 +46,24 @@ export function toView(game: AnyGame, row: PlayRow, loaded: LoadedPuzzle): PlayV
       finished && row.score !== null && row.result_label !== null && row.share_grid !== null
         ? { score: row.score, label: row.result_label, shareGrid: row.share_grid }
         : null,
-    reveal: finished && game.reveal ? game.reveal({ puzzle: loaded.puzzle, solution: loaded.solution }) : null,
+    reveal,
+    sealed: sealedAssets({ puzzle: loaded.puzzle, solution: loaded.solution, visible: [loaded.puzzle, row.state, reveal] }),
   };
 }
 
+/** Image ids to download sealed before a play exists (a game's start screen); see `sealedAssets`. */
+export async function preloadAssets(game: AnyGame, date: PuzzleDate): Promise<string[]> {
+  const loaded = await getOrCreatePuzzle(game, date);
+  return sealedAssets({ puzzle: loaded.puzzle, solution: loaded.solution, visible: [] }).preload;
+}
+
 export async function getPlayView(userId: string, game: AnyGame, date: PuzzleDate): Promise<PlayView | null> {
+  // Both at once: the puzzle is needed whenever there's a play (and by a start screen's images).
+  const puzzle = getOrCreatePuzzle(game, date);
+  puzzle.catch(() => {}); // without a play, a missing puzzle is only the start screen's problem
   const row = await loadPlay(userId, game.id, date);
   if (!row) return null;
-  return toView(game, row, await getOrCreatePuzzle(game, date));
+  return toView(game, row, await puzzle);
 }
 
 /** Idempotent: starting a play that already exists returns it unchanged. */
