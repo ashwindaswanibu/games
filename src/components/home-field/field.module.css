@@ -1,0 +1,550 @@
+/* The home field (field.tsx). Near-black ground; every colour on the page comes from the puzzles. */
+
+.root {
+  --hf-ink: #ece6da;
+  --hf-dim: #8b8478;
+  --hf-ground: #0b0b0c;
+  --hf-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --hf-serif: var(--hf-display), "Bodoni Moda", serif;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--hf-ground);
+  color: var(--hf-ink);
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+
+.root[data-ready] {
+  opacity: 1;
+}
+
+/* The day's edge: date, the line toward midnight, where to go, the points. */
+.top {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 56px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 32px;
+  font: 500 11px/1 var(--hf-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hf-dim);
+  white-space: nowrap;
+}
+
+.date {
+  color: var(--hf-ink);
+}
+
+.nav {
+  display: flex;
+  gap: 22px;
+  margin-left: auto;
+}
+
+.nav a {
+  color: var(--hf-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.nav a:hover,
+.nav a:focus-visible {
+  color: var(--hf-ink);
+}
+
+.score b {
+  color: var(--hf-ink);
+  font-weight: 500;
+}
+
+.line {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--hf-ink);
+  opacity: 0.55;
+}
+
+.line::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hf-ink);
+}
+
+.welcome {
+  position: absolute;
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  max-width: min(92vw, 720px);
+  padding: 10px 16px;
+  background: rgba(11, 11, 12, 0.88);
+  border: 1px solid rgba(236, 230, 218, 0.25);
+  font: italic 400 17px/1.4 var(--hf-serif);
+  text-align: center;
+}
+
+.welcome a {
+  color: inherit;
+  text-underline-offset: 4px;
+}
+
+.field {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 56px;
+}
+
+.empty {
+  position: absolute;
+  inset: 40% 0 auto;
+  text-align: center;
+  font: italic 400 28px/1.3 var(--hf-serif);
+  color: var(--hf-dim);
+}
+
+/* A tile: full-field, clipped to its slanted share. Clicks land only inside the clip. */
+.tile {
+  position: absolute;
+  inset: 0;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+  overflow: hidden;
+}
+
+.tile:focus-visible .label {
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+.tile > * {
+  position: absolute;
+}
+
+.cover {
+  position: absolute;
+  object-fit: cover;
+  max-width: none;
+}
+
+/* The strip of light: the whole film, every column, squeezed into the tile (crisp at any density). */
+.strip {
+  position: absolute;
+  object-fit: fill;
+  max-width: none;
+}
+
+.wash {
+  opacity: 0.22;
+  filter: saturate(0.9);
+}
+
+.still {
+  position: absolute;
+  object-fit: cover;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.grey {
+  filter: grayscale(1) brightness(0.5);
+}
+
+.drift {
+  animation: drift 26s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  from { transform: translateX(-28px); }
+  to { transform: translateX(28px); }
+}
+
+.shade {
+  position: absolute;
+  background: linear-gradient(180deg, rgba(11, 11, 12, 0.55), rgba(11, 11, 12, 0) 26%, rgba(11, 11, 12, 0) 62%, rgba(11, 11, 12, 0.8));
+  pointer-events: none;
+}
+
+.dark {
+  position: absolute;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%, #17181b, var(--hf-ground) 75%);
+}
+
+.label {
+  font: 500 11px/1.6 var(--hf-mono);
+  letter-spacing: 0.24em;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 18px rgba(0, 0, 0, 0.7);
+}
+
+.label i {
+  display: block;
+  font-style: normal;
+  color: #b9b2a6;
+}
+
+.name {
+  font-family: var(--hf-serif);
+  line-height: 0.95;
+  white-space: nowrap;
+}
+
+.thread {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.thread path {
+  fill: none;
+  stroke: var(--hf-ink);
+  stroke-width: 1.5;
+}
+
+.knot,
+.knotTied {
+  stroke: var(--hf-ink);
+  stroke-width: 1.5;
+  fill: var(--hf-ground);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: knot 3.2s ease-in-out infinite;
+}
+
+.knotTied {
+  fill: var(--hf-ink);
+}
+
+@keyframes knot {
+  0%, 70%, 100% { transform: scale(1); }
+  82% { transform: scale(1.25); }
+}
+
+.slot {
+  border: 1px solid rgba(236, 230, 218, 0.35);
+  overflow: hidden;
+}
+
+.tick {
+  position: absolute;
+  height: 3px;
+  background: rgba(236, 230, 218, 0.22);
+}
+
+.tick[data-seen] {
+  background: var(--hf-ink);
+}
+
+.slot img {
+  position: absolute;
+  object-fit: cover;
+}
+
+.flicker {
+  animation: flicker 4.2s steps(1, end) infinite, glow 3s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from { opacity: 0.45; }
+  to { opacity: 0.8; }
+}
+
+@keyframes flicker {
+  0%, 96%, 100% { filter: none; }
+  97% { filter: brightness(1.6); }
+  98% { filter: brightness(0.6); }
+}
+
+.word {
+  font-family: var(--hf-serif);
+  text-align: center;
+  line-height: 1;
+}
+
+/* Finished: the strip's writing, the day's print. */
+.stripText {
+  font: 500 11px/1 var(--hf-mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.85);
+}
+
+/* A game you've played, in its strip. */
+.played {
+  position: absolute;
+  inset: 0;
+}
+
+.played > * {
+  position: absolute;
+}
+
+.playedShade {
+  background: linear-gradient(180deg, rgba(11, 11, 12, 0.72), rgba(11, 11, 12, 0.15) 30%, rgba(11, 11, 12, 0.15) 60%, rgba(11, 11, 12, 0.78));
+}
+
+.playedPicture {
+  opacity: 0.55;
+  filter: saturate(0.9);
+}
+
+.playedScore {
+  font-family: var(--hf-serif);
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: lining-nums;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.7);
+}
+
+.playedUnit {
+  font: 500 9px/1 var(--hf-mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #b9b2a6;
+  white-space: nowrap;
+}
+
+.playedTitle {
+  font: italic 400 30px/1 var(--hf-serif);
+  transform-origin: 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 14px rgba(0, 0, 0, 0.85);
+}
+
+.playedLine {
+  font: 500 9px/1 var(--hf-mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #d8d1c4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: rotate(-90deg);
+  transform-origin: 0 0;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+}
+
+.playedTitleFlat {
+  font: italic 400 22px/1.1 var(--hf-serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playedTitleFlat i {
+  display: block;
+  margin-top: 4px;
+  font: 500 9px/1 var(--hf-mono);
+  font-style: normal;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #b9b2a6;
+}
+
+.chainSvg {
+  inset: 0;
+  overflow: visible;
+}
+
+.chainSvg line {
+  stroke: var(--hf-ink);
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+.bead,
+.beadEnd {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--hf-ink);
+  background: var(--hf-ground);
+}
+
+.beadEnd {
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--hf-ink);
+}
+
+.beadName {
+  position: absolute;
+  left: 16px;
+  top: -9px;
+  font: 400 15px/1.2 var(--hf-serif);
+  white-space: nowrap;
+}
+
+.beadName em {
+  display: block;
+  font: italic 400 11px/1.3 var(--hf-serif);
+  color: #b9b2a6;
+  max-width: 120px;
+  white-space: normal;
+}
+
+.print {
+  position: absolute;
+  inset: 0;
+}
+
+.print > * {
+  position: absolute;
+}
+
+.chain {
+  inset: 0;
+}
+
+.person {
+  display: block;
+  font-family: var(--hf-serif);
+  white-space: nowrap;
+  line-height: 1.05;
+}
+
+.via {
+  display: block;
+  margin: 6px 0 0 22px;
+  font: italic 400 16px/1.3 var(--hf-serif);
+  color: #cfc8bb;
+  max-width: 320px;
+}
+
+.resultTitle {
+  font-family: var(--hf-serif);
+  line-height: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-wrap: balance;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
+}
+
+.resultLine {
+  font: 500 11px/1 var(--hf-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.thumbs {
+  display: flex;
+  gap: 8px;
+}
+
+.thumb {
+  width: 62px;
+  height: 46px;
+  object-fit: cover;
+  outline-offset: 3px;
+}
+
+.scale {
+  height: 1px;
+  background: rgba(236, 230, 218, 0.5);
+}
+
+.scale i {
+  position: absolute;
+  top: -5px;
+  font-style: normal;
+}
+
+.me {
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  border-radius: 50%;
+  background: var(--hf-ink);
+}
+
+.friendDot {
+  width: 2px;
+  height: 11px;
+  margin-left: -1px;
+  background: var(--hf-ink);
+}
+
+.friendDot b {
+  position: absolute;
+  left: 6px;
+  font: 500 9px/1 var(--hf-mono);
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  color: var(--hf-ink);
+}
+
+.mark {
+  width: 2px;
+  height: 28px;
+  background: var(--hf-ink);
+  opacity: 0.6;
+}
+
+.markNote {
+  font: 500 9px/1 var(--hf-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hf-dim);
+  white-space: nowrap;
+}
+
+@media (max-width: 719px) {
+  .top {
+    gap: 14px;
+    padding: 0 16px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  .date {
+    display: none;
+  }
+
+  .nav {
+    margin-left: 0;
+    gap: 14px;
+  }
+
+  .score {
+    margin-left: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drift,
+  .flicker,
+  .knot,
+  .knotTied {
+    animation: none;
+  }
+}

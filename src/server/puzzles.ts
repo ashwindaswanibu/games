@@ -32,13 +32,15 @@ function parseStored(game: AnyGame, payload: unknown, solution: unknown): Loaded
   return { puzzle: game.puzzleSchema.parse(payload), solution: game.solutionSchema.parse(solution) };
 }
 
-async function selectPuzzle(game: AnyGame, date: PuzzleDate): Promise<LoadedPuzzle | null> {
-  const { data, error } = await db()
-    .from("puzzles")
-    .select("payload, solution")
-    .eq("game_id", game.id)
-    .eq("puzzle_date", date)
-    .maybeSingle();
+/**
+ * The stored puzzle, or null. `fresh` reads it with a request of its own: during a page render,
+ * Next memoizes identical GET fetches, so reading back a puzzle just inserted with the same query
+ * would return the memoized "none" from before the insert.
+ */
+async function selectPuzzle(game: AnyGame, date: PuzzleDate, options: { fresh?: boolean } = {}): Promise<LoadedPuzzle | null> {
+  let query = db().from("puzzles").select("payload, solution").eq("game_id", game.id).eq("puzzle_date", date);
+  if (options.fresh) query = query.limit(1);
+  const { data, error } = await query.maybeSingle();
   if (error) throw new Error(`Failed to load puzzle: ${error.message}`);
   return data ? parseStored(game, data.payload, data.solution) : null;
 }
@@ -58,15 +60,18 @@ export const getOrCreatePuzzle = cache(async (game: AnyGame, date: PuzzleDate): 
   // Validate our own output too: a generator bug should fail here, not in front of players.
   const { puzzle, solution } = parseStored(game, generated.puzzle, generated.solution);
 
-  const { error } = await db()
+  const { data: inserted, error } = await db()
     .from("puzzles")
     .upsert(
       { game_id: game.id, puzzle_date: date, payload: puzzle as Json, solution: solution as Json },
       { onConflict: "game_id,puzzle_date", ignoreDuplicates: true },
-    );
+    )
+    .select("payload, solution");
   if (error) throw new Error(`Failed to save puzzle: ${error.message}`);
+  // Ours went in: that's the puzzle. Someone else's won the race: read theirs.
+  if (inserted?.[0]) return parseStored(game, inserted[0].payload, inserted[0].solution);
 
-  const saved = await selectPuzzle(game, date);
+  const saved = await selectPuzzle(game, date, { fresh: true });
   if (!saved) throw new Error(`Puzzle for ${game.id} on ${date} vanished after insert`);
   return saved;
 });
