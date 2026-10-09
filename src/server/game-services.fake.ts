@@ -1,4 +1,4 @@
-import type { CreditRecord, FilmRecord, GameServices, PersonRecord } from "./game-services";
+import { MAX_NEXT_LINK_DEPTH, type ChainStep, type CreditRecord, type FilmRecord, type GameServices, type PersonRecord } from "./game-services";
 
 /**
  * In-memory `GameServices` for unit tests of resolvers and the move pipeline. Same contract as the
@@ -54,8 +54,50 @@ export function createFakeGameServices(data: {
         calls.push(`credits.together(${personId},${filmId})`);
         return credits.find((c) => c.personId === personId && c.filmId === filmId) ?? null;
       },
+      async nextLink(from, to, { avoid, maxLinks }) {
+        calls.push(`credits.nextLink(${from},${to})`);
+        return nextLink(credits, films, from, to, new Set(avoid), Math.min(MAX_NEXT_LINK_DEPTH, maxLinks));
+      },
     },
   };
+}
+
+/**
+ * Breadth-first from `from`, as the real search would answer: the first link of a shortest chain
+ * to `to`, skipping adult films and anyone in `avoid`. Ties go to the lowest ids.
+ */
+function nextLink(
+  credits: readonly CreditRecord[],
+  films: ReadonlyMap<number, FilmRecord>,
+  from: number,
+  to: number,
+  avoid: ReadonlySet<number>,
+  maxLinks: number,
+): ChainStep | null {
+  if (from === to) return null;
+  const usable = credits.filter((c) => films.get(c.filmId)?.isAdult !== true);
+  const coStars = (person: number) =>
+    usable
+      .filter((c) => c.personId === person)
+      .flatMap((own) => usable.filter((c) => c.filmId === own.filmId && c.personId !== person).map((c) => ({ filmId: c.filmId, personId: c.personId })))
+      .sort((a, b) => a.personId - b.personId || a.filmId - b.filmId);
+  // Each reached person keeps the first link of the chain that reached them.
+  let frontier = new Map<number, { filmId: number; personId: number }>([[from, { filmId: 0, personId: 0 }]]);
+  const seen = new Set([from]);
+  for (let depth = 1; depth <= maxLinks; depth++) {
+    const next = new Map<number, { filmId: number; personId: number }>();
+    for (const [person, first] of frontier) {
+      for (const step of coStars(person)) {
+        if (seen.has(step.personId) || (avoid.has(step.personId) && step.personId !== to)) continue;
+        const head = depth === 1 ? step : first;
+        if (step.personId === to) return { ...head, links: depth };
+        seen.add(step.personId);
+        next.set(step.personId, head);
+      }
+    }
+    frontier = next;
+  }
+  return null;
 }
 
 /** A complete `FilmRecord` with sensible defaults for tests. */

@@ -28,7 +28,7 @@ import { describeClue, spokenClues } from "@/games/_movies/clue-text";
 import { computeClues } from "@/games/_movies/hints";
 import type { ClueKind, FilmDetails, PersonRef } from "@/games/_movies/schemas";
 import { fadeToColor, LAST_REEL_SCORE, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES, OPTION_COUNT, pickWorth } from "@/games/fade-to-color/logic";
-import { chainScore, degrees, maxLinks } from "@/games/degrees/logic";
+import { degrees, degreesScore, HINT_COST, maxLinks } from "@/games/degrees/logic";
 import { FRAME_COUNT, frameByFrame, CLUE_KINDS as FRAME_CLUES } from "@/games/frame-by-frame/logic";
 import { assetKey } from "@/server/asset-seal";
 import type { PlayRow } from "@/server/database.types";
@@ -299,8 +299,10 @@ async function checkFinishedImages(ctx: Ctx, label: string): Promise<void> {
 
 const degreesStateSchema = z.object({
   links: z.array(z.object({ film: z.object({ id: z.number() }), person: z.object({ id: z.number() }) })),
+  hints: z.array(z.object({ kind: z.string(), film: z.object({ id: z.number() }), person: z.object({ id: z.number() }).optional() })).optional(),
 });
 
+/** Degrees is full screen: its own start ("Start linking"), the thread, the link line, hints, end card and friends panel. */
 async function playDegrees(ctx: Ctx): Promise<void> {
   const { page, report } = ctx;
   const loaded = await loadPuzzle(ctx.db, degrees, ctx.date);
@@ -308,20 +310,35 @@ async function playDegrees(ctx: Ctx): Promise<void> {
   const route = solution.path;
   report.note(`today: ${puzzle.start.name} → ${puzzle.end.name}, par ${puzzle.par}${puzzle.fixture ? " (DEV FIXTURE)" : ""}`);
 
-  /** Route films and co-stars the player hasn't put in their chain are secret while playing. */
+  /** Route films and co-stars the player hasn't put in their chain (or been shown by a hint) are secret while playing. */
   const secretsFor = async (): Promise<string[]> => {
     const row = await loadPlay(ctx.db, ctx.userId, degrees.id, ctx.date);
     if (row && row.status !== "in_progress") return [];
-    const links = row ? degreesStateSchema.parse(row.state).links : [];
+    const state = row ? degreesStateSchema.parse(row.state) : { links: [], hints: [] };
+    const seenFilms = new Set([...state.links.map((l) => l.film.id), ...(state.hints ?? []).map((h) => h.film.id)]);
+    const seenPeople = new Set([...state.links.map((l) => l.person.id), ...(state.hints ?? []).flatMap((h) => (h.person ? [h.person.id] : []))]);
     return route.flatMap((link) => [
-      ...(links.some((l) => l.film.id === link.film.id) ? [] : [link.film.title]),
-      ...(link.person.id === puzzle.end.id || links.some((l) => l.person.id === link.person.id) ? [] : [link.person.name]),
+      ...(seenFilms.has(link.film.id) ? [] : [link.film.title]),
+      ...(link.person.id === puzzle.end.id || seenPeople.has(link.person.id) ? [] : [link.person.name]),
     ]);
   };
+  const statusLine = () => page.evaluate(() => (document.querySelector("main section p")?.textContent ?? "").replace(/\s+/g, " ").trim());
+  const chainSays = (name: string) =>
+    page.evaluate((want) => [...document.querySelectorAll('ol[aria-label="Your chain"] span')].some((s) => (s.textContent ?? "").includes(want)), name);
 
-  await openAndStart(ctx, degrees, loaded, await secretsFor());
+  // --- Before the play: no app chrome, the rules and "Start linking". ---
+  await page.goto(`${ctx.baseUrl}/play/${degrees.id}`, { waitUntil: "networkidle0" });
+  await waitForText(page, "h1", degrees.name);
+  report.equal("full screen: no app nav", await page.$$eval("nav", (navs) => navs.length), 0);
+  report.check("the rules are on the opening screen", await pageSays(page, degrees.rules[0]!));
+  await spoilerCheckpoint(ctx, degrees, loaded, "before starting", await secretsFor());
+  await clickButton(page, "Start linking");
+  const started = await waitForPlayVersion(ctx.db, { userId: ctx.userId, gameId: degrees.id, date: ctx.date, version: 0 });
+  report.equal("the play starts in progress", started.status, "in_progress");
   const limit = maxLinks(puzzle);
-  report.check(`countdown shows ${limit} links left`, await page.$(`[role="img"][aria-label="${limit} links left"]`).then(Boolean));
+  await page.waitForFunction((want) => (document.querySelector("main section p")?.textContent ?? "").includes(want), { timeout: 15000 }, `Link 1 of ${limit}`);
+  report.check("the status line shows the link, par and the worth", (await statusLine()).startsWith(`Link 1 of ${limit} · par ${puzzle.par} · worth 100`), await statusLine());
+  report.check("the thread names both ends", (await chainSays(puzzle.start.name)) && (await chainSays(puzzle.end.name)));
 
   // --- Wrong moves: a co-star already in the chain is refused; an off-route link costs a link. ---
   const detour = await degreesDetour(
@@ -343,23 +360,42 @@ async function playDegrees(ctx: Ctx): Promise<void> {
   report.check("the refused pick sends no move", (await loadPlay(ctx.db, ctx.userId, degrees.id, ctx.date))?.version === 0);
 
   await playMove(ctx, degrees, 1, () => pickFromSearch(page, castLabel, detour.person.name, { primary: detour.person.name }));
-  await waitForText(page, "span", detour.person.name);
-  report.check("the off-route link joins the chain", await hasText(page, "span", "Co-star 1"));
-  report.check(`countdown drops to ${limit - 1} links left`, await page.$(`[role="img"][aria-label="${limit - 1} links left"]`).then(Boolean));
+  await page.waitForFunction((want) => (document.querySelector("main section p")?.textContent ?? "").includes(want), { timeout: 15000 }, `Link 2 of ${limit}`);
+  report.check("the off-route link joins the chain", await chainSays(detour.person.name));
   await spoilerCheckpoint(ctx, degrees, loaded, "after the off-route link", await secretsFor());
   await checkNoSidewaysScroll(ctx, "mid-play");
   await shot(ctx, "degrees-mid");
 
-  const undone = await playMove(ctx, degrees, 2, () => clickButton(page, { pattern: "Undo last link$" }));
+  const undone = await playMove(ctx, degrees, 2, () => clickButton(page, { pattern: "Undo$" }));
   report.equal("undo removes the link", degreesStateSchema.parse(undone.state).links.length, 0);
-  await page.waitForFunction(() => ![...document.querySelectorAll("span")].some((s) => s.textContent === "Co-star 1"));
-  report.check(`countdown is back to ${limit} links left`, await page.$(`[role="img"][aria-label="${limit} links left"]`).then(Boolean));
+  await page.waitForFunction((want) => (document.querySelector("main section p")?.textContent ?? "").includes(want), { timeout: 15000 }, `Link 1 of ${limit}`);
+  report.check("the undone co-star leaves the thread", !(await chainSays(detour.person.name)));
 
-  // --- The optimal route. ---
-  let from: PersonRef = puzzle.start;
-  let version = 2;
-  let row = undone;
+  // --- Hints: each asks first, then shows on the thread and under the status line, and costs points. ---
+  const wayIn = route.at(-1)!.film;
+  await clickButton(page, { pattern: "^The way in" });
+  await waitForText(page, "button", "Keep trying");
+  report.check("a hint asks first, with its cost", await pageSays(page, `It costs ${HINT_COST.film} points.`));
+  const hinted = await playMove(ctx, degrees, 3, () => clickButton(page, { pattern: "^Show it" }));
+  report.equal("the way in is kept with the play", degreesStateSchema.parse(hinted.state).hints?.[0]?.film.id, wayIn.id);
+  await page.waitForFunction((want) => [...document.querySelectorAll("main section p")].some((p) => (p.textContent ?? "").includes(want)), { timeout: 15000 }, wayIn.title);
+  report.check("the way in shows its film", true);
+  report.check("the worth drops by its cost", (await statusLine()).includes(`worth ${100 - HINT_COST.film}`), await statusLine());
+
+  await clickButton(page, { pattern: "^Next link" });
+  await waitForText(page, "button", "Keep trying");
+  await playMove(ctx, degrees, 4, () => clickButton(page, { pattern: "^Show it" }));
+  await waitForText(page, "button", "Use it");
+  report.check("the next link shows the route's first link", (await pageSays(page, route[0]!.film.title)) && (await pageSays(page, route[0]!.person.name)));
+  await spoilerCheckpoint(ctx, degrees, loaded, "after both hints", await secretsFor());
+  let row = await playMove(ctx, degrees, 5, () => clickButton(page, "Use it"));
+  report.check("using the hint ties its link", await chainSays(route[0]!.person.name));
+
+  // --- The rest of the route. ---
+  let from: PersonRef = route[0]!.person;
+  let version = 5;
   for (const [i, link] of route.entries()) {
+    if (i === 0) continue;
     await pickFromSearch(page, `A film with ${from.name}`, link.film.title, {
       primary: link.film.title,
       secondaryPrefix: link.film.year === null ? null : String(link.film.year),
@@ -371,11 +407,28 @@ async function playDegrees(ctx: Ctx): Promise<void> {
   }
 
   report.equal("the play is won", row.status, "won");
-  const label = `${route.length} ${route.length === 1 ? "link" : "links"} · par ${puzzle.par}`;
-  await checkResultCard(ctx, row, { score: chainScore(route.length, puzzle.par), label, grid: `${"🎞".repeat(route.length)}⭐` });
-  await waitForText(page, "h3", `Our route matches yours · par ${puzzle.par}`);
-  report.check("the reveal shows the route", true);
-  await checkFriendsResults(ctx, row);
+  const hints = [{ kind: "film" as const, film: wayIn }, { kind: "link" as const, fromPersonId: puzzle.start.id, film: route[0]!.film, person: route[0]!.person }];
+  report.equal("score: par less both hints", row.score, degreesScore(route.length, puzzle.par, hints));
+  report.equal("label counts the hints", row.result_label, `${route.length} ${route.length === 1 ? "link" : "links"} · par ${puzzle.par} · 2 hints`);
+  report.equal("share grid: a strip per link, a bulb per hint", row.share_grid, `${"🎞".repeat(route.length)}💡💡⭐`);
+  await page.waitForSelector('section[aria-label="Today\'s result"]');
+  await page.waitForFunction(() => document.querySelector('section[aria-label="Today\'s result"]')?.closest("[data-show]") !== null, { timeout: 10000 });
+  report.check("the end card says connected at par", await pageSays(page, "Connected · at par"));
+  report.check("…with the score", await page.evaluate((want) => (document.querySelector('section[aria-label="Today\'s result"] h2')?.textContent ?? "").startsWith(want), String(row.score)));
+  report.check("…and a Share button", await hasText(page, "button", "Share"));
+
+  // --- Everyone's results, in a panel. ---
+  await clickButton(page, "How everyone did");
+  await page.waitForSelector('[role="dialog"][aria-label="How everyone did"] li');
+  const mine = await page.evaluate((name) => {
+    const rows = [...document.querySelectorAll('[role="dialog"] li')];
+    const own = rows.find((r) => r.querySelector("b")?.textContent?.trim() === name);
+    return { rows: rows.length, text: own ? (own.textContent ?? "").replace(/\s+/g, " ") : null };
+  }, ctx.displayName);
+  report.check("friends' results list players", mine.rows > 0, mine);
+  report.check("friends' results show @username, my label and my chain", mine.text !== null && mine.text.includes(`@${ctx.username}`) && mine.text.includes(row.result_label ?? "\0") && mine.text.includes(route[0]!.film.title), mine.text);
+  await page.keyboard.press("Escape");
+
   await spoilerCheckpoint(ctx, degrees, loaded, "after finishing");
   await checkNoSidewaysScroll(ctx, "finished");
   await shot(ctx, "degrees-finished");

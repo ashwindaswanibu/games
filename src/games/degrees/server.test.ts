@@ -112,6 +112,77 @@ describe("degreesServer.resolveMove", () => {
   });
 });
 
+describe("hints", () => {
+  it("shows the way in: the film the stored route reaches the end actor through, with no lookups", async () => {
+    const fake = services();
+    expect(await resolve({ type: "hint", kind: "film" }, start, fake)).toEqual({
+      ok: true,
+      move: { type: "hint", hint: { kind: "film", film: solution.path[2]!.film } },
+    });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("gives the stored route's next link while the player is on it", async () => {
+    const fake = services();
+    const onRoute: DegreesState = { links: [solution.path[0]!], gaveUp: false };
+    expect(await resolve({ type: "hint", kind: "link" }, onRoute, fake)).toEqual({
+      ok: true,
+      move: { type: "hint", hint: { kind: "link", fromPersonId: 2, film: solution.path[1]!.film, person: solution.path[1]!.person } },
+    });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("searches the catalog from off the route, around anyone already in the chain", async () => {
+    // Pacino → Keitel (Detour) → De Niro (Taxi Driver): from De Niro the stored route continues, so
+    // go off it instead: Pacino → Keitel, who shares Taxi Driver with Foster.
+    const fake = createFakeGameServices({
+      films: [
+        film({ id: 11, title: "Taxi Driver", year: 1976 }),
+        film({ id: 12, title: "The Silence of the Lambs", year: 1991 }),
+        film({ id: 13, title: "Detour", year: 1990 }),
+      ],
+      people: [
+        { id: 1, name: "Al Pacino" },
+        { id: 3, name: "Jodie Foster" },
+        { id: 4, name: "Anthony Hopkins" },
+        { id: 5, name: "Harvey Keitel" },
+      ],
+      credits: [
+        { filmId: 13, personId: 1 },
+        { filmId: 13, personId: 5 },
+        { filmId: 11, personId: 5 },
+        { filmId: 11, personId: 3 },
+        { filmId: 12, personId: 3 },
+        { filmId: 12, personId: 4 },
+      ],
+    });
+    const offRoute: DegreesState = { links: [{ film: { id: 13, title: "Detour", year: 1990 }, person: { id: 5, name: "Harvey Keitel" } }], gaveUp: false };
+    expect(await resolve({ type: "hint", kind: "link" }, offRoute, fake)).toEqual({
+      ok: true,
+      move: {
+        type: "hint",
+        hint: { kind: "link", fromPersonId: 5, film: { id: 11, title: "Taxi Driver", year: 1976 }, person: { id: 3, name: "Jodie Foster" } },
+      },
+    });
+    expect(fake.calls).toContain("credits.nextLink(5,4)");
+  });
+
+  it("refuses, free, when no short route fits the links left", async () => {
+    const fake = createFakeGameServices({ people: [{ id: 5, name: "Harvey Keitel" }] });
+    const stuck: DegreesState = { links: [{ film: { id: 13, title: "Detour", year: 1990 }, person: { id: 5, name: "Harvey Keitel" } }], gaveUp: false };
+    const result = await resolve({ type: "hint", kind: "link" }, stuck, fake);
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) expect(result.error).toContain("There's no short way to Anthony Hopkins from Harvey Keitel");
+  });
+
+  it("refuses a hint already taken before looking anything up", async () => {
+    const fake = services();
+    const taken: DegreesState = { links: [], gaveUp: false, hints: [{ kind: "film", film: solution.path[2]!.film }] };
+    expect(await resolve({ type: "hint", kind: "film" }, taken, fake)).toEqual({ ok: false, error: "You already have the way in to Anthony Hopkins." });
+    expect(fake.calls).toEqual([]);
+  });
+});
+
 describe("degrees through the move pipeline", () => {
   const advance = (state: DegreesState, move: unknown) =>
     advancePlay({ game: degrees, server: degreesServer, services: services(), puzzle, solution, state, move, elapsedMs: 0 });
@@ -130,6 +201,17 @@ describe("degrees through the move pipeline", () => {
       state = last.state;
     }
     expect(last).toMatchObject({ ok: true, outcome: "won", result: { score: 100, label: "3 links · par 3", shareGrid: "🎞🎞🎞⭐" } });
+  });
+
+  it("plays a hinted chain to a win at the hinted score", async () => {
+    let state: unknown = start;
+    let last;
+    for (const move of [{ type: "hint", kind: "link" }, { type: "link", filmId: 10, personId: 2 }, { type: "link", filmId: 11, personId: 3 }, { type: "link", filmId: 12, personId: 4 }]) {
+      last = await advance(state as DegreesState, move);
+      if (!last.ok) throw new Error(last.error);
+      state = last.state;
+    }
+    expect(last).toMatchObject({ ok: true, outcome: "won", result: { score: 80, label: "3 links · par 3 · 1 hint", shareGrid: "🎞🎞🎞💡⭐" } });
   });
 
   it("surfaces resolver rejections without changing the state", async () => {

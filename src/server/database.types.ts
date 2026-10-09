@@ -427,6 +427,14 @@ export type Database = {
         Args: { p_game_id: string; p_date: string; p_expected_payload: Json; p_payload: Json; p_solution: Json };
         Returns: ReplaceUnplayedPuzzleOutcome;
       };
+      degrees_next_link: {
+        Args: { p_from: number; p_to: number; p_avoid: number[]; p_max_links: number };
+        Returns: {
+          film_id: number;
+          person_id: number;
+          links: number;
+        }[];
+      };
       orphan_auth_user_for_email: {
         Args: { p_email: string };
         Returns: {
