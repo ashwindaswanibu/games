@@ -74,13 +74,16 @@ export class SpoilerWatch {
     // Images, and sealed images (ciphertext, see src/app/api/assets/[id]/sealed/route.ts).
     if (type.startsWith("image/") || type.startsWith("application/octet-stream")) return;
     const search = path.startsWith("/api/catalog/");
+    // A page loaded ahead in the background (the home prefetches the games' pages).
+    const prefetch = Boolean(response.request().headers()["next-router-prefetch"]);
     this.pending.push(
       response.text().then(
         (body) => ({ path, body, search }),
         (error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
-          // A search the page cancelled (the player typed on) never reached it, so it can't leak.
-          if (search && message.includes("No data found for resource")) return null;
+          // A search the page cancelled (the player typed on), or a page loaded ahead that the
+          // browser dropped (the player moved on), never reached the page, so it can't leak.
+          if ((search || prefetch) && (message.includes("No data found for resource") || message.includes("Could not load response body"))) return null;
           this.unreadable.push(`${path} (${message})`);
           return null;
         },

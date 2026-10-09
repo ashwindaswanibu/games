@@ -83,7 +83,7 @@ export interface HomeModel {
  */
 export function fieldMetrics(width: number): { perRow: number; strip: number; band: number; lean: number; compact: boolean } {
   const compact = width < 720;
-  return { perRow: compact ? 2 : 4, strip: compact ? 48 : 76, band: compact ? 56 : 72, lean: 0.083, compact };
+  return { perRow: compact ? 2 : 4, strip: compact ? 64 : 132, band: compact ? 72 : 96, lean: 0.083, compact };
 }
 
 /**
@@ -113,6 +113,8 @@ export function spans(params: {
   length: number;
   collapse: readonly number[];
   weight?: readonly number[];
+  /** Extra width for a strip (a played game opened a little under the pointer). */
+  extra?: readonly number[];
   print: number;
   open: { index: number; amount: number } | null;
   strip: number;
@@ -122,7 +124,7 @@ export function spans(params: {
   const n = collapse.length;
   if (n === 0) return [];
   const weight = params.weight ?? collapse.map(() => 1);
-  const strips = collapse.map((c) => strip * c);
+  const strips = collapse.map((c, i) => (strip + (params.extra?.[i] ?? 0)) * c);
   const openWeights = collapse.map((c, i) => (1 - c) * weight[i]!);
   const openSum = openWeights.reduce((a, b) => a + b, 0);
   const space = Math.max(0, length - strips.reduce((a, b) => a + b, 0));
@@ -145,6 +147,9 @@ export function spans(params: {
   return out;
 }
 
+/** How much wider a played game's strip opens under the pointer. */
+export const PEEK = 150;
+
 export interface TileBox {
   x: [number, number];
   y: [number, number];
@@ -166,9 +171,12 @@ export function fieldLayout(params: {
   collapse: readonly number[];
   print: number;
   open: { index: number; amount: number } | null;
+  /** A played game's strip opened a little (under the pointer), and how far. */
+  peek?: { index: number; amount: number } | null;
   metrics: { strip: number; band: number; lean: number };
 }): TileBox[] {
   const { width, height, rows, collapse, print, open, metrics } = params;
+  const peek = params.peek ?? null;
   const openRow = open ? rows.findIndex((r) => r.includes(open.index)) : -1;
   const rowSpans = spans({
     length: height,
@@ -187,6 +195,7 @@ export function fieldLayout(params: {
     const xs = spans({
       length: width,
       collapse: row.map((i) => collapse[i]!),
+      extra: row.map((i) => (peek && peek.index === i ? PEEK * peek.amount : 0)),
       print,
       open: r === openRow ? { index: row.indexOf(open!.index), amount: open!.amount } : null,
       strip: metrics.strip,

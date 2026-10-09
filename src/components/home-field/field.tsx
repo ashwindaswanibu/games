@@ -125,7 +125,7 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const router = useRouter();
   const { tiles } = model;
   const targets = tileTargets(tiles);
-  const motion = useMotion({ arrive: 1, print: targets.print, open: 0, openIndex: -1, ...Object.fromEntries(targets.collapse.map((c, i) => [`c${i}`, c])) });
+  const motion = useMotion({ arrive: 1, print: targets.print, open: 0, openIndex: -1, peek: 0, peekIndex: -1, ...Object.fromEntries(targets.collapse.map((c, i) => [`c${i}`, c])) });
   const [ready, setReady] = useState(false);
   const size = useWindowSize();
   const [now, setNow] = useState(() => Date.parse(model.rolloverAt) - 12 * 3600_000);
@@ -178,7 +178,17 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const collapse = tiles.map((_, i) => v[`c${i}`] ?? 0);
   const print = v.print ?? 0;
   const open = (v.openIndex ?? -1) >= 0 && (v.open ?? 0) > 0 ? { index: v.openIndex!, amount: v.open! } : null;
-  const boxes = fieldLayout({ width: size.width, height: fieldHeight, rows, collapse, print, open, metrics });
+  const peek = (v.peekIndex ?? -1) >= 0 && (v.peek ?? 0) > 0 ? { index: v.peekIndex!, amount: v.peek! } : null;
+  const boxes = fieldLayout({ width: size.width, height: fieldHeight, rows, collapse, print, open, peek, metrics });
+
+  function peekAt(index: number, show: boolean) {
+    const tile = tiles[index]!;
+    if (reduced || metrics.compact || tile.state !== "finished" || print > 0) return;
+    if (show) {
+      if ((v.peekIndex ?? -1) !== index) motion.jump({ peekIndex: index, peek: 0 });
+      motion.animate("peek", 1, 320);
+    } else if ((v.peekIndex ?? -1) === index) motion.animate("peek", 0, 260);
+  }
 
   function enter(event: MouseEvent<HTMLAnchorElement>, index: number) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -244,7 +254,9 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
             print={print}
             opened={open?.index === i ? open.amount : 0}
             arrive={clamp((arrive - 0.08 * i) / 0.8)}
+            peek={peek?.index === i ? peek.amount : 0}
             onEnter={(e) => enter(e, i)}
+            onPeek={(show) => peekAt(i, show)}
           />
         ))}
       </main>
@@ -264,10 +276,13 @@ interface TileProps {
   print: number;
   opened: number;
   arrive: number;
+  /** How far this played game's strip is opened under the pointer. */
+  peek: number;
   onEnter(event: MouseEvent<HTMLAnchorElement>): void;
+  onPeek(open: boolean): void;
 }
 
-function Tile({ tile, box, lean, collapse, print, opened, arrive, onEnter }: TileProps) {
+function Tile({ tile, box, lean, collapse, print, opened, arrive, peek, onEnter, onPeek }: TileProps) {
   const finished = tile.state === "finished";
   const w = box.x[1] - box.x[0];
   const h = box.y[1] - box.y[0];
@@ -285,6 +300,8 @@ function Tile({ tile, box, lean, collapse, print, opened, arrive, onEnter }: Til
       className={styles.tile}
       style={{ clipPath: tileClip(box, lean), zIndex: opened > 0 ? 3 : 1, opacity: clamp(arrive * 4) }}
       onClick={onEnter}
+      onPointerEnter={(e) => e.pointerType === "mouse" && onPeek(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && onPeek(false)}
       aria-label={tile.label}
       data-state={tile.state}
     >
@@ -297,7 +314,7 @@ function Tile({ tile, box, lean, collapse, print, opened, arrive, onEnter }: Til
         </span>
       )}
 
-      {finished && tile.result && strip > 0 && <StripText tile={tile} box={box} opacity={strip} />}
+      {finished && tile.result && strip > 0 && <PlayedStrip tile={tile} box={box} lean={lean} opacity={strip} settle={collapse} peek={peek} />}
       {finished && tile.result && print > 0 && <Print tile={tile} box={box} lean={lean} cover={cover} amount={print} />}
 
       <Marks tile={tile} box={box} lean={lean} pad={pad} visible={clamp(arrive * 2 - 1) * (finished ? print : live)} />
@@ -392,23 +409,88 @@ function Material({ tile, box, lean, cover, arrive, finished, pad }: { tile: Hom
   );
 }
 
-/** A finished game in a strip (or a finished row's band): its result, written along it. */
-function StripText({ tile, box, opacity }: { tile: HomeTile; box: TileBox; opacity: number }) {
+/**
+ * A game you've played, in its strip: its material resolved and still, your score large at the
+ * top (it counts up as the game settles into the strip), the title running up the side. Opened a
+ * little under the pointer (`peek`), it says more (Degrees names its links).
+ */
+function PlayedStrip({ tile, box, lean, opacity, settle, peek }: { tile: HomeTile; box: TileBox; lean: number; opacity: number; settle: number; peek: number }) {
   const r = tile.result!;
+  const m = tile.material;
   const w = box.x[1] - box.x[0];
   const h = box.y[1] - box.y[0];
-  const text = [r.title || tile.name, r.line, `${r.score}`].filter(Boolean).join(" · ");
   const upright = w < h;
+  const k = (lean * h) / 2;
+  // The strip's middle at height y: its seams lean, so the middle drifts left going down.
+  const middle = (y: number) => (box.x[0] + box.x[1]) / 2 + k * (1 - (2 * (y - box.y[0])) / h);
+  const cx = (box.x[0] + box.x[1]) / 2;
+  const shown = Math.round(r.score * easeInOut(clamp((settle - 0.25) / 0.75)));
+  const write = clamp((settle - 0.45) / 0.55);
+  const area: CSSProperties = { left: box.x[0] - 40, top: box.y[0], width: w + 80, height: h };
+
+  if (!upright) {
+    // A finished row's band: the same, laid along it.
+    return (
+      <span className={styles.played} style={{ opacity }}>
+        {m.kind === "frames" && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.playedPicture}`} style={area} />}
+        <span className={styles.playedScore} style={{ left: box.x[0] + 22, top: box.y[0] + h / 2 - 22, fontSize: 40 }}>
+          {shown}
+        </span>
+        <span className={styles.playedTitleFlat} style={{ left: box.x[0] + 96, top: box.y[0] + h / 2 - 20, maxWidth: w - 120, opacity: write }}>
+          {r.title || r.line}
+          <i>{r.title ? r.line : tile.name}</i>
+        </span>
+      </span>
+    );
+  }
+
+  const digits = String(r.score).length;
+  const score = Math.max(24, Math.min(64, w * 0.5, (w - 30) / (0.62 * digits)));
+  const title = Math.max(16, Math.min(30, w * 0.22));
+  const chainTop = box.y[0] + score * 1.9 + 70;
+  const chainBottom = box.y[1] - 70;
+  const people = r.chain?.people ?? [];
   return (
-    <span
-      className={styles.stripText}
-      style={
-        upright
-          ? { left: (box.x[0] + box.x[1]) / 2 - 7, top: box.y[1] - 36, transform: "rotate(-90deg)", transformOrigin: "0 0", maxWidth: h - 72, opacity }
-          : { left: box.x[0] + 20, top: (box.y[0] + box.y[1]) / 2 - 7, maxWidth: w - 40, opacity }
-      }
-    >
-      {text}
+    <span className={styles.played} style={{ opacity }}>
+      {m.kind === "frames" && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.playedPicture}`} style={area} />}
+      <span className={styles.playedShade} style={area} />
+      <span className={styles.playedScore} style={{ left: middle(box.y[0] + 26 + score / 2), top: box.y[0] + 26, fontSize: score, transform: "translateX(-50%)" }}>
+        {shown}
+      </span>
+      <span className={styles.playedUnit} style={{ left: middle(box.y[0] + 34 + score), top: box.y[0] + 30 + score, transform: "translateX(-50%)" }}>
+        of 100
+      </span>
+      {people.length > 1 && (
+        <>
+          <svg className={styles.chainSvg} width="100%" height="100%" aria-hidden>
+            <line x1={middle(chainTop)} y1={chainTop} x2={lerp(middle(chainTop), middle(chainBottom), write)} y2={lerp(chainTop, chainBottom, write)} />
+          </svg>
+          {people.map((person, j) => {
+            const y = lerp(chainTop, chainBottom, j / (people.length - 1));
+            const end = j === 0 || j === people.length - 1;
+            return (
+              <span key={j} style={{ position: "absolute", left: middle(y), top: y, opacity: clamp(write * people.length - j) }}>
+                <i className={end ? styles.beadEnd : styles.bead} />
+                <span className={styles.beadName} style={{ opacity: peek }}>
+                  {person}
+                  {r.chain!.films[j] && <em>↳ {r.chain!.films[j]}</em>}
+                </span>
+              </span>
+            );
+          })}
+        </>
+      )}
+      {people.length <= 1 && (
+        <span
+          className={styles.playedTitle}
+          style={{ left: cx - title * 0.62, top: box.y[1] - 44, fontSize: title, maxWidth: h - score * 2 - 140, opacity: write, transform: `rotate(-90deg) translateX(${lerp(-24, 0, write)}px)` }}
+        >
+          {r.title || tile.name}
+        </span>
+      )}
+      <span className={styles.playedLine} style={{ left: (people.length > 1 ? middle(box.y[1] - 44) - 22 : cx + title * 0.62 + 2), top: box.y[1] - 44, maxWidth: h - score * 2 - 140, opacity: write * (people.length > 1 ? 1 - peek : 1) }}>
+        {people.length > 1 ? `${r.line}` : r.line}
+      </span>
     </span>
   );
 }
