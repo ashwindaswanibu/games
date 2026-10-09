@@ -93,6 +93,59 @@ export function linkDistances(graph: CastGraph, from: number, maxLinks: number):
   return distance;
 }
 
+/**
+ * Whether some chain from `start` to `end` is exactly `length` links long, nobody in it twice (a
+ * film may be used again). Depth-first, never stepping where `end` is out of reach in the links
+ * left (`toEnd`: `linkDistances` from `end`). In the dense co-star graph a chain turns up almost
+ * at once; `budget` caps the people tried, and null means it ran out without an answer.
+ */
+export function chainOfLengthExists(
+  graph: CastGraph,
+  start: number,
+  end: number,
+  length: number,
+  toEnd: ReadonlyMap<number, number>,
+  budget = 200_000,
+): boolean | null {
+  const onChain = new Set<number>([start]);
+  let tried = 0;
+  const search = (person: number, left: number): boolean | null => {
+    const seen = new Set<number>();
+    for (const film of graph.filmsOf.get(person) ?? []) {
+      for (const next of graph.castOf.get(film) ?? []) {
+        if (onChain.has(next) || seen.has(next)) continue;
+        seen.add(next);
+        if (next === end) {
+          if (left === 1) return true;
+          continue; // the end can only be the last link
+        }
+        if (left === 1 || (toEnd.get(next) ?? Infinity) > left - 1) continue;
+        if (++tried > budget) return null;
+        onChain.add(next);
+        const found = search(next, left - 1);
+        onChain.delete(next);
+        if (found !== false) return found;
+      }
+    }
+    return false;
+  };
+  return length >= 1 && start !== end ? search(start, length) : false;
+}
+
+/**
+ * Chain lengths from `par + 1` to `maxLength` that no chain from `start` to `end` has (see
+ * `chainOfLengthExists`). A length the search couldn't settle within its budget counts as existing:
+ * the puzzle then scores as if it did, the ordinary case.
+ */
+export function missingChainLengths(graph: CastGraph, start: number, end: number, par: number, maxLength: number, budget?: number): number[] {
+  const toEnd = linkDistances(graph, end, maxLength);
+  const missing: number[] = [];
+  for (let length = par + 1; length <= maxLength; length++) {
+    if (chainOfLengthExists(graph, start, end, length, toEnd, budget) === false) missing.push(length);
+  }
+  return missing;
+}
+
 export interface PathLink {
   filmId: number;
   personId: number;

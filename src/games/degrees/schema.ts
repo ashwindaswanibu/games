@@ -16,6 +16,8 @@ import { filmRefSchema, personIdSchema, personRefSchema } from "@/games/_movies/
 /** Shortest possible chains are 2–3 links (the generator only publishes those). */
 export const DEGREES_MIN_PAR = 2;
 export const DEGREES_MAX_PAR = 3;
+/** Moves a player gets beyond par: a link, an undo and a hint each use one. */
+export const DEGREES_SPARE_MOVES = 4;
 
 export const degreesLinkSchema = z.object({
   /** A film the previous actor and `person` were both credited in. */
@@ -44,6 +46,12 @@ export const degreesPuzzleSchema = z
     end: personRefSchema,
     /** Length of the shortest chain from `start` to `end`, in links. */
     par: z.number().int().min(DEGREES_MIN_PAR).max(DEGREES_MAX_PAR),
+    /**
+     * Chain lengths between par and par + spare moves that no chain has (no route of exactly that
+     * many links exists), so a longer chain ranks as if they weren't there. Absent when every
+     * length exists, as it almost always does. Public: it says nothing about the route.
+     */
+    missingLengths: z.array(z.number().int().positive()).max(DEGREES_SPARE_MOVES).optional(),
     /** Set only on DEV FIXTURE puzzles, so the board can label them. */
     fixture: z.literal(true).optional(),
   })

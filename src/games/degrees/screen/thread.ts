@@ -17,7 +17,7 @@ export interface ThreadKnot {
   /** Who is tied here; null for a knot still to tie. */
   person: PersonRef | null;
   /** The next-link hint's co-star, shown faintly on the open knot. */
-  ghost: string | null;
+  ghost: PersonRef | null;
 }
 
 export interface ThreadSegment {
@@ -68,7 +68,7 @@ export function threadOf(
     const at = links.length;
     segments.push({ key: `open${at}`, kind: "open", film: draft, draft: draft !== null, ghost: draft ? null : (next?.film ?? (ahead === 1 ? wayIn : null)) });
     for (let k = 1; k < ahead; k++) {
-      knots.push({ key: `ahead${at + k}`, kind: k === 1 ? "open" : "ahead", person: null, ghost: k === 1 && next && !nextToEnd ? next.person.name : null });
+      knots.push({ key: `ahead${at + k}`, kind: k === 1 ? "open" : "ahead", person: null, ghost: k === 1 && next && !nextToEnd ? next.person : null });
       segments.push({ key: `ahead${at + k}`, kind: "ahead", film: null, draft: false, ghost: k === ahead - 1 ? wayIn : null });
     }
     knots.push({ key: "end", kind: "end", person: puzzle.end, ghost: null });
@@ -111,9 +111,10 @@ export function threadGeometry(count: number, slack: number, box: { width: numbe
   };
   if (box.width < VERTICAL_BELOW) {
     const spacing = 66;
-    const top = 30;
+    const top = 40;
     const sag = Math.min(64, slack * 18);
-    const points = Array.from({ length: n }, (_, i) => ({ x: 20 + sag * bow(i), y: top + i * spacing }));
+    // In from the edge far enough for the ends' faces, which sit on their knots down a phone.
+    const points = Array.from({ length: n }, (_, i) => ({ x: 34 + sag * bow(i), y: top + i * spacing }));
     return { vertical: true, points, height: top + (n - 1) * spacing + 44, spacing };
   }
   const pad = Math.max(28, Math.min(96, box.width * 0.065));

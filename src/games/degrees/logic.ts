@@ -3,6 +3,7 @@ import { defineGame } from "@/core/game";
 import { clampScore } from "@/core/scoring";
 import { filmIdSchema, filmRefSchema, personIdSchema, personRefSchema, type PersonRef } from "@/games/_movies/schemas";
 import {
+  DEGREES_SPARE_MOVES,
   degreesHintSchema,
   degreesPuzzleSchema,
   degreesSolutionSchema,
@@ -14,31 +15,30 @@ import {
 
 /**
  * Degrees of Separation: link today's start actor to the end actor through films they shared, in as
- * few links as possible.
+ * few moves as possible.
  *
- * A move names a film the current actor (the start, or the last co-star reached) was in and a
+ * A link names a film the current actor (the start, or the last co-star reached) was in and a
  * co-star from it. The server module (`./server.ts`) checks both credits against the catalog and
  * hands `applyMove` the resolved films and people; every rule below is pure.
  *
- * - Undoing the last link is free. Giving up ends the game with 0.
- * - The chain holds at most `par + EXTRA_LINKS` links, so the last allowed link must land on the end
- *   actor; anything else is refused (undo to try another route).
- * - Two hints, paid for out of the score: the way in (the film a shortest route reaches the end
- *   actor through; once) and the next link (from where you stand, the first link of a shortest
- *   route from there; once per place you stand). The server finds them; undo never refunds one.
- * - Score: 100 at par, 15 less per extra link, never below 40 for a finished chain; then the hints
- *   come off, never below 10.
+ * - Moves: a link, an undo and a hint each use one. A player has par + `SPARE_MOVES` of them. An
+ *   undo takes the last link off the chain, but the move it used is spent. The last move has to
+ *   reach the end actor: anything else is refused (and so is an undo or a hint that would leave no
+ *   move to finish with). Giving up ends the game with 0.
+ * - Two hints: the way in (the film a shortest route reaches the end actor through; once) and the
+ *   next link (from where you stand, the first link of a shortest route from there; once per place
+ *   you stand). The server finds them.
+ * - Score, by rank: finishing in par moves is rank 1, 100 points. Every route length that exists
+ *   is a rank; each rank down is 20 points fewer. Equal moves share a rank, and no rank is skipped,
+ *   so if no chain of some length exists (the puzzle's `missingLengths`), the next length up takes
+ *   its place.
  */
 
-/** Links allowed beyond par. */
-export const EXTRA_LINKS = 4;
-export const PAR_SCORE = 100;
-export const EXTRA_LINK_PENALTY = 15;
-export const MIN_WIN_SCORE = 40;
-/** What each hint costs, off the score. */
-export const HINT_COST = { film: 10, link: 20 } as const;
-/** A finished chain scores at least this, however many hints it took. */
-export const MIN_HINTED_SCORE = 10;
+/** Moves beyond par: links, undos and hints alike. */
+export const SPARE_MOVES = DEGREES_SPARE_MOVES;
+/** Points for rank 1 (par), and what each rank down costs. */
+export const TOP_SCORE = 100;
+export const RANK_STEP = 20;
 
 export type { DegreesHint, DegreesHintKind, DegreesLink, DegreesPuzzle, DegreesSolution } from "./schema";
 
@@ -48,6 +48,8 @@ export interface DegreesState {
   gaveUp: boolean;
   /** Hints taken, in order. Absent on plays started before hints existed. */
   hints?: DegreesHint[];
+  /** Links undone. Each one used a move. Absent on plays started before undo cost a move. */
+  undos?: number;
 }
 
 /** What the browser sends: ids only. The server looks up who and what they are. */
@@ -75,9 +77,22 @@ export type DegreesResolvedMove = z.infer<typeof degreesResolvedMoveSchema>;
 /** Shown after the play ends: one shortest chain. */
 export type DegreesReveal = DegreesSolution;
 
-/** The most links a chain may hold for this puzzle. */
-export function maxLinks(puzzle: Pick<DegreesPuzzle, "par">): number {
-  return puzzle.par + EXTRA_LINKS;
+/** The moves a player has for this puzzle. */
+export function maxMoves(puzzle: Pick<DegreesPuzzle, "par">): number {
+  return puzzle.par + SPARE_MOVES;
+}
+
+export function hintsOf(state: DegreesState): readonly DegreesHint[] {
+  return state.hints ?? [];
+}
+
+/** Moves used so far: every link on the chain, every undo (the link it took off was a move too) and every hint. */
+export function movesUsed(state: DegreesState): number {
+  return state.links.length + (state.undos ?? 0) + hintsOf(state).length;
+}
+
+export function movesLeft(puzzle: DegreesPuzzle, state: DegreesState): number {
+  return Math.max(0, maxMoves(puzzle) - movesUsed(state));
 }
 
 /** The actor the next link starts from. */
@@ -94,29 +109,30 @@ export function hasReachedEnd(puzzle: DegreesPuzzle, state: DegreesState): boole
   return state.links.at(-1)?.person.id === puzzle.end.id;
 }
 
-/** 100 at par, −15 per extra link, floored at 40. Chains shorter than par (a catalog that gained credits) still get 100. */
-export function chainScore(links: number, par: number): number {
-  return clampScore(Math.max(MIN_WIN_SCORE, PAR_SCORE - EXTRA_LINK_PENALTY * Math.max(0, links - par)));
+/**
+ * The rank of finishing in `moves` moves: 1 at par (or fewer: a catalog that gained credits), then
+ * one more for every route length that exists below it. Lengths no chain has don't count, so ranks
+ * are never skipped.
+ */
+export function rankOf(puzzle: Pick<DegreesPuzzle, "par" | "missingLengths">, moves: number): number {
+  const missing = new Set(puzzle.missingLengths ?? []);
+  let rank = 1;
+  for (let length = puzzle.par; length < moves; length++) if (!missing.has(length)) rank++;
+  return rank;
 }
 
-export function hintsOf(state: DegreesState): readonly DegreesHint[] {
-  return state.hints ?? [];
+/** Points for finishing in `moves` moves: 100 at rank 1, 20 fewer per rank down. */
+export function pointsFor(puzzle: Pick<DegreesPuzzle, "par" | "missingLengths">, moves: number): number {
+  return clampScore(TOP_SCORE - RANK_STEP * (rankOf(puzzle, moves) - 1));
 }
 
-/** Points the hints taken have cost. */
-export function hintCost(hints: readonly DegreesHint[]): number {
-  return hints.reduce((sum, hint) => sum + HINT_COST[hint.kind], 0);
-}
-
-/** A finished chain's score: its links' score less its hints, never below 10. */
-export function degreesScore(links: number, par: number, hints: readonly DegreesHint[]): number {
-  const cost = hintCost(hints);
-  return cost === 0 ? chainScore(links, par) : clampScore(Math.max(MIN_HINTED_SCORE, chainScore(links, par) - cost));
-}
-
-/** What the chain would score if it reached the end actor with `links` links and no more hints. */
-export function worthAt(puzzle: DegreesPuzzle, state: DegreesState, links: number): number {
-  return degreesScore(Math.max(links, puzzle.par), puzzle.par, hintsOf(state));
+/**
+ * The most the play can still score: finishing in the fewest moves it could still take. From where
+ * the player stands, the end is at least par minus the links made away (par is the shortest chain
+ * from the start), and at least one more link.
+ */
+export function bestStillPossible(puzzle: DegreesPuzzle, state: DegreesState): number {
+  return pointsFor(puzzle, movesUsed(state) + Math.max(1, puzzle.par - state.links.length));
 }
 
 /** The way in, once taken. */
@@ -137,12 +153,23 @@ export function linkHint(puzzle: DegreesPuzzle, state: DegreesState): Extract<De
   return null;
 }
 
+const OVER = "Today's game is already over.";
+const lastMove = (puzzle: DegreesPuzzle) => `Your last move has to reach ${puzzle.end.name}.`;
+
 /** Why a hint can't be taken now, or null if it can. The server asks before it searches. */
 export function hintRefusal(puzzle: DegreesPuzzle, state: DegreesState, kind: DegreesHint["kind"]): string | null {
-  if (state.gaveUp || hasReachedEnd(puzzle, state)) return "Today's game is already over.";
-  if (kind === "film") return filmHint(state) ? `You already have the way in to ${puzzle.end.name}.` : null;
-  if (linkHint(puzzle, state)) return "Your hint for this link is already showing.";
-  if (state.links.length >= maxLinks(puzzle)) return "You've used all your links. Undo one first.";
+  if (state.gaveUp || hasReachedEnd(puzzle, state)) return OVER;
+  if (kind === "film" && filmHint(state)) return `You already have the way in to ${puzzle.end.name}.`;
+  if (kind === "link" && linkHint(puzzle, state)) return "Your hint for this link is already showing.";
+  if (movesLeft(puzzle, state) < 2) return lastMove(puzzle);
+  return null;
+}
+
+/** Why an undo can't be made now, or null if it can. */
+export function undoRefusal(puzzle: DegreesPuzzle, state: DegreesState): string | null {
+  if (state.gaveUp || hasReachedEnd(puzzle, state)) return OVER;
+  if (state.links.length === 0) return "There's no link to undo yet.";
+  if (movesLeft(puzzle, state) < 2) return lastMove(puzzle);
   return null;
 }
 
@@ -155,9 +182,9 @@ export const degrees = defineGame<DegreesPuzzle, DegreesSolution, DegreesState, 
   rules: [
     "Start from today's first actor. Pick a film they were in, then a co-star from that film.",
     "Keep linking co-stars until you reach the second actor.",
-    `Par is the shortest possible chain. You can use up to ${EXTRA_LINKS} links more than par.`,
-    `Undo the last link at any time, for free. At par you score 100; each extra link costs ${EXTRA_LINK_PENALTY}.`,
-    `Stuck? The way in to the second actor costs ${HINT_COST.film}; the next link from where you are costs ${HINT_COST.link}.`,
+    `You have par + ${SPARE_MOVES} moves. A link, an undo and a hint each use one.`,
+    `Reach them in par moves for ${TOP_SCORE}. Each route length longer costs ${RANK_STEP}.`,
+    "Stuck? The way in shows a film that leads to the second actor; the next link shows a step from where you are.",
   ],
   accent: "#e9a31e",
   emoji: "🔗",
@@ -169,15 +196,17 @@ export const degrees = defineGame<DegreesPuzzle, DegreesSolution, DegreesState, 
   moveSchema: degreesMoveSchema,
   resolvedMoveSchema: degreesResolvedMoveSchema,
 
-  initialState: () => ({ links: [], gaveUp: false, hints: [] }),
+  initialState: () => ({ links: [], gaveUp: false, hints: [], undos: 0 }),
 
   applyMove({ puzzle, state, move }) {
-    if (state.gaveUp || hasReachedEnd(puzzle, state)) return { ok: false, error: "Today's game is already over." };
+    if (state.gaveUp || hasReachedEnd(puzzle, state)) return { ok: false, error: OVER };
 
     switch (move.type) {
-      case "undo":
-        if (state.links.length === 0) return { ok: false, error: "There's no link to undo yet." };
-        return { ok: true, state: { ...state, links: state.links.slice(0, -1) } };
+      case "undo": {
+        const refusal = undoRefusal(puzzle, state);
+        if (refusal) return { ok: false, error: refusal };
+        return { ok: true, state: { ...state, links: state.links.slice(0, -1), undos: (state.undos ?? 0) + 1 } };
+      }
 
       case "give-up":
         return { ok: true, state: { ...state, gaveUp: true } };
@@ -199,15 +228,10 @@ export const degrees = defineGame<DegreesPuzzle, DegreesSolution, DegreesState, 
         if (chainPersonIds(puzzle, state).includes(move.person.id)) {
           return { ok: false, error: `${move.person.name} is already in your chain. Pick someone new.` };
         }
-        const limit = maxLinks(puzzle);
-        if (state.links.length >= limit) {
-          return { ok: false, error: `You've used all ${limit} links. Undo one to try another route.` };
-        }
-        if (state.links.length === limit - 1 && move.person.id !== puzzle.end.id) {
-          return {
-            ok: false,
-            error: `That's your last link, so it has to reach ${puzzle.end.name}. Undo a link to try another route.`,
-          };
+        const left = movesLeft(puzzle, state);
+        if (left < 1) return { ok: false, error: "You've used all your moves." };
+        if (left === 1 && move.person.id !== puzzle.end.id) {
+          return { ok: false, error: `That's your last move, so it has to reach ${puzzle.end.name}.` };
         }
         const link: DegreesLink = { film: move.film, person: move.person };
         return { ok: true, state: { ...state, links: [...state.links, link] } };
@@ -222,22 +246,21 @@ export const degrees = defineGame<DegreesPuzzle, DegreesSolution, DegreesState, 
 
   score({ puzzle, state, outcome }) {
     if (outcome === "lost") return { score: 0, label: "Gave up" };
-    const links = state.links.length;
-    const hints = hintsOf(state);
-    const label = [plural(links, "link"), `par ${puzzle.par}`, hints.length > 0 ? plural(hints.length, "hint") : null].filter(Boolean).join(" · ");
-    return { score: degreesScore(links, puzzle.par, hints), label };
+    const moves = movesUsed(state);
+    return { score: pointsFor(puzzle, moves), label: `${plural(moves, "move")} · par ${puzzle.par}` };
   },
 
-  /** A film strip per link, a bulb per hint, then a star for reaching the end or a flag for giving up. */
+  /** A film strip per link, scissors per undo, a bulb per hint, then a star for reaching the end or a flag for giving up. */
   shareGrid({ state, outcome }) {
-    const reel = "🎞".repeat(state.links.length) + "💡".repeat(hintsOf(state).length);
-    return outcome === "won" ? `${reel}⭐` : `${reel}🏳️`;
+    const moves = "🎞".repeat(state.links.length) + "✂️".repeat(state.undos ?? 0) + "💡".repeat(hintsOf(state).length);
+    return outcome === "won" ? `${moves}⭐` : `${moves}🏳️`;
   },
 
-  /** Friends see the chain itself once they've finished too: who, through which films, and the hints. */
+  /** Friends see the chain itself once they've finished too: who, through which films, and the undos and hints. */
   friendDetail: (state) => ({
     people: state.links.map((link) => link.person.name),
     films: state.links.map((link) => link.film.title),
+    undos: state.undos ?? 0,
     hints: hintsOf(state).length,
   }),
 

@@ -36,7 +36,7 @@ describe("threadOf", () => {
 
     const hinted = threadOf(puzzle, [], { open: true, next: { film: heat, person: deNiro } });
     expect(hinted.segments[0]!.ghost).toEqual(heat);
-    expect(hinted.knots[1]!.ghost).toBe("Robert De Niro");
+    expect(hinted.knots[1]!.ghost).toEqual(deNiro);
   });
 
   it("shows the way in on the stretch being made when it leads to the end, and drops it once used", () => {

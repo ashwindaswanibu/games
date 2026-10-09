@@ -3,6 +3,7 @@ import { rankByQuery } from "@/games/_movies/scoped-search";
 import type { FilmSearchHit, PersonSearchHit } from "@/games/_movies/schemas";
 import { searchFilms } from "./catalog";
 import { gameServices } from "./game-services";
+import { portraitSrcs } from "./portraits";
 
 /**
  * Autocomplete within one person's filmography or one film's cast. Callers authorize the request
@@ -28,5 +29,6 @@ export async function searchCast(filmId: number, query: string, limit: number): 
   const people = await services.people.get(credits.map((credit) => credit.personId));
   const hits = rankByQuery([...people.values()], query, { text: (person) => person.name, popularity: (person) => person.popularity, limit });
   // Everyone here shares the film being searched, so namesakes are unlikely; skip the per-person lookup.
-  return hits.map((person) => ({ id: person.id, name: person.name, knownFor: null }));
+  const faces = await portraitSrcs(hits.map((person) => person.id));
+  return hits.map((person) => ({ id: person.id, name: person.name, knownFor: null, portrait: faces.get(person.id) ?? null }));
 }

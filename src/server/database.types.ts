@@ -130,6 +130,57 @@ export type Database = {
           },
         ];
       };
+      movie_person_portraits: {
+        Row: {
+          person_id: number;
+          /** bytea, as PostgREST's hex text form: "\\x52494646…". */
+          bytes: string;
+          version: string;
+          width: number;
+          height: number;
+          source_file: string;
+          source_url: string;
+          author: string | null;
+          license: string;
+          license_url: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          person_id: number;
+          bytes: string;
+          version: string;
+          width: number;
+          height: number;
+          source_file: string;
+          source_url: string;
+          author?: string | null;
+          license: string;
+          license_url?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          person_id?: number;
+          bytes?: string;
+          version?: string;
+          width?: number;
+          height?: number;
+          source_file?: string;
+          source_url?: string;
+          author?: string | null;
+          license?: string;
+          license_url?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "movie_person_portraits_person_id_fkey";
+            columns: ["person_id"];
+            isOneToOne: true;
+            referencedRelation: "movie_people";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       puzzle_assets: {
         Row: {
           id: string;
@@ -474,6 +525,7 @@ export type PuzzleAssetRow = Database["public"]["Tables"]["puzzle_assets"]["Row"
 export type MovieFilmRow = Database["public"]["Tables"]["movie_films"]["Row"];
 export type MoviePersonRow = Database["public"]["Tables"]["movie_people"]["Row"];
 export type MovieCreditRow = Database["public"]["Tables"]["movie_credits"]["Row"];
+export type MoviePersonPortraitRow = Database["public"]["Tables"]["movie_person_portraits"]["Row"];
 export type MovieFilmTitleRow = Database["public"]["Tables"]["movie_film_titles"]["Row"];
 
 /** `movie_film_titles.kind`: the display title, IMDb's titles, Wikidata/Wikipedia names, or a former display title. */

@@ -52,7 +52,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Sealed puzzle images and the film search list need no session (see their routes).
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|api/assets/.+/sealed$|api/catalog/films/index$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // Sealed puzzle images, the film search list and people's faces need no session (see their routes).
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|api/assets/.+/sealed$|api/catalog/films/index$|api/catalog/portraits/[0-9]+$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

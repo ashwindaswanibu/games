@@ -2,7 +2,7 @@ import "server-only";
 import { FILM_NOT_FOUND, PERSON_NOT_FOUND, toPersonRef } from "@/games/_movies/server";
 import { defineGameServer } from "@/server/game-server";
 import type { GameServices } from "@/server/game-services";
-import { chainPersonIds, currentActor, degrees, hintRefusal, maxLinks, type DegreesHint, type DegreesPuzzle, type DegreesSolution, type DegreesState } from "./logic";
+import { chainPersonIds, currentActor, degrees, hintRefusal, movesLeft, type DegreesHint, type DegreesPuzzle, type DegreesSolution, type DegreesState } from "./logic";
 
 /**
  * Checks a proposed link against the catalog: the current actor and the chosen co-star must both be
@@ -61,12 +61,14 @@ function wayIn(solution: DegreesSolution): Found {
 /**
  * The next link from where the player stands: the stored route's own next link while they're on it
  * (so the hint and the reveal agree), else the first link of a shortest route the catalog finds
- * from here, within the links they have left and never through anyone already in their chain.
+ * from here, within the moves they'll have left after this hint and never through anyone already
+ * in their chain.
  */
 async function nextLink(puzzle: DegreesPuzzle, solution: DegreesSolution, state: DegreesState, services: GameServices): Promise<Found> {
   const from = currentActor(puzzle, state);
   const used = chainPersonIds(puzzle, state);
-  const left = maxLinks(puzzle) - state.links.length;
+  // The hint itself uses a move.
+  const left = movesLeft(puzzle, state) - 1;
 
   const route = [puzzle.start, ...solution.path.map((link) => link.person)];
   const at = route.findIndex((person) => person.id === from.id);
@@ -80,7 +82,7 @@ async function nextLink(puzzle: DegreesPuzzle, solution: DegreesSolution, state:
   if (!step) {
     return {
       ok: false,
-      error: `There's no short way to ${puzzle.end.name} from ${from.name}${left < 3 ? " in the links you have left" : ""}. Undo a link and ask again from there (you won't be charged).`,
+      error: `There's no short way to ${puzzle.end.name} from ${from.name}${left < 3 ? " in the moves you have left" : ""}. Undo a link and ask again from there (this hint didn't use a move).`,
     };
   }
   const [films, people] = await Promise.all([services.films.get([step.filmId]), services.people.get([step.personId])]);

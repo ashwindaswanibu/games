@@ -4,6 +4,8 @@ import {
   actorPool,
   bestShortestPath,
   buildGraph,
+  chainOfLengthExists,
+  missingChainLengths,
   linkDistances,
   pickPuzzle,
   popularityLinkScore,
@@ -206,5 +208,34 @@ describe("pickPuzzle", () => {
     expect(picked && [picked.start, picked.end].sort()).toEqual([2, 4]);
     expect(picked?.par).toBe(2);
     expect(pickPuzzle({ graph, pool: [6, 7], rng: createRng([1, 2, 3, 4]), pars: [2, 3], targetPar: 2, exclude: new Set(), linkScore: score })).toBeNull();
+  });
+});
+
+describe("chain lengths", () => {
+  //   1 ─(200)─ 2 ─(201)─ 3        a 2-link chain from 1 to 3
+  //   1 ─(202)─ 4 ─(203)─ 5 ─(204)─ 6 ─(205)─ 3   and a 4-link one, but no 3-link chain
+  const gappy = buildGraph(
+    [
+      [200, 1], [200, 2], [201, 2], [201, 3],
+      [202, 1], [202, 4], [203, 4], [203, 5], [204, 5], [204, 6], [205, 6], [205, 3],
+    ].map(([filmId, personId]) => ({ filmId: filmId!, personId: personId!, billing: null })),
+  );
+
+  it("finds chains of an exact length, nobody twice", () => {
+    const toEnd = linkDistances(gappy, 3, 6);
+    expect(chainOfLengthExists(gappy, 1, 3, 2, toEnd)).toBe(true);
+    expect(chainOfLengthExists(gappy, 1, 3, 3, toEnd)).toBe(false);
+    expect(chainOfLengthExists(gappy, 1, 3, 4, toEnd)).toBe(true);
+    expect(chainOfLengthExists(gappy, 1, 3, 5, toEnd)).toBe(false);
+  });
+
+  it("lists the lengths past par that no chain has", () => {
+    expect(missingChainLengths(gappy, 1, 3, 2, 6)).toEqual([3, 5, 6]);
+  });
+
+  it("counts a length it couldn't settle within its budget as existing", () => {
+    const toEnd = linkDistances(gappy, 3, 6);
+    expect(chainOfLengthExists(gappy, 1, 3, 4, toEnd, 0)).toBeNull();
+    expect(missingChainLengths(gappy, 1, 3, 2, 4, 0)).toEqual([]);
   });
 });

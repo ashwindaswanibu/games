@@ -3,6 +3,7 @@ import type { FilmSearchHit, PersonSearchHit } from "@/games/_movies/schemas";
 import { visibleGames } from "@/games/registry";
 import type { ProfileRow } from "./database.types";
 import { db } from "./supabase/admin";
+import { portraitSrcs } from "./portraits";
 
 /**
  * Movie catalog autocomplete. Ranking lives in the `search_films` / `search_people` SQL functions
@@ -29,5 +30,6 @@ export async function searchFilms(query: string, limit: number, personId?: numbe
 export async function searchPeople(query: string, limit: number): Promise<PersonSearchHit[]> {
   const { data, error } = await db().rpc("search_people", { p_query: query, p_limit: limit });
   if (error) throw new Error(`People search failed: ${error.message}`);
-  return data.map((row) => ({ id: row.id, name: row.name, knownFor: row.known_for }));
+  const faces = await portraitSrcs(data.map((row) => row.id));
+  return data.map((row) => ({ id: row.id, name: row.name, knownFor: row.known_for, portrait: faces.get(row.id) ?? null }));
 }
