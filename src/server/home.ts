@@ -130,7 +130,10 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const reveal = view?.reveal as DegreesSolution | null | undefined;
       // The viewer's chain if they reached the end, else the shortest one (once the play is over).
       const finishedChain = links.length > 0 && links.at(-1)!.person.id === p.end.id ? links : (reveal?.path ?? []);
-      const line = s?.gaveUp ? "Gave up" : links.length <= p.par ? `At par · ${links.length} links` : `${links.length} links · par ${p.par}`;
+      const hinted = s?.hints?.length ?? 0;
+      const line =
+        (s?.gaveUp ? "Gave up" : links.length <= p.par ? `At par · ${links.length} links` : `${links.length} links · par ${p.par}`) +
+        (hinted > 0 && !s?.gaveUp ? ` · ${hinted} ${hinted === 1 ? "hint" : "hints"}` : "");
       return {
         sub: `PAR ${p.par}`,
         progress: `${links.length} ${links.length === 1 ? "link" : "links"} in`,

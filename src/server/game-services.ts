@@ -24,8 +24,24 @@ export interface GameServices {
     castOf(filmId: number): Promise<CreditRecord[]>;
     /** The person's credit in the film, or null if they weren't in it. */
     together(personId: number, filmId: number): Promise<CreditRecord | null>;
+    /**
+     * The first link of a shortest chain of co-stars from `from` to `to`, at most `maxLinks` (1–3)
+     * links long, never through anyone in `avoid` nor an adult film; null if there's none.
+     */
+    nextLink(from: number, to: number, options: { avoid: readonly number[]; maxLinks: number }): Promise<ChainStep | null>;
   };
 }
+
+/** One link of a chain: the shared film, the co-star it reaches, and the whole chain's length. */
+export interface ChainStep {
+  filmId: number;
+  personId: number;
+  /** Links in the shortest chain this step starts. */
+  links: number;
+}
+
+/** The deepest chain `nextLink` searches (puzzles' par is at most 3). */
+export const MAX_NEXT_LINK_DEPTH = 3;
 
 export interface FilmRecord {
   id: number;
@@ -151,6 +167,19 @@ export function createGameServices(client: SupabaseClient<Database>): GameServic
           .maybeSingle();
         if (error) throw new Error(`Failed to load credit: ${error.message}`);
         return data ? toCreditRecord(data) : null;
+      },
+      async nextLink(from, to, { avoid, maxLinks }) {
+        const depth = Math.min(MAX_NEXT_LINK_DEPTH, Math.floor(maxLinks));
+        if (!Number.isSafeInteger(from) || from <= 0 || !Number.isSafeInteger(to) || to <= 0 || depth < 1) return null;
+        const { data, error } = await client.rpc("degrees_next_link", {
+          p_from: from,
+          p_to: to,
+          p_avoid: cleanIds(avoid),
+          p_max_links: depth,
+        });
+        if (error) throw new Error(`Failed to search for a link: ${error.message}`);
+        const row = data[0];
+        return row ? { filmId: row.film_id, personId: row.person_id, links: row.links } : null;
       },
     },
   };

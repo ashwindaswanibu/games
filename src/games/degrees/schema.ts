@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { filmRefSchema, personRefSchema } from "@/games/_movies/schemas";
+import { filmRefSchema, personIdSchema, personRefSchema } from "@/games/_movies/schemas";
 
 /**
  * Degrees of Separation: stored puzzle and solution shapes.
@@ -24,6 +24,18 @@ export const degreesLinkSchema = z.object({
   person: personRefSchema,
 });
 export type DegreesLink = z.infer<typeof degreesLinkSchema>;
+
+/**
+ * A hint the player paid for. `film`: the film a shortest route reaches the end actor through (the
+ * way in). `link`: a link from `fromPersonId` (where the player stood when they asked) that starts a
+ * shortest route from there to the end actor.
+ */
+export const degreesHintSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("film"), film: filmRefSchema }),
+  z.strictObject({ kind: z.literal("link"), fromPersonId: personIdSchema, film: filmRefSchema, person: personRefSchema }),
+]);
+export type DegreesHint = z.infer<typeof degreesHintSchema>;
+export type DegreesHintKind = DegreesHint["kind"];
 
 /** What every player receives. Par is public: it's the target, like par on a golf hole. */
 export const degreesPuzzleSchema = z

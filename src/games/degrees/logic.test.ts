@@ -5,9 +5,16 @@ import {
   chainScore,
   currentActor,
   degrees,
+  degreesScore,
+  filmHint,
+  HINT_COST,
+  hintRefusal,
+  linkHint,
+  worthAt,
   degreesMoveSchema,
   degreesResolvedMoveSchema,
   maxLinks,
+  type DegreesHint,
   type DegreesPuzzle,
   type DegreesResolvedMove,
   type DegreesSolution,
@@ -99,7 +106,7 @@ describe("schemas", () => {
 describe("applyMove", () => {
   it("starts from the start actor with an empty chain", () => {
     const state = degrees.initialState(puzzle);
-    expect(state).toEqual({ links: [], gaveUp: false });
+    expect(state).toEqual({ links: [], gaveUp: false, hints: [] });
     expect(currentActor(puzzle, state)).toEqual(pacino);
     expect(degrees.outcome({ puzzle, solution, state })).toBe("in_progress");
   });
@@ -225,5 +232,98 @@ describe("score, share grid and reveal", () => {
       expect(visible).not.toContain(step.film.title);
       expect(visible).not.toContain(step.person.name);
     }
+  });
+});
+
+describe("hints", () => {
+  const wayIn: DegreesHint = { kind: "film", film: lambs };
+  const nextFrom = (from: { id: number }, film: typeof heat, person: { id: number; name: string }): DegreesResolvedMove => ({
+    type: "hint",
+    hint: { kind: "link", fromPersonId: from.id, film, person },
+  });
+
+  it("accepts hint requests by kind only, and resolved hints with what the server found", () => {
+    expect(degreesMoveSchema.safeParse({ type: "hint", kind: "film" }).success).toBe(true);
+    expect(degreesMoveSchema.safeParse({ type: "hint", kind: "link" }).success).toBe(true);
+    expect(degreesMoveSchema.safeParse({ type: "hint", kind: "cast" }).success).toBe(false);
+    expect(degreesMoveSchema.safeParse({ type: "hint", kind: "film", film: lambs }).success).toBe(false);
+    expect(degreesResolvedMoveSchema.safeParse({ type: "hint", hint: wayIn }).success).toBe(true);
+    expect(degreesResolvedMoveSchema.safeParse(nextFrom(pacino, heat, deNiro)).success).toBe(true);
+  });
+
+  it("takes the way in once", () => {
+    const state = play({ type: "hint", hint: wayIn });
+    expect(filmHint(state)).toEqual(wayIn);
+    expect(reject(state, { type: "hint", hint: wayIn })).toBe("You already have the way in to Anthony Hopkins.");
+  });
+
+  it("shows a next link where it was asked for, and again after an undo brings the player back", () => {
+    const hinted = play(nextFrom(pacino, heat, deNiro));
+    expect(linkHint(puzzle, hinted)?.person).toEqual(deNiro);
+    expect(reject(hinted, nextFrom(pacino, heat, deNiro))).toBe("Your hint for this link is already showing.");
+
+    const moved = play(nextFrom(pacino, heat, deNiro), link(1, heat, deNiro));
+    expect(linkHint(puzzle, moved)).toBeNull();
+    expect(hintRefusal(puzzle, moved, "link")).toBeNull();
+
+    const back = play(nextFrom(pacino, heat, deNiro), link(1, heat, deNiro), { type: "undo" });
+    expect(linkHint(puzzle, back)?.person).toEqual(deNiro);
+  });
+
+  it("drops a next link whose co-star joined the chain another way", () => {
+    // Asked at De Niro (→ Foster), then Pacino → Foster → De Niro: standing on De Niro again, Foster is taken.
+    const state: DegreesState = {
+      links: [
+        { film: heat, person: foster },
+        { film: taxiDriver, person: deNiro },
+      ],
+      gaveUp: false,
+      hints: [{ kind: "link", fromPersonId: deNiro.id, film: taxiDriver, person: foster }],
+    };
+    expect(linkHint(puzzle, state)).toBeNull();
+  });
+
+  it("refuses a next link asked for from someone the chain has moved past", () => {
+    const state = play(link(1, heat, deNiro));
+    expect(reject(state, nextFrom(pacino, heat, deNiro))).toBe("Your chain changed in another tab. Ask for the hint again.");
+  });
+
+  it("refuses hints once the game is over", () => {
+    const over = play({ type: "give-up" });
+    expect(hintRefusal(puzzle, over, "film")).toBe("Today's game is already over.");
+    expect(hintRefusal(puzzle, over, "link")).toBe("Today's game is already over.");
+  });
+
+  it("charges each hint off the score, never below 10, and keeps undo free", () => {
+    const state = play({ type: "hint", hint: wayIn }, nextFrom(pacino, heat, deNiro), link(1, heat, deNiro), link(2, taxiDriver, foster), link(3, lambs, hopkins));
+    expect(finish(state, "won")).toEqual({
+      score: { score: 100 - HINT_COST.film - HINT_COST.link, label: "3 links · par 3 · 2 hints" },
+      share: "🎞🎞🎞💡💡⭐",
+    });
+    const many: DegreesHint[] = Array.from({ length: 5 }, () => ({ kind: "link", fromPersonId: 1, film: heat, person: deNiro }));
+    expect(degreesScore(7, 3, many)).toBe(10);
+    expect(degreesScore(3, 3, [])).toBe(chainScore(3, 3));
+  });
+
+  it("says what the chain is worth if it lands at a given length", () => {
+    const state = play({ type: "hint", hint: wayIn });
+    expect(worthAt(puzzle, state, 2)).toBe(90);
+    expect(worthAt(puzzle, state, 3)).toBe(90);
+    expect(worthAt(puzzle, state, 4)).toBe(75);
+  });
+
+  it("shares the chain with friends: who, through which films, and how many hints", () => {
+    const state = play(nextFrom(pacino, heat, deNiro), link(1, heat, deNiro), link(2, taxiDriver, foster), link(3, lambs, hopkins));
+    expect(degrees.friendDetail?.(state)).toEqual({
+      people: ["Robert De Niro", "Jodie Foster", "Anthony Hopkins"],
+      films: ["Heat", "Taxi Driver", "The Silence of the Lambs"],
+      hints: 1,
+    });
+  });
+
+  it("reads plays from before hints existed", () => {
+    const old: DegreesState = { links: [{ film: heat, person: deNiro }], gaveUp: false };
+    expect(hintRefusal(puzzle, old, "film")).toBeNull();
+    expect(degrees.applyMove({ puzzle, solution, state: old, move: { type: "hint", hint: wayIn } })).toMatchObject({ ok: true, state: { hints: [wayIn] } });
   });
 });

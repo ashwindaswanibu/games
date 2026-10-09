@@ -1,0 +1,1320 @@
+/*
+ * Degrees of Separation: a dark room and a thread.
+ *
+ * The thread is the board's one idea. Its two ends are today's actors, set large; each link ties a
+ * film (italic, riding the stretch) and a co-star (a knot, named under it). At par the thread is
+ * taut; links over par are slack, and the knots hang lower with each. The warm light (`--accent`)
+ * is what's being made: the stretch you're on, a hint, and, once the end is reached, the whole
+ * thread, lit from end to end.
+ *
+ * Performance: only opacity, transform (and the individual `scale`) animate; no live blur or
+ * blend modes. Positions glide by transition once the board has been measured (`data-settled`).
+ */
+
+.screen {
+  --void: #050506;
+  --ink: #efe9df;
+  --ink-2: rgb(239 233 223 / 0.66);
+  --ink-3: rgb(239 233 223 / 0.38);
+  --hair: rgb(239 233 223 / 0.11);
+  --accent: 236 178 92;
+  --display: var(--cb-display), "Bodoni 72", Didot, Georgia, serif;
+  --sans: var(--font-geist-sans), system-ui, sans-serif;
+  --mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --glide: 760ms;
+
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--sans);
+  color-scheme: dark;
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The room
+ * ------------------------------------------------------------------------------------------- */
+
+.room {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* A lamp above the table. */
+.lamp {
+  position: absolute;
+  left: 50%;
+  top: -30vh;
+  width: 140vw;
+  height: 90vh;
+  transform: translateX(-50%);
+  background: radial-gradient(48% 56% at 50% 0%, rgb(var(--accent) / 0.1), transparent 72%);
+}
+
+/* The light along the thread: it gathers as links are tied. */
+.glow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 18vh;
+  height: 46vh;
+  background: radial-gradient(56% 42% at 50% 50%, rgb(var(--accent) / 0.085), transparent 72%);
+  transition: opacity 1400ms ease;
+}
+
+.screen[data-finished] .glow {
+  opacity: 1 !important;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(125% 95% at 50% 46%, transparent 36%, rgb(5 5 6 / 0.72) 76%, var(--void) 100%);
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Top
+ * ------------------------------------------------------------------------------------------- */
+
+.top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: clamp(12px, 1.4vw, 20px);
+  padding: clamp(14px, 2.6vh, 28px) clamp(16px, 3.4vw, 52px) 0;
+}
+
+.back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 300ms ease;
+}
+
+.back:hover,
+.back:focus-visible {
+  color: var(--ink);
+}
+
+.back svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.wordmark {
+  margin: 0;
+  font: 400 clamp(17px, 1.5vw, 23px)/1 var(--display);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.wordmark i {
+  font-size: 0.82em;
+  color: var(--ink-2);
+}
+
+.dateline {
+  justify-self: end;
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.fixture {
+  color: rgb(var(--accent));
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The board: the thread
+ * ------------------------------------------------------------------------------------------- */
+
+.stage {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: clamp(6px, 2vh, 22px);
+  padding: clamp(10px, 3vh, 40px) 0 clamp(28px, 6vh, 64px);
+}
+
+.board {
+  position: relative;
+  width: min(1320px, calc(100vw - 32px));
+  height: clamp(280px, 44vh, 440px);
+  animation: fadeIn 900ms ease both;
+}
+
+.lines,
+.knots {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knotItem {
+  display: contents;
+}
+
+/* A stretch between two knots: placed and turned from its first knot; the line inside draws. */
+.segment {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--len);
+  height: 0;
+  transform: translate(var(--x), var(--y)) rotate(var(--angle));
+  transform-origin: 0 0;
+}
+
+.board[data-settled] .segment {
+  transition:
+    transform var(--glide) var(--ease),
+    width var(--glide) var(--ease);
+}
+
+.segmentLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -0.75px;
+  height: 1.5px;
+  background: var(--ink);
+  transform-origin: 0 50%;
+  transition: background-color 700ms ease calc(var(--i) * 170ms);
+}
+
+/* The stretch being made: warm, marching toward the next knot. */
+.segment[data-kind="open"] .segmentLine {
+  background: repeating-linear-gradient(90deg, rgb(var(--accent)) 0 9px, transparent 9px 15px);
+  background-size: 15px 100%;
+  animation: march 900ms linear infinite;
+}
+
+/* Stretches still to make: a faint stitch. */
+.segment[data-kind="ahead"] .segmentLine {
+  background: repeating-linear-gradient(90deg, var(--ink-3) 0 2px, transparent 2px 9px);
+}
+
+/* A hint's stretch: the stitch in the warm light. */
+.segment[data-ghost][data-kind="ahead"] .segmentLine {
+  background: repeating-linear-gradient(90deg, rgb(var(--accent) / 0.7) 0 2px, transparent 2px 8px);
+}
+
+@keyframes march {
+  to {
+    background-position: 15px 0;
+  }
+}
+
+/* A tie made just now draws along its stretch. */
+.segment[data-fresh] .segmentLine {
+  animation: draw 640ms var(--ease) both;
+}
+
+@keyframes draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* The knots: a point placed on the thread; the dot itself (`::before`) is what pulses and ties. */
+.knot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform: translate(var(--x), var(--y));
+}
+
+.board[data-settled] .knot {
+  transition: transform var(--glide) var(--ease);
+}
+
+.knot::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition:
+    background-color 700ms ease calc(var(--i) * 170ms),
+    box-shadow 700ms ease calc(var(--i) * 170ms);
+}
+
+.knot[data-kind="start"]::before,
+.knot[data-kind="end"]::before {
+  left: -8px;
+  top: -8px;
+  width: 16px;
+  height: 16px;
+}
+
+/* The end, until it's reached: a ring to tie into. */
+.board:not([data-reached]) .knot[data-kind="end"]::before {
+  background: var(--void);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+/* The next knot to tie: a warm ring, breathing. */
+.knot[data-kind="open"]::before {
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--void);
+  box-shadow: inset 0 0 0 1.5px rgb(var(--accent));
+  animation: breathe 2400ms ease-in-out infinite;
+}
+
+.knot[data-kind="ahead"]::before {
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  background: var(--void);
+  box-shadow: inset 0 0 0 1.25px var(--ink-3);
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.3;
+  }
+}
+
+/* A knot tied just now pulls tight. */
+.knotItem[data-fresh] .knot::before {
+  animation: tie 520ms var(--ease) 380ms both;
+}
+
+@keyframes tie {
+  from {
+    scale: 0;
+  }
+  60% {
+    scale: 1.35;
+  }
+}
+
+/* A co-star, under their knot. */
+.name {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) + 17px));
+  font: 400 clamp(16px, 1.4vw, 22px)/1.06 var(--display);
+  text-align: center;
+  text-wrap: balance;
+  color: var(--ink);
+}
+
+/* A hint's co-star: faint, warm, not yet tied. */
+.name[data-ghost] {
+  font-style: italic;
+  color: rgb(var(--accent) / 0.85);
+}
+
+/* The two ends, large, above their knots: the start reading in from the left, the end out to the right. */
+.endName {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  max-width: 42%;
+  font: 400 clamp(32px, 4.3vw, 66px)/0.98 var(--display);
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+  color: var(--ink);
+}
+
+/* Clear of the films riding the thread under them. */
+.endName[data-side="start"] {
+  transform: translate(calc(var(--x) - 8px), calc(var(--y) - 100% - 50px));
+}
+
+.endName[data-side="end"] {
+  transform: translate(calc(var(--x) - 100% + 8px), calc(var(--y) - 100% - 50px));
+  text-align: right;
+}
+
+.endLabel {
+  display: block;
+  margin-bottom: 12px;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* The film a stretch passes through, riding just above it. */
+.film {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--w);
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) - 100% - 11px)) rotate(var(--angle));
+  transform-origin: 50% 100%;
+  font: italic 400 clamp(14px, 1.08vw, 17px)/1.12 var(--display);
+  text-align: center;
+  text-wrap: balance;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.filmYear {
+  font: 500 9px/1 var(--mono);
+  font-style: normal;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+
+/* Chosen for the link being made, or a hint: in the warm light. */
+.film[data-draft],
+.film[data-ghost] {
+  color: rgb(var(--accent));
+}
+
+.film[data-ghost] .filmTitle::before {
+  content: "◆ ";
+  font-size: 0.6em;
+  vertical-align: 0.2em;
+}
+
+.board[data-settled] :is(.name, .endName, .film) {
+  transition:
+    transform var(--glide) var(--ease),
+    color 700ms ease,
+    opacity 500ms ease;
+}
+
+/* What was tied just now develops after its stretch has drawn. */
+.knotItem[data-fresh] :is(.name, .film) {
+  animation: develop 700ms ease 300ms both;
+}
+
+@keyframes develop {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ----- Live moments ----- */
+
+/* The first draw: the ends come up, then the thread runs out between them, knot by knot. */
+.board[data-mode="intro"] .segmentLine {
+  animation: draw 620ms var(--ease) calc(320ms + var(--i) * 150ms) both;
+}
+
+.board[data-mode="intro"] .knot::before {
+  animation: tie 480ms var(--ease) calc(240ms + var(--i) * 150ms) both;
+}
+
+.board[data-mode="intro"] .endName {
+  animation: develop 1100ms ease both;
+}
+
+.board[data-mode="intro"] .endName[data-side="end"] {
+  animation-delay: 380ms;
+}
+
+/* Reached: the light runs the thread from end to end, and stays. */
+.board[data-reached] .segment[data-kind="tied"] .segmentLine,
+.board[data-reached] .knot::before {
+  background-color: rgb(var(--accent));
+}
+
+.board[data-reached] .knot[data-kind="end"]::before {
+  box-shadow: 0 0 0 6px rgb(var(--accent) / 0.16);
+}
+
+.board[data-mode="win"] .knot::before {
+  animation: flash 900ms ease calc(var(--i) * 170ms) both;
+}
+
+@keyframes flash {
+  0% {
+    scale: 1;
+  }
+  35% {
+    scale: 1.7;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.board[data-mode="win"] .endName[data-side="end"] {
+  animation: develop 900ms ease both;
+}
+
+/* Our route (after giving up, or asked for): drawn in, in plain ink, quieter than yours. */
+.board[data-variant="ours"] :is(.name, .endName) {
+  color: var(--ink-2);
+}
+
+.board[data-variant="ours"] .segment[data-kind="tied"] .segmentLine,
+.board[data-variant="ours"] .knot::before {
+  background-color: var(--ink-2);
+  box-shadow: none;
+}
+
+.board[data-mode="reveal"] .segmentLine {
+  animation: draw 700ms var(--ease) calc(200ms + var(--i) * 260ms) both;
+}
+
+.board[data-mode="reveal"] :is(.name, .film) {
+  animation: develop 700ms ease calc(500ms + var(--i) * 260ms) both;
+}
+
+/* ----- Down a phone ----- */
+
+.board[data-vertical] {
+  width: calc(100vw - 32px);
+}
+
+.board[data-vertical] .name,
+.board[data-vertical] .endName {
+  width: auto;
+  max-width: calc(100% - 64px);
+  transform: translate(calc(var(--x) + 22px), calc(var(--y) - 50%));
+  text-align: left;
+}
+
+.board[data-vertical] .name {
+  font-size: 18px;
+}
+
+.board[data-vertical] .endName {
+  font-size: clamp(24px, 7.4vw, 32px);
+}
+
+.board[data-vertical] .endLabel {
+  display: inline;
+  margin: 0 10px 0 0;
+  vertical-align: 0.35em;
+}
+
+.board[data-vertical] .film {
+  width: auto;
+  max-width: calc(100% - 72px);
+  transform: translate(calc(var(--x) + 24px), calc(var(--y) - 50%));
+  font-size: 14px;
+  text-align: left;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The console
+ * ------------------------------------------------------------------------------------------- */
+
+.console {
+  width: min(780px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 14px;
+}
+
+.status {
+  margin: 0;
+  font: 400 clamp(18px, 1.45vw, 22px)/1.2 var(--display);
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.status em {
+  font-style: normal;
+  color: var(--ink);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.dot {
+  margin: 0 0.3em;
+  color: var(--ink-3);
+}
+
+/* The worth ticks over (remounted on change) as links pass par or hints are taken. */
+.worth {
+  display: inline-block;
+  animation: develop 900ms ease both;
+}
+
+.hints {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.hintLine {
+  margin: 0;
+  font: 400 clamp(15px, 1.15vw, 17px)/1.35 var(--display);
+  color: var(--ink-2);
+  text-align: center;
+  animation: develop 700ms ease both;
+}
+
+.hintLine i {
+  color: rgb(var(--accent));
+}
+
+.hintMark {
+  margin-right: 8px;
+  font-size: 0.6em;
+  vertical-align: 0.2em;
+  color: rgb(var(--accent));
+}
+
+.useIt {
+  margin-left: 12px;
+  padding: 6px 11px;
+  border: 1px solid rgb(var(--accent) / 0.6);
+  border-radius: 999px;
+  background: none;
+  color: rgb(var(--accent));
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  vertical-align: 0.15em;
+  cursor: pointer;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+
+.useIt:not(:disabled):hover {
+  background: rgb(var(--accent));
+  color: #0b0b0b;
+}
+
+.slateBlock {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+
+.slate {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 2px 2px 10px;
+  border-bottom: 1px solid var(--hair);
+  transition: border-color 400ms ease;
+}
+
+.slate:focus-within {
+  border-color: rgb(var(--accent) / 0.75);
+}
+
+/* The film chosen for this link, in front of the cast search. */
+.via {
+  flex: none;
+  max-width: 46%;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 6px 7px 12px;
+  border: 1px solid rgb(var(--accent) / 0.45);
+  border-radius: 999px;
+  animation: develop 500ms ease both;
+}
+
+.viaLabel {
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.viaTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: italic 400 17px/1.1 var(--display);
+  color: rgb(var(--accent));
+}
+
+.viaClear {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-3);
+  font: 300 17px/1 var(--sans);
+  cursor: pointer;
+}
+
+.viaClear:not(:disabled):hover {
+  color: var(--ink);
+}
+
+.field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  font: 400 clamp(21px, 1.85vw, 28px)/1.25 var(--display);
+}
+
+.input[data-italic] {
+  font-style: italic;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+/* Hits open upward, over the board: the line sits low on the screen. */
+.hits {
+  position: absolute;
+  left: -14px;
+  right: -14px;
+  bottom: calc(100% + 16px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  max-height: min(360px, 46dvh);
+  padding: 6px;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  background: rgb(13 13 14 / 0.97);
+  box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.85);
+}
+
+.hits[hidden] {
+  display: none;
+}
+
+.list {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.option {
+  display: grid;
+  gap: 4px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.option[aria-selected="true"] {
+  background: rgb(var(--accent) / 0.13);
+}
+
+.option[aria-disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.optionTitle {
+  font: 400 19px/1.2 var(--display);
+  color: var(--ink);
+}
+
+.optionTitle[data-italic] {
+  font-style: italic;
+}
+
+.optionMeta,
+.listNote {
+  font: 500 9.5px/1.3 var(--mono);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.listNote {
+  padding: 10px 12px;
+}
+
+.listCredit {
+  flex: none;
+  margin: 4px 0 0;
+  padding: 8px 12px 4px;
+  border-top: 1px solid var(--hair);
+  font: 500 9.5px/1.4 var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.slateActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirmText {
+  flex: 1;
+  margin: 0;
+  padding: 3px 0;
+  font: italic 400 clamp(16px, 1.22vw, 18px)/1.22 var(--display);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* The play's other moves, under the line: undo at the left, the hints and giving up at the right. */
+.moves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 34px;
+}
+
+.movesGap {
+  flex: 1;
+}
+
+.go,
+.roll {
+  border: 0;
+  border-radius: 999px;
+  background: rgb(var(--accent));
+  color: #0b0b0b;
+  font: 600 13px/1 var(--sans);
+  letter-spacing: 0.02em;
+  padding: 11px 20px;
+  cursor: pointer;
+  transition:
+    opacity 300ms ease,
+    transform 150ms ease;
+}
+
+.go:disabled,
+.roll:disabled {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.go:not(:disabled):active,
+.roll:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.go:focus-visible,
+.roll:focus-visible,
+.quiet:focus-visible,
+.hintControl:focus-visible,
+.useIt:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.quiet,
+.hintControl {
+  padding: 10px 8px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 300ms ease;
+}
+
+.quiet:not(:disabled):hover,
+.hintControl:not(:disabled):hover {
+  color: var(--ink);
+}
+
+.quiet:disabled,
+.hintControl:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hintControl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink-2);
+}
+
+.hintCost {
+  color: rgb(var(--accent));
+  letter-spacing: 0.08em;
+}
+
+.alert {
+  margin: 0;
+  font: 500 11px/1.5 var(--mono);
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: #f0a58f;
+}
+
+/* Before the play: the rules and the way in. */
+.opening {
+  display: grid;
+  justify-items: center;
+  gap: 24px;
+  padding-top: 4px;
+}
+
+.rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 9px;
+  counter-reset: rule;
+}
+
+.rules li {
+  counter-increment: rule;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: baseline;
+  font: 400 clamp(16px, 1.25vw, 19px)/1.35 var(--display);
+  color: var(--ink-2);
+}
+
+.rules li::before {
+  content: counter(rule, decimal-leading-zero);
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.14em;
+  color: rgb(var(--accent) / 0.85);
+}
+
+.roll {
+  padding: 14px 30px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The end
+ * ------------------------------------------------------------------------------------------- */
+
+.creditsWrap {
+  width: 100%;
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+  pointer-events: none;
+  transition:
+    opacity 1100ms ease,
+    transform 1100ms var(--ease);
+}
+
+.creditsWrap[data-show] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.credits {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.kicker {
+  margin: 4px 0 0;
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgb(var(--accent));
+}
+
+.points {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 2px 0 0;
+  font: 400 clamp(48px, 5vw, 72px)/1 var(--display);
+  font-variant-numeric: lining-nums;
+}
+
+.points small {
+  font: italic 400 clamp(17px, 1.4vw, 21px)/1 var(--display);
+  color: var(--ink-3);
+}
+
+.creditActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.result {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: 6px;
+}
+
+.score {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.score b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dataCredit {
+  margin: 14px 0 0;
+  font: 500 9.5px/1.4 var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+}
+
+/* A result as a little thread. */
+.marks {
+  display: inline-flex;
+  align-items: center;
+}
+
+.markKnot,
+.markFlag {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-2);
+}
+
+.markFlag {
+  margin-left: 3px;
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--ink-3);
+}
+
+.markLink {
+  position: relative;
+  width: 17px;
+  height: 6px;
+}
+
+.markLink::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 6px;
+  top: 50%;
+  height: 1px;
+  background: var(--ink-3);
+}
+
+.markLink::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-2);
+}
+
+.markLink[data-end]::after {
+  background: rgb(var(--accent));
+}
+
+.markHints {
+  margin-left: 8px;
+  font-size: 7px;
+  letter-spacing: 3px;
+  color: rgb(var(--accent));
+}
+
+/* Everyone's results. */
+.panelBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(3 3 4 / 0.6);
+  animation: fadeIn 300ms ease both;
+}
+
+.panel {
+  width: min(460px, 100vw);
+  text-align: left;
+  height: 100%;
+  overflow: auto;
+  padding: 28px 26px;
+  border-left: 1px solid var(--hair);
+  background: #0c0c0d;
+  animation: panelIn 480ms var(--ease) both;
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.panelHead h3 {
+  margin: 0;
+  font: 400 28px/1 var(--display);
+}
+
+.close {
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: 300 28px/1 var(--sans);
+  cursor: pointer;
+}
+
+.close:hover {
+  color: var(--ink);
+}
+
+.close:focus-visible {
+  outline: 1px solid var(--ink-3);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.people {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.people li {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.who {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.who b {
+  overflow: hidden;
+  font: 500 14px/1.2 var(--sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who small {
+  font: 400 10.5px/1 var(--mono);
+  color: var(--ink-3);
+}
+
+.people li[data-you] .who b {
+  color: rgb(var(--accent));
+}
+
+.theirs {
+  display: grid;
+  gap: 8px;
+}
+
+.theirResult {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.personScore {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.theirChain {
+  font: 400 15px/1.4 var(--display);
+  color: var(--ink);
+}
+
+.theirChain i {
+  color: var(--ink-3);
+}
+
+.panelNote {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phones
+ * ------------------------------------------------------------------------------------------- */
+
+@media (max-width: 719px) {
+  .top {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .wordmark {
+    justify-self: center;
+    font-size: 16px;
+  }
+
+  .back span,
+  .back::after {
+    display: none;
+  }
+
+  .stage {
+    align-content: start;
+  }
+
+  .slate {
+    flex-wrap: wrap;
+  }
+
+  .via {
+    max-width: 100%;
+  }
+
+  .slateActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .moves {
+    justify-content: center;
+  }
+
+  .movesGap {
+    flex-basis: 100%;
+    height: 0;
+    order: 1;
+  }
+
+  .moves > :first-child {
+    order: 2;
+  }
+
+  .moves > :nth-child(n + 3) {
+    order: 0;
+  }
+
+  .panelBackdrop {
+    align-items: flex-end;
+  }
+
+  .panel {
+    width: 100%;
+    height: auto;
+    max-height: 82dvh;
+    border-left: 0;
+    border-top: 1px solid var(--hair);
+    border-radius: 16px 16px 0 0;
+    padding-bottom: max(env(safe-area-inset-bottom), 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen *,
+  .screen *::before,
+  .screen *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+}
