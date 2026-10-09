@@ -292,7 +292,7 @@ function Tile({ tile, box, lean, collapse, print, opened, arrive, peek, onEnter,
   const live = finished ? 0 : 1 - opened;
   const strip = finished ? clamp(collapse * 1.6 - 0.4) * (1 - print) : 0;
   // The bottom of a game still to play is its title card; its picture keeps above it.
-  const footer = finished ? 0 : Math.max(96, Math.min(h * 0.3, w < 300 ? 150 : 196));
+  const footer = finished ? 0 : Math.max(110, Math.min(h * 0.36, w < 300 ? 170 : 250));
 
   return (
     <a
@@ -490,7 +490,7 @@ function PlayedStrip({ tile, box, lean, opacity, settle, peek }: { tile: HomeTil
         </span>
       )}
       <span className={styles.playedLine} style={{ left: (people.length > 1 ? middle(box.y[1] - 44) - 22 : cx + title * 0.62 + 2), top: box.y[1] - 44, maxWidth: h - score * 2 - 140, opacity: write * (people.length > 1 ? 1 - peek : 1) }}>
-        {people.length > 1 ? `${r.line}` : r.line}
+        <b>{tile.title}</b> · {r.line}
       </span>
     </span>
   );
@@ -505,7 +505,8 @@ function TitleCard({ tile, box, lean, pad, footer, opacity }: { tile: HomeTile; 
   const top = box.y[1] - footer + 8;
   const x = seamAt(box, lean, top + footer / 2) + pad;
   const narrow = w < 300;
-  const size = Math.max(22, Math.min(46, w * 0.085));
+  // The game's name leads the card: the first thing read on a tile still to play.
+  const size = Math.max(26, Math.min(72, w * 0.13, footer * 0.34));
   return (
     <span className={styles.card} style={{ left: x, top, width: Math.max(140, w - (lean * (box.y[1] - box.y[0])) / 2 - 2 * pad), opacity }}>
       <span className={styles.cardTitle} style={{ fontSize: size }}>
