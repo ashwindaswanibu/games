@@ -127,11 +127,6 @@
   overflow: hidden;
 }
 
-.tile:focus-visible .label {
-  text-decoration: underline;
-  text-underline-offset: 6px;
-}
-
 .tile > * {
   position: absolute;
 }
@@ -184,18 +179,95 @@
   background: radial-gradient(ellipse 70% 60% at 50% 50%, #17181b, var(--hf-ground) 75%);
 }
 
-.label {
-  font: 500 11px/1.6 var(--hf-mono);
-  letter-spacing: 0.24em;
-  white-space: nowrap;
+/* A game still to play: its title card, and a lift under the pointer. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   pointer-events: none;
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 18px rgba(0, 0, 0, 0.7);
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-.label i {
-  display: block;
-  font-style: normal;
+.cardTitle {
+  font-family: var(--hf-serif);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9), 0 0 24px rgba(0, 0, 0, 0.7);
+}
+
+.cardTagline {
+  font: italic 400 16px/1.3 var(--hf-serif);
+  color: #cfc8bb;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+}
+
+.cardRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.cta {
+  font: 500 11px/1 var(--hf-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  border: 1px solid var(--hf-ink);
+  border-radius: 999px;
+  background: rgba(11, 11, 12, 0.55);
+  white-space: nowrap;
+  transition: background-color 0.25s, color 0.25s;
+}
+
+.cardSub {
+  font: 500 10px/1 var(--hf-mono);
+  letter-spacing: 0.22em;
   color: #b9b2a6;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+}
+
+.glow {
+  position: absolute;
+  background: radial-gradient(ellipse 60% 45% at 50% 85%, rgba(236, 230, 218, 0.12), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.35s;
+  pointer-events: none;
+}
+
+.tile:hover .glow,
+.tile:focus-visible .glow {
+  opacity: 1;
+}
+
+.tile:hover .card,
+.tile:focus-visible .card {
+  transform: translateY(-6px);
+}
+
+.tile:hover .cta,
+.tile:focus-visible .cta {
+  background: var(--hf-ink);
+  color: var(--hf-ground);
+}
+
+/* Played: still and quieter than the games still to play. */
+.rested {
+  filter: saturate(0.75);
+}
+
+.playedMark {
+  font: 600 9px/1 var(--hf-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 5px 8px;
+  border: 1px solid rgba(236, 230, 218, 0.7);
+  border-radius: 999px;
+  background: rgba(11, 11, 12, 0.6);
 }
 
 .name {

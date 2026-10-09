@@ -59,7 +59,10 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
           id: game.id,
           group: game.bucket,
           name: game.name.toUpperCase(),
+          title: game.name,
+          tagline: game.tagline,
           sub: tile.sub,
+          cta: state === "playing" ? { verb: "Continue", detail: tile.progress } : { verb: "Play", detail: "100" },
           href: `/play/${game.id}`,
           state,
           material: tile.material,
@@ -95,6 +98,8 @@ async function friendMarks(viewerId: string, game: AnyGame, date: PuzzleDate) {
 type Show = (ref: AssetRef | null | undefined) => AssetRef | null;
 interface Described {
   sub: string;
+  /** Where a started play is, for "Continue · …". */
+  progress: string;
   material: TileMaterial;
   result: TileResult | null;
 }
@@ -112,7 +117,8 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       show(p.first);
       const reel = Math.min(10, (s?.turns.length ?? 0) + 1);
       return {
-        sub: view ? (view.status === "in_progress" ? `REEL ${reel} OF 10` : "TEN REELS") : "TEN REELS · 100",
+        sub: "TEN REELS",
+        progress: `reel ${reel}`,
         material: { kind: "light", image: view && view.status !== "in_progress" ? p.first : shown },
         result: reveal ? { title: reveal.film.title, line: view?.result ? describeGrid(parseGrid(view.result.shareGrid)) : "", score, image: p.first, chain: null, frames: null } : null,
       };
@@ -126,7 +132,8 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const finishedChain = links.length > 0 && links.at(-1)!.person.id === p.end.id ? links : (reveal?.path ?? []);
       const line = s?.gaveUp ? "Gave up" : links.length <= p.par ? `At par · ${links.length} links` : `${links.length} links · par ${p.par}`;
       return {
-        sub: view?.status === "in_progress" ? `${links.length} ${links.length === 1 ? "LINK" : "LINKS"} SO FAR · PAR ${p.par}` : `PAR ${p.par} · 100`,
+        sub: `PAR ${p.par}`,
+        progress: `${links.length} ${links.length === 1 ? "link" : "links"} in`,
         material: { kind: "thread", from: p.start.name, to: p.end.name, knots: p.par, drawn: links.length },
         result: view && view.status !== "in_progress"
           ? { title: "", line, score, image: null, chain: { people: [p.start.name, ...finishedChain.map((l) => l.person.name)], films: finishedChain.map((l) => l.film.title) }, frames: null }
@@ -141,7 +148,8 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       for (const f of seen) show(f);
       const won = view?.status === "won";
       return {
-        sub: view?.status === "in_progress" ? `FRAME ${seen.length} OF 6` : "SIX FRAMES · 100",
+        sub: "SIX FRAMES",
+        progress: `frame ${seen.length}`,
         material: { kind: "frames", image: seen.at(-1)!, total: 6, shown: seen.length },
         result: reveal
           ? { title: reveal.film.title, line: won ? `Named on frame ${seen.length}` : "Not named in six frames", score, image: seen.at(-1)!, chain: null, frames: seen }
@@ -150,7 +158,8 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
     }
     default:
       return {
-        sub: game.tagline.toUpperCase(),
+        sub: "",
+        progress: "in progress",
         material: { kind: "word", headline: game.name },
         result: view?.result ? { title: game.name, line: view.result.label, score, image: null, chain: null, frames: null } : null,
       };
