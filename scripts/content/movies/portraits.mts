@@ -1,10 +1,12 @@
 /**
  * Faces for the catalog's people, for Degrees of Separation's thread.
  *
- *   npm run content:movies:portraits                     everyone in Degrees puzzles from today on
- *   npm run content:movies:portraits -- --top 2000       … and the 2,000 best-known actors
+ *   npm run content:movies:portraits                     the 2,000 best-known actors, and Degrees' start and end actors from today on
+ *   npm run content:movies:portraits -- --top 5000       … the 5,000 best-known instead
+ *   npm run content:movies:portraits -- --prune          also remove faces of anyone outside that set
  *   npm run content:movies:portraits -- --people 12,34   just these people
- *   npm run content:movies:portraits -- --refresh        fetch again, even people who have a face
+ *   npm run content:movies:portraits -- --refresh        fetch again, even people who have a face (and drop
+ *                                                        faces whose photo is gone or no longer usable)
  *   npm run content:movies:portraits -- --dry-run --preview /tmp/faces   crop, write the crops there, store nothing
  *   npm run content:movies:portraits -- --concurrency 2                  downloads at once (default 2; Wikimedia limits bursts)
  *
@@ -14,6 +16,11 @@
  * `movie_person_portraits`, with the photo's author, license and Commons page for the credit. A
  * photo without one clear face is skipped: a bad crop is worse than a plain knot. Downloads go to
  * the temp directory and are deleted as soon as they're cropped. Toning happens on screen, not here.
+ *
+ * Who gets a face must not depend on the puzzles' routes: a cast search shows faces, so if only a
+ * day's route co-stars had one, the face would give the route away. The set is the best-known
+ * actors by popularity, plus each day's start and end actors (the puzzle shows them anyway); never
+ * anyone just for being on a route.
  *
  * A non-local database needs `--allow-remote` to write, or `--allow-remote-read` for a dry run.
  */
@@ -33,7 +40,8 @@ import { faceCrop, isUsableLicense, mainFace, pickImage, plainCredit, PORTRAIT_S
 const { values: args } = parseArgs({
   options: {
     from: { type: "string" },
-    top: { type: "string", default: "0" },
+    top: { type: "string", default: "2000" },
+    prune: { type: "boolean", default: false },
     people: { type: "string" },
     refresh: { type: "boolean", default: false },
     concurrency: { type: "string", default: "2" },
@@ -86,18 +94,30 @@ const json = async <T,>(url: string, label: string): Promise<T> => {
   return (await response.json()) as T;
 };
 
-/** Everyone in Degrees puzzles from `from` on: start and end actors, and our routes' co-stars. */
-async function puzzlePeople(db: ContentDb, from: string): Promise<number[]> {
-  const rows = await selectAllPages<{ payload: unknown; solution: unknown }>((first, last) =>
-    db.from("puzzles").select("payload, solution").eq("game_id", "degrees").gte("puzzle_date", from).order("puzzle_date").range(first, last),
+/** Degrees' start and end actors from `from` on: the puzzle shows them. Never the routes' co-stars (see above). */
+async function puzzleEnds(db: ContentDb, from: string): Promise<number[]> {
+  const rows = await selectAllPages<{ payload: unknown }>((first, last) =>
+    db.from("puzzles").select("payload").eq("game_id", "degrees").gte("puzzle_date", from).order("puzzle_date").range(first, last),
   );
   const ids = new Set<number>();
-  for (const { payload, solution } of rows) {
+  for (const { payload } of rows) {
     const p = payload as { start?: { id?: number }; end?: { id?: number } };
-    const s = solution as { path?: { person?: { id?: number } }[] };
-    for (const id of [p.start?.id, p.end?.id, ...(s.path ?? []).map((l) => l.person?.id)]) if (typeof id === "number") ids.add(id);
+    for (const id of [p.start?.id, p.end?.id]) if (typeof id === "number") ids.add(id);
   }
   return [...ids];
+}
+
+/** Every person who has a face now. */
+async function allPortraitIds(db: ContentDb): Promise<number[]> {
+  const rows = await selectAllPages<{ person_id: number }>((first, last) => db.from("movie_person_portraits").select("person_id").order("person_id").range(first, last));
+  return rows.map((row) => row.person_id);
+}
+
+async function removePortraits(db: ContentDb, ids: readonly number[]): Promise<void> {
+  for (const part of chunk(ids, 200)) {
+    const { error } = await db.from("movie_person_portraits").delete().in("person_id", part);
+    if (error) throw new Error(`Couldn't remove portraits: ${error.message}`);
+  }
 }
 
 async function topActors(db: ContentDb, count: number): Promise<number[]> {
@@ -163,10 +183,15 @@ interface CommonsPage {
   }[];
 }
 
-/** What Commons says about each file: a sized copy, its page, its license and its author. */
-async function describePhotos(people: readonly Person[], files: ReadonlyMap<number, string>): Promise<{ photos: Photo[]; unlicensed: number }> {
+/**
+ * What Commons says about each file: a sized copy, its page, its license and its author. People
+ * whose file Commons doesn't have (deleted, renamed without a redirect) are `missing`; those whose
+ * license we can't use are `unlicensed`.
+ */
+async function describePhotos(people: readonly Person[], files: ReadonlyMap<number, string>): Promise<{ photos: Photo[]; unlicensed: number[]; missing: number[] }> {
   const photos: Photo[] = [];
-  let unlicensed = 0;
+  const unlicensed: number[] = [];
+  const missing: number[] = [];
   const wanted = people.filter((p) => files.has(p.id));
   for (const part of chunk(wanted, 50)) {
     const titles = part.map((p) => `File:${files.get(p.id)!}`);
@@ -187,16 +212,19 @@ async function describePhotos(people: readonly Person[], files: ReadonlyMap<numb
       const info = page?.imageinfo?.[0];
       const meta = info?.extmetadata ?? {};
       const license = plainCredit(meta.LicenseShortName?.value, 80);
-      if (!info?.thumburl || !info.descriptionurl || !license) return;
-      if (!isUsableLicense(license)) {
-        unlicensed++;
+      if (!info?.thumburl || !info.descriptionurl) {
+        missing.push(person.id);
+        return;
+      }
+      if (!license || !isUsableLicense(license)) {
+        unlicensed.push(person.id);
         return;
       }
       const licenseUrl = meta.LicenseUrl?.value && /^https?:\/\//.test(meta.LicenseUrl.value) ? meta.LicenseUrl.value : null;
       photos.push({ person, file: files.get(person.id)!, thumb: info.thumburl, page: info.descriptionurl, license, licenseUrl, author: plainCredit(meta.Artist?.value) });
     });
   }
-  return { photos, unlicensed };
+  return { photos, unlicensed, missing };
 }
 
 /** One round: download, find the faces, crop and store (or preview). Every download is deleted after. */
@@ -282,26 +310,48 @@ async function main() {
   if (args.preview) await mkdir(args.preview, { recursive: true });
 
   const named = args.people ? args.people.split(",").map((id) => positiveInt(id.trim(), "people")) : null;
-  const ids = named ?? [...new Set([...(await puzzlePeople(db, args.from ?? today())), ...(await topActors(db, top))])];
-  const have = args.refresh ? new Set<number>() : await havePortraits(db, ids);
-  const people = (await loadPeople(db, ids)).filter((p) => !have.has(p.id));
+  if (named && args.prune) throw new Error("--prune keeps the default set (best-known actors and puzzle ends); it doesn't go with --people");
+  const ids = named ?? [...new Set([...(await puzzleEnds(db, args.from ?? today())), ...(await topActors(db, top))])];
+
+  if (args.prune) {
+    const keep = new Set(ids);
+    const outside = (await allPortraitIds(db)).filter((id) => !keep.has(id));
+    console.log(`Pruning ${outside.length} face(s) of people outside the set${dryRun ? " (dry run: kept)" : ""}.`);
+    if (!dryRun) await removePortraits(db, outside);
+  }
+
+  const have = await havePortraits(db, ids);
+  const people = (await loadPeople(db, ids)).filter((p) => args.refresh || !have.has(p.id));
   console.log(`${ids.length} people asked for; ${have.size} already have a face; ${people.length} to look up.`);
 
   const files = await photoFiles(people);
-  const { photos, unlicensed } = await describePhotos(people, files);
-  console.log(`${files.size} have a photo on Wikidata; ${photos.length} usable (${unlicensed} skipped for their license).`);
+  const { photos, unlicensed, missing } = await describePhotos(people, files);
+  console.log(`${files.size} have a photo on Wikidata; ${photos.length} usable (${unlicensed.length} skipped for their license, ${missing.length} missing on Commons).`);
 
-  const counts: Record<Outcome, number> = { written: 0, previewed: 0, "no photo": people.length - files.size, license: unlicensed, "no face": 0, failed: 0 };
+  const outcomes = new Map<number, Outcome>();
+  for (const person of people) if (!files.has(person.id)) outcomes.set(person.id, "no photo");
+  for (const id of missing) outcomes.set(id, "no photo");
+  for (const id of unlicensed) outcomes.set(id, "license");
   const work = await mkdtemp(path.join(tmpdir(), "games-portraits-"));
   try {
     const rounds = chunk(photos, ROUND);
     for (const [i, round] of rounds.entries()) {
-      for (const outcome of (await processRound(db, round, work, concurrency)).values()) counts[outcome]++;
-      console.log(`  round ${i + 1}/${rounds.length}: ${counts.written + counts.previewed} faces so far`);
+      for (const [id, outcome] of await processRound(db, round, work, concurrency)) outcomes.set(id, outcome);
+      console.log(`  round ${i + 1}/${rounds.length}: ${[...outcomes.values()].filter((o) => o === "written" || o === "previewed").length} faces so far`);
     }
   } finally {
     await rm(work, { recursive: true, force: true });
   }
+
+  // A face whose photo is gone, or no longer usable, goes too (only when asked to look again).
+  const stale = args.refresh ? people.filter((p) => have.has(p.id) && ["no photo", "license", "no face"].includes(outcomes.get(p.id) ?? "")).map((p) => p.id) : [];
+  if (stale.length > 0) {
+    console.log(`Removing ${stale.length} face(s) whose photo is gone or no longer usable${dryRun ? " (dry run: kept)" : ""}.`);
+    if (!dryRun) await removePortraits(db, stale);
+  }
+
+  const counts: Record<Outcome, number> = { written: 0, previewed: 0, "no photo": 0, license: 0, "no face": 0, failed: 0 };
+  for (const outcome of outcomes.values()) counts[outcome]++;
   console.log(
     `\n${dryRun ? `Dry run: ${counts.previewed} faces cropped, nothing stored.` : `${counts.written} faces stored.`} ` +
       `No photo: ${counts["no photo"]}. License: ${counts.license}. No clear face: ${counts["no face"]}. Failed: ${counts.failed}.`,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { useShare } from "@/components/share-button";
 import { APP_NAME } from "@/config";
@@ -91,13 +91,7 @@ const chainDetail = z.object({ people: z.array(z.string()), films: z.array(z.str
 
 /** Everyone's results, in a panel over the room: each player's score and, once finished, their chain. */
 export function EveryonePanel({ friends, viewerId, start, onClose }: { friends: readonly FriendResult[] | null; viewerId: string; start: string; onClose(): void }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  usePanel(onClose);
 
   return (
     <div className={styles.panelBackdrop} onClick={onClose}>
@@ -159,13 +153,7 @@ export function EveryonePanel({ friends, viewerId, start, onClose }: { friends: 
  * page, as the license asks. Opened from the line under the console whenever faces show.
  */
 export function PhotoCredits({ faces, onClose }: { faces: readonly { name: string; portrait: Portrait }[]; onClose(): void }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  usePanel(onClose);
 
   return (
     <div className={styles.panelBackdrop} onClick={onClose}>
@@ -176,7 +164,7 @@ export function PhotoCredits({ faces, onClose }: { faces: readonly { name: strin
             ×
           </button>
         </div>
-        <p className={styles.panelNote}>Photos from Wikimedia Commons, cropped and toned.</p>
+        <p className={styles.panelNote}>{faces.length > 0 ? "Photos from Wikimedia Commons, cropped and toned." : "No portraits on screen yet."}</p>
         <ol className={styles.photoList}>
           {faces.map(({ name, portrait }) => (
             <li key={portrait.id}>
@@ -201,4 +189,27 @@ export function PhotoCredits({ faces, onClose }: { faces: readonly { name: strin
       </div>
     </div>
   );
+}
+
+/**
+ * A panel over the room: Escape closes it, and focus goes back to whatever opened it. (The screen
+ * makes everything else inert while it's open, so focus stays inside.)
+ */
+function usePanel(onClose: () => void) {
+  // What had focus as the panel opened, before its close button took it.
+  const [opener] = useState(() => (typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null));
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, [opener]);
 }

@@ -21,10 +21,12 @@ import {
  * co-star from it. The server module (`./server.ts`) checks both credits against the catalog and
  * hands `applyMove` the resolved films and people; every rule below is pure.
  *
- * - Moves: a link, an undo and a hint each use one. A player has par + `SPARE_MOVES` of them. An
- *   undo takes the last link off the chain, but the move it used is spent. The last move has to
- *   reach the end actor: anything else is refused (and so is an undo or a hint that would leave no
- *   move to finish with). Giving up ends the game with 0.
+ * - Moves: a player has par + `SPARE_MOVES` of them. A link uses one, and so does a hint. An undo
+ *   takes the last link off the chain, but that link's move stays spent (`movesUsed` counts the
+ *   links on the chain, the undos and the hints). The last move has to reach the end actor:
+ *   anything else is refused, and so is a hint that would leave no move to finish with. An undo is
+ *   always allowed (it leaves the moves as they were), so a player on their last move can step back
+ *   and finish from someone earlier. Giving up ends the game with 0.
  * - Two hints: the way in (the film a shortest route reaches the end actor through; once) and the
  *   next link (from where you stand, the first link of a shortest route from there; once per place
  *   you stand). The server finds them.
@@ -165,11 +167,10 @@ export function hintRefusal(puzzle: DegreesPuzzle, state: DegreesState, kind: De
   return null;
 }
 
-/** Why an undo can't be made now, or null if it can. */
+/** Why an undo can't be made now, or null if it can. It never changes the moves left, so it's never too late for one. */
 export function undoRefusal(puzzle: DegreesPuzzle, state: DegreesState): string | null {
   if (state.gaveUp || hasReachedEnd(puzzle, state)) return OVER;
   if (state.links.length === 0) return "There's no link to undo yet.";
-  if (movesLeft(puzzle, state) < 2) return lastMove(puzzle);
   return null;
 }
 
@@ -182,7 +183,7 @@ export const degrees = defineGame<DegreesPuzzle, DegreesSolution, DegreesState, 
   rules: [
     "Start from today's first actor. Pick a film they were in, then a co-star from that film.",
     "Keep linking co-stars until you reach the second actor.",
-    `You have par + ${SPARE_MOVES} moves. A link, an undo and a hint each use one.`,
+    `You have par + ${SPARE_MOVES} moves. A link uses one, and so does a hint; undoing a link doesn't give its move back.`,
     `Reach them in par moves for ${TOP_SCORE}. Each route length longer costs ${RANK_STEP}.`,
     "Stuck? The way in shows a film that leads to the second actor; the next link shows a step from where you are.",
   ],

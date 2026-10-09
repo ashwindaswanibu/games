@@ -1,4 +1,4 @@
-import { portraitBytes } from "@/server/portraits";
+import { isPersonId, portraitBytes } from "@/server/portraits";
 
 /**
  * One person's face, WebP: GET /api/catalog/portraits/12?v=3fa9c1d07e2b. A face says no more than
@@ -9,7 +9,7 @@ import { portraitBytes } from "@/server/portraits";
 export async function GET(request: Request, { params }: RouteContext<"/api/catalog/portraits/[id]">) {
   const { id } = await params;
   const personId = Number(id);
-  if (!/^[1-9][0-9]{0,9}$/.test(id) || !Number.isSafeInteger(personId)) return new Response("Not found", { status: 404 });
+  if (!/^[1-9][0-9]{0,9}$/.test(id) || !isPersonId(personId)) return new Response("Not found", { status: 404 });
 
   const portrait = await portraitBytes(personId);
   if (!portrait) {

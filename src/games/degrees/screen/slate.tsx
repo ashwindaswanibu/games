@@ -38,6 +38,8 @@ export function Slate(props: {
   onBack(): void;
   onCoStar(person: PersonRef): Promise<boolean>;
   onUndo(): Promise<unknown>;
+  /** The cast's hits showed these people's faces (each needs a credit). */
+  onFaces(people: readonly { id: number; name: string }[]): void;
   onHint(kind: DegreesHintKind): Promise<unknown>;
   onGiveUp(): void;
 }) {
@@ -51,6 +53,8 @@ export function Slate(props: {
     if (!confirming || disabled) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // Escape in a panel over the room closes the panel, not this question.
+      if (event.target instanceof Element && event.target.closest('[role="dialog"]')) return;
       event.preventDefault();
       backOut();
     };
@@ -87,7 +91,7 @@ export function Slate(props: {
     const questions: Record<Confirming, { ask: string; label: string; safe: string; go: string }> = {
       film: { ask: `Show the way in to ${end.name}, a film a shortest route reaches them through? It uses a move.`, label: "Take a hint?", safe: "Keep trying", go: "Show it" },
       link: { ask: `Show a next link from ${from.name}, on a shortest route from there? It uses a move.`, label: "Take a hint?", safe: "Keep trying", go: "Show it" },
-      undo: { ask: `Take ${undoing?.name ?? "the last link"} off your chain? It uses a move.`, label: "Undo?", safe: "Keep it", go: "Undo" },
+      undo: { ask: `Take ${undoing?.name ?? "the last link"} off your chain? The move that link used stays spent.`, label: "Undo?", safe: "Keep it", go: "Undo" },
       "give-up": { ask: "Give up today's chain? You'll score 0 and see a shortest route.", label: "Give up?", safe: "Keep playing", go: "Give up" },
     };
     const q = questions[confirming];
@@ -178,7 +182,7 @@ function FilmLine({ from, disabled, focus, onFilm }: LineProps) {
 }
 
 /** Step two: a co-star from the chosen film. */
-function CastLine({ draft, chainIds, disabled, onBack, onCoStar }: LineProps & { draft: FilmRef }) {
+function CastLine({ draft, chainIds, disabled, onBack, onCoStar, onFaces }: LineProps & { draft: FilmRef }) {
   const search = useCatalogSearch<PersonSearchHit>({
     endpoint: "/api/catalog/cast",
     scope: { film: String(draft.id) },
@@ -188,6 +192,14 @@ function CastLine({ draft, chainIds, disabled, onBack, onCoStar }: LineProps & {
     noun: { one: "person", many: "people" },
     onSelect: (hit) => void onCoStar({ id: hit.id, name: hit.name }),
   });
+  // Faces the hits show, for the portraits' credits.
+  const faced = search.status === "ready" && search.open ? search.results.filter((hit) => hit.portrait) : [];
+  const facedKey = faced.map((hit) => hit.id).join(",");
+  useEffect(() => {
+    if (faced.length > 0) onFaces(faced.map((hit) => ({ id: hit.id, name: hit.name })));
+    // Keyed by who is shown, not by the array's identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facedKey]);
   return (
     <SearchLine
       search={search}

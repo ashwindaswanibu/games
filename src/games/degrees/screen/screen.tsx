@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatPuzzleDate } from "@/core/day";
 import type { ImmersiveGameUiProps } from "@/core/view";
 import type { FilmRef, PersonRef } from "@/games/_movies/schemas";
@@ -77,7 +77,10 @@ export function DegreesScreen(props: Props) {
   const [announcement, setAnnouncement] = useState("");
   const [starting, setStarting] = useState(false);
   const [everyone, setEveryone] = useState(false);
-  const [photoCredits, setPhotoCredits] = useState(false);
+  // The portraits' credits, while open: everyone whose face was on screen (the board and the cast's hits).
+  const [photoCredits, setPhotoCredits] = useState<{ id: number; name: string }[] | null>(null);
+  // Faces the cast search has shown this visit, by person (they need a credit too).
+  const searchFaces = useRef(new Map<number, string>());
   const [showOurs, setShowOurs] = useState(false);
 
   // The board's live moments play only when they happen in front of the player, never on a reload.
@@ -124,14 +127,26 @@ export function DegreesScreen(props: Props) {
   const boardLabel = showingOurs ? "A shortest route" : "Your chain";
   // Faces for everyone the board can show: both ends, the chain, a hint's co-star, our route once it's out.
   const faceIds = puzzle
-    ? [puzzle.start.id, puzzle.end.id, ...links.map((l) => l.person.id), ...(next ? [next.person.id] : []), ...(reveal?.path.map((l) => l.person.id) ?? [])]
+    ? [
+        puzzle.start.id,
+        puzzle.end.id,
+        ...links.map((l) => l.person.id),
+        ...(next ? [next.person.id] : []),
+        ...(reveal?.path.map((l) => l.person.id) ?? []),
+        ...(photoCredits?.map((p) => p.id) ?? []),
+      ]
     : [];
   const portraitOf = usePortraits(faceIds);
-  const shownFaces = thread.knots.flatMap((knot) => {
+  const boardPeople = thread.knots.flatMap((knot) => {
     const who = knot.person ?? knot.ghost;
-    const face = who ? portraitOf(who.id) : null;
-    return who && face ? [{ name: who.name, portrait: face }] : [];
+    return who ? [who] : [];
   });
+
+  function openPhotoCredits() {
+    const people = new Map(boardPeople.map((p) => [p.id, p.name]));
+    for (const [id, name] of searchFaces.current) if (!people.has(id)) people.set(id, name);
+    setPhotoCredits([...people].map(([id, name]) => ({ id, name })));
+  }
 
   async function send(move: DegreesMove): Promise<boolean> {
     setError(null);
@@ -158,7 +173,8 @@ export function DegreesScreen(props: Props) {
   async function undo() {
     const removed = links.at(-1);
     setDraft(null);
-    if ((await send({ type: "undo" })) && removed) setAnnouncement(`Removed the link to ${removed.person.name}. ${plural(left - 1, "move")} left.`);
+    // An undo leaves the moves as they were: the link's move stays spent.
+    if ((await send({ type: "undo" })) && removed) setAnnouncement(`Removed the link to ${removed.person.name}. ${plural(left, "move")} left.`);
   }
 
   async function hint(kind: DegreesHintKind) {
@@ -176,6 +192,7 @@ export function DegreesScreen(props: Props) {
 
   return (
     <div className={`${DISPLAY_FONT_VARS} ${styles.screen}`} data-finished={finished || undefined} data-playing={playing || undefined}>
+      {/* While a panel is open over the room, the rest of the screen is out of reach (focus stays in the panel). */}
       <div className={styles.room} aria-hidden>
         <div className={styles.lamp} />
         <div className={styles.glow} style={{ opacity: puzzle ? Math.min(1, 0.35 + (0.65 * links.length) / Math.max(1, puzzle.par)) : 0.2 }} />
@@ -183,7 +200,7 @@ export function DegreesScreen(props: Props) {
         <div className={styles.grain} />
       </div>
 
-      <header className={styles.top}>
+      <header className={styles.top} inert={everyone || photoCredits !== null}>
         <Link href="/" prefetch={true} className={styles.back} aria-label="Back to today's games">
           <svg viewBox="0 0 16 16" aria-hidden>
             <path d="M10 3L5 8l5 5" />
@@ -199,7 +216,7 @@ export function DegreesScreen(props: Props) {
         </span>
       </header>
 
-      <main className={styles.stage}>
+      <main className={styles.stage} inert={everyone || photoCredits !== null}>
         <Board
           thread={thread}
           mode={mode}
@@ -234,7 +251,12 @@ export function DegreesScreen(props: Props) {
           {playing && puzzle && state && from && (
             <>
               <p className={styles.status}>
-                {lastMove ? (
+                {left === 0 ? (
+                  // Only a play from before moves were counted can get here.
+                  <>
+                    No moves left <span className={styles.dot}>·</span> give up to see a shortest route
+                  </>
+                ) : lastMove ? (
                   <>
                     Last move <span className={styles.dot}>·</span> it has to reach <em>{puzzle.end.name}</em>
                   </>
@@ -279,7 +301,7 @@ export function DegreesScreen(props: Props) {
                 draft={film}
                 chainIds={chainPersonIds(puzzle, state)}
                 disabled={pending}
-                canUndo={links.length > 0 && left > 1}
+                canUndo={links.length > 0}
                 canHint={left > 1}
                 wayInTaken={wayIn !== null}
                 nextShowing={next !== null}
@@ -293,6 +315,9 @@ export function DegreesScreen(props: Props) {
                 onBack={() => setDraft(null)}
                 onCoStar={(person) => (film ? link(person, film) : Promise.resolve(false))}
                 onUndo={undo}
+                onFaces={(seen) => {
+                  for (const { id, name } of seen) searchFaces.current.set(id, name);
+                }}
                 onHint={hint}
                 onGiveUp={() => void giveUp()}
               />
@@ -319,8 +344,8 @@ export function DegreesScreen(props: Props) {
             </p>
           )}
 
-          {shownFaces.length > 0 && (
-            <button type="button" className={styles.photoCreditsLink} onClick={() => setPhotoCredits(true)} aria-haspopup="dialog">
+          {view && (
+            <button type="button" className={styles.photoCreditsLink} onClick={openPhotoCredits} aria-haspopup="dialog">
               Portraits · Wikimedia Commons
             </button>
           )}
@@ -328,7 +353,15 @@ export function DegreesScreen(props: Props) {
       </main>
 
       {everyone && puzzle && <EveryonePanel friends={friends} viewerId={viewerId} start={puzzle.start.name} onClose={() => setEveryone(false)} />}
-      {photoCredits && <PhotoCredits faces={shownFaces} onClose={() => setPhotoCredits(false)} />}
+      {photoCredits && (
+        <PhotoCredits
+          faces={photoCredits.flatMap(({ id, name }) => {
+            const portrait = portraitOf(id);
+            return portrait ? [{ name, portrait }] : [];
+          })}
+          onClose={() => setPhotoCredits(null)}
+        />
+      )}
 
       <p className={styles.srOnly} role="status" aria-live="polite">
         {announcement}

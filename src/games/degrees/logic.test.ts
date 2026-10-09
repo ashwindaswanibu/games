@@ -172,11 +172,28 @@ describe("applyMove", () => {
     const state = play(...moves);
     expect(movesLeft(puzzle, state)).toBe(1);
     expect(reject(state, link(8, lambs, { id: 9, name: "Extra C" }))).toBe("That's your last move, so it has to reach Anthony Hopkins.");
-    expect(reject(state, { type: "undo" })).toBe("Your last move has to reach Anthony Hopkins.");
     expect(hintRefusal(puzzle, state, "link")).toBe("Your last move has to reach Anthony Hopkins.");
+    // On the last move, stepping back is still allowed: it leaves the moves as they were.
+    const back = playFrom(state, { type: "undo" });
+    expect(movesLeft(puzzle, back)).toBe(1);
+    expect(currentActor(puzzle, back)).toEqual({ id: 7, name: "Extra A" });
     const won = play(...moves, link(8, lambs, hopkins));
     expect(won.links).toHaveLength(7);
     expect(degrees.outcome({ puzzle, solution, state: won })).toBe("won");
+  });
+
+  it("lets a player on their last move step back and finish from someone earlier", () => {
+    // 5 links and an undo: 6 of 7 moves. Kilmer isn't in a film with Hopkins; Foster, before them, is.
+    const state: DegreesState = {
+      links: [{ film: heat, person: deNiro }, { film: heat, person: keitel }, { film: taxiDriver, person: foster }, { film: heat, person: kilmer }],
+      gaveUp: false,
+      undos: 2,
+      hints: [],
+    };
+    expect(movesLeft(puzzle, state)).toBe(1);
+    const won = playFrom(state, { type: "undo" }, link(3, lambs, hopkins));
+    expect(degrees.outcome({ puzzle, solution, state: won })).toBe("won");
+    expect(finish(won, "won").score.score).toBe(20);
   });
 
   it("counts undos and hints against the moves, so the last move can come sooner", () => {
