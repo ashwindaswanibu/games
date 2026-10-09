@@ -190,6 +190,9 @@
 
 .cardTitle {
   font-family: var(--hf-serif);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #fff;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -402,6 +405,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 0 14px rgba(0, 0, 0, 0.85);
+}
+
+.playedLine b {
+  font-weight: 600;
+  color: #fff;
 }
 
 .playedLine {
