@@ -314,8 +314,8 @@ function Material({ tile, box, lean, cover, arrive, finished, pad }: { tile: Hom
   if (m.kind === "light") {
     return (
       <>
-        <SealedImage asset={m.image} className={`${styles.cover} ${styles.grey}`} style={cover} />
-        <SealedImage asset={m.image} className={`${styles.cover} ${finished ? "" : styles.drift}`} style={{ ...cover, opacity: finished ? 0.85 : arrive }} />
+        <SealedImage asset={m.image} className={`${styles.strip} ${styles.grey}`} style={cover} />
+        <SealedImage asset={m.image} className={`${styles.strip} ${finished ? "" : styles.drift}`} style={{ ...cover, opacity: finished ? 0.85 : arrive }} />
         <span className={styles.shade} style={cover} />
       </>
     );
@@ -357,27 +357,27 @@ function Material({ tile, box, lean, cover, arrive, finished, pad }: { tile: Hom
 
   if (m.kind === "frames") {
     if (finished) return <span className={styles.dark} style={cover} />;
-    const cols = 3;
-    const slotW = Math.max(36, Math.min(190, (w - 2 * pad - (lean * h)) / 3.4, (h - 120) / 1.7 / 0.75));
-    const slotH = slotW * 0.75;
-    const gx = (box.x[0] + box.x[1]) / 2 - (cols * slotW + (cols - 1) * 14) / 2;
-    const gy = (box.y[0] + box.y[1]) / 2 - slotH - 7;
+    // The latest frame, large, on a lightbox; six ticks beneath, one per frame, lit as they're seen.
+    const room = w - 2 * pad - lean * h;
+    const frameW = Math.max(80, Math.min(room, 640, ((h - 200) * m.image.width) / m.image.height));
+    const frameH = (frameW * m.image.height) / m.image.width;
+    const cx = (box.x[0] + box.x[1]) / 2;
+    const top = (box.y[0] + box.y[1]) / 2 - frameH / 2 - 10;
+    const tickW = Math.min(36, (frameW - (m.total - 1) * 8) / m.total);
     return (
       <>
         <span className={styles.dark} style={cover} />
-        {Array.from({ length: m.total }, (_, j) => {
-          const lit = j === m.shown - 1;
-          return (
-            <span
-              key={j}
-              className={styles.slot}
-              data-seen={j < m.shown - 1 ? "" : undefined}
-              style={{ left: gx + (j % cols) * (slotW + 14), top: gy + Math.floor(j / cols) * (slotH + 14), width: slotW, height: slotH, opacity: clamp((arrive - 0.3 - j * 0.05) * 3) }}
-            >
-              {lit && <SealedImage asset={m.image} className={styles.flicker} style={{ inset: 0, width: "100%", height: "100%" }} />}
-            </span>
-          );
-        })}
+        <span className={styles.slot} style={{ left: cx - frameW / 2, top, width: frameW, height: frameH, opacity: clamp((arrive - 0.3) * 3) }}>
+          <SealedImage asset={m.image} className={styles.flicker} style={{ inset: 0, width: "100%", height: "100%" }} />
+        </span>
+        {Array.from({ length: m.total }, (_, j) => (
+          <span
+            key={j}
+            className={styles.tick}
+            data-seen={j < m.shown ? "" : undefined}
+            style={{ left: cx - (m.total * tickW + (m.total - 1) * 8) / 2 + j * (tickW + 8), top: top + frameH + 22, width: tickW, opacity: clamp((arrive - 0.45 - j * 0.04) * 3) }}
+          />
+        ))}
       </>
     );
   }
@@ -426,8 +426,9 @@ function Print({ tile, box, lean, cover, amount }: { tile: HomeTile; box: TileBo
   const fade = (from: number) => clamp((amount - from) / (1 - from));
   return (
     <span className={styles.print} style={{ opacity: clamp(amount * 1.6) }}>
-      {m.kind === "light" && r.image && <SealedImage asset={r.image} className={styles.cover} style={cover} />}
-      {r.frames && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.backdrop}`} style={cover} />}
+      {m.kind === "light" && r.image && <SealedImage asset={r.image} className={styles.strip} style={cover} />}
+      {r.frames && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.wash}`} style={cover} />}
+      {r.frames && r.image && h > 260 && <SealedImage asset={r.image} className={styles.still} style={stillBox(box, lean, r.image, baseY)} />}
       {m.kind === "thread" && <span className={styles.dark} style={cover} />}
       <span className={styles.shade} style={cover} />
       {r.chain && (
@@ -494,6 +495,19 @@ function SealedImage({ asset, className, style }: { asset: AssetRef; className?:
   if (!src) return null;
   // eslint-disable-next-line @next/next/no-img-element -- object URLs of sealed images (src/lib/sealed-assets.ts)
   return <img src={src} alt="" className={className} style={style} draggable={false} decoding="async" />;
+}
+
+/**
+ * The frame it was named on, at its own proportions (never stretched over a tall third of the
+ * screen): as wide as the tile allows, above the title.
+ */
+function stillBox(box: TileBox, lean: number, image: AssetRef, baseY: number): CSSProperties {
+  const k = (lean * (box.y[1] - box.y[0])) / 2;
+  const room = box.x[1] - box.x[0] - 2 * k - 48;
+  const width = Math.max(120, Math.min(room, (image.width / image.height) * (baseY - box.y[0] - 150)));
+  const height = (width * image.height) / image.width;
+  const top = Math.max(box.y[0] + 24, baseY - 110 - height);
+  return { left: (box.x[0] + box.x[1]) / 2 - width / 2, top, width, height };
 }
 
 function splitName(name: string) {
