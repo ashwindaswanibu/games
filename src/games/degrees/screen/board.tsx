@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, type CSSProperties } from "react";
+import type { Portrait } from "@/games/_movies/schemas";
 import { stretch, threadGeometry, type Thread, type ThreadKnot, type ThreadSegment } from "./thread";
 import styles from "./screen.module.css";
 
@@ -25,8 +26,10 @@ export function Board(props: {
   /** Whose chain it is: the player's, or our shortest route (drawn quieter). */
   variant: "yours" | "ours";
   label: string;
+  /** A person's face, once known (null: none, or not yet). */
+  portraitOf: (personId: number) => Portrait | null;
 }) {
-  const { thread, mode, variant, label } = props;
+  const { thread, mode, variant, label, portraitOf } = props;
   // Ties on the board when it first drew; any tied since draw themselves in.
   const [first] = useState(() => new Set(thread.segments.filter((s) => s.kind === "tied").map((s) => s.key)));
   const fresh = (key: string) => !first.has(key);
@@ -92,7 +95,7 @@ export function Board(props: {
               return (
                 <li key={knot.key} className={styles.knotItem} data-fresh={(knot.person !== null && i > 0 && into?.kind === "tied" && fresh(into.key)) || undefined}>
                   {into && mid && <FilmLabel segment={into} at={mid} angle={angle} width={room} index={i - 1} />}
-                  <Knot knot={knot} index={i} x={at.x} y={at.y} width={room} last={i === thread.knots.length - 1} />
+                  <Knot knot={knot} index={i} x={at.x} y={at.y} width={room} last={i === thread.knots.length - 1} portraitOf={portraitOf} />
                 </li>
               );
             })}
@@ -126,15 +129,24 @@ function FilmLabel({ segment, at, angle, width, index }: { segment: ThreadSegmen
   );
 }
 
-/** A knot: a person tied into the chain (the two ends large), or a place still to tie. */
-function Knot({ knot, index, x, y, width, last }: { knot: ThreadKnot; index: number; x: number; y: number; width: number | null; last: boolean }) {
+/**
+ * A knot: a person tied into the chain (the two ends large), or a place still to tie. With a face,
+ * the two ends' are large and low-key behind their names, like a title card's; a co-star's sits on
+ * the knot. Faces are toned to the room while playing and take their colour when the end is reached.
+ */
+function Knot(props: { knot: ThreadKnot; index: number; x: number; y: number; width: number | null; last: boolean; portraitOf: (personId: number) => Portrait | null }) {
+  const { knot, index, x, y, width, last, portraitOf } = props;
   const end = knot.kind === "start" || (knot.kind === "end" && last);
+  const side = knot.kind === "start" ? "start" : end ? "end" : undefined;
   const style = { "--x": `${x}px`, "--y": `${y}px`, "--w": width ? `${width}px` : undefined, "--i": index } as CSSProperties;
+  const who = knot.person ?? knot.ghost;
+  const face = who ? portraitOf(who.id) : null;
   return (
     <>
       <span className={styles.knot} data-kind={knot.kind} style={style} aria-hidden />
+      {face && <Face key={face.src} src={face.src} side={side} ghost={!knot.person} style={style} />}
       {knot.person ? (
-        <span className={end ? styles.endName : styles.name} data-side={knot.kind === "start" ? "start" : end ? "end" : undefined} style={style}>
+        <span className={end ? styles.endName : styles.name} data-side={side} data-face={face !== null || undefined} style={style}>
           {end && (
             <span className={styles.endLabel} aria-hidden>
               {knot.kind === "start" ? "From" : "To"}
@@ -144,13 +156,25 @@ function Knot({ knot, index, x, y, width, last }: { knot: ThreadKnot; index: num
           {knot.person.name}
         </span>
       ) : knot.ghost ? (
-        <span className={styles.name} data-ghost style={style}>
+        <span className={styles.name} data-ghost data-face={face !== null || undefined} style={style}>
           <span className={styles.srOnly}>Hint: </span>
-          {knot.ghost}
+          {knot.ghost.name}
         </span>
       ) : (
         <span className={styles.srOnly}>{knot.kind === "open" ? "Next link, to make" : "A link still to make"}</span>
       )}
     </>
+  );
+}
+
+/** A face, faded in once it has loaded (until then, and if it never does, the knot shows alone). */
+function Face({ src, side, ghost, style }: { src: string; side: "start" | "end" | undefined; ghost: boolean; style: CSSProperties }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <span className={styles.face} data-side={side} data-ghost={ghost || undefined} data-loaded={loaded || undefined} style={style} aria-hidden>
+      {/* A small, already cropped WebP from our own route: next/image would only add a hop. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" decoding="async" onLoad={() => setLoaded(true)} />
+    </span>
   );
 }

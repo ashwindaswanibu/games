@@ -8,18 +8,21 @@ import type { PuzzleDate } from "@/core/day";
 import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
+import type { Portrait } from "@/games/_movies/schemas";
 import { degrees, type DegreesPuzzle } from "../logic";
 import styles from "./screen.module.css";
 
-/** A result as a little thread: a knot per link, a mark per hint, then a star (reached) or a flag. */
-export function parseChainGrid(grid: string): { links: number; hints: number; won: boolean } {
+/** A result as a little thread: a knot per link, a mark per undo and per hint, then a star (reached) or a flag. */
+export function parseChainGrid(grid: string): { links: number; undos: number; hints: number; won: boolean } {
   const count = (mark: string) => grid.split(mark).length - 1;
-  return { links: count("🎞"), hints: count("💡"), won: grid.includes("⭐") };
+  return { links: count("🎞"), undos: count("✂️"), hints: count("💡"), won: grid.includes("⭐") };
 }
 
+const some = (n: number, one: string) => (n > 0 ? `, ${n} ${n === 1 ? one : `${one}s`}` : "");
+
 export function ChainMarks({ grid, label }: { grid: string; label?: string }) {
-  const { links, hints, won } = parseChainGrid(grid);
-  const said = label ?? `${links} ${links === 1 ? "link" : "links"}${hints > 0 ? `, ${hints} ${hints === 1 ? "hint" : "hints"}` : ""}, ${won ? "reached" : "gave up"}`;
+  const { links, undos, hints, won } = parseChainGrid(grid);
+  const said = label ?? `${links} ${links === 1 ? "link" : "links"}${some(undos, "undo")}${some(hints, "hint")}, ${won ? "reached" : "gave up"}`;
   return (
     <span className={styles.marks} role="img" aria-label={said}>
       <span className={styles.markKnot} />
@@ -27,7 +30,7 @@ export function ChainMarks({ grid, label }: { grid: string; label?: string }) {
         <span key={i} className={styles.markLink} data-end={(won && i === links - 1) || undefined} />
       ))}
       {!won && <span className={styles.markFlag} />}
-      {hints > 0 && <span className={styles.markHints}>{"◆".repeat(hints)}</span>}
+      {undos + hints > 0 && <span className={styles.markHints}>{"×".repeat(undos) + "◆".repeat(hints)}</span>}
     </span>
   );
 }
@@ -40,18 +43,19 @@ export function ChainMarks({ grid, label }: { grid: string; label?: string }) {
 export function Credits(props: {
   puzzle: DegreesPuzzle;
   won: boolean;
-  links: number;
+  /** Moves the play used (links, undos and hints). */
+  moves: number;
   result: { score: number; label: string; shareGrid: string };
   date: PuzzleDate;
   /** Whether the board can switch to our route (the player's chain differs), and which it shows. */
   ours: { available: boolean; showing: boolean; toggle(): void };
   onEveryone(): void;
 }) {
-  const { puzzle, won, links, result, date, ours, onEveryone } = props;
+  const { puzzle, won, moves, result, date, ours, onEveryone } = props;
   const { share, copied } = useShare(
     shareText({ appName: APP_NAME, gameName: degrees.name, emoji: degrees.emoji, date, label: result.label, score: result.score, grid: result.shareGrid }),
   );
-  const over = links - puzzle.par;
+  const over = moves - puzzle.par;
   const kicker = !won ? "Gave up · a shortest route" : over > 0 ? `Connected · ${over} over par` : over < 0 ? "Connected · under par" : "Connected · at par";
 
   return (
@@ -83,7 +87,7 @@ export function Credits(props: {
   );
 }
 
-const chainDetail = z.object({ people: z.array(z.string()), films: z.array(z.string()), hints: z.number() });
+const chainDetail = z.object({ people: z.array(z.string()), films: z.array(z.string()) });
 
 /** Everyone's results, in a panel over the room: each player's score and, once finished, their chain. */
 export function EveryonePanel({ friends, viewerId, start, onClose }: { friends: readonly FriendResult[] | null; viewerId: string; start: string; onClose(): void }) {
@@ -145,6 +149,55 @@ export function EveryonePanel({ friends, viewerId, start, onClose }: { friends: 
             })}
           </ol>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Whose faces are on the board and whose photos they are: each photo's author, license and Commons
+ * page, as the license asks. Opened from the line under the console whenever faces show.
+ */
+export function PhotoCredits({ faces, onClose }: { faces: readonly { name: string; portrait: Portrait }[]; onClose(): void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className={styles.panelBackdrop} onClick={onClose}>
+      <div className={styles.panel} role="dialog" aria-modal="true" aria-label="Portraits" onClick={(event) => event.stopPropagation()}>
+        <div className={styles.panelHead}>
+          <h3>Portraits</h3>
+          <button type="button" className={styles.close} onClick={onClose} aria-label="Close" autoFocus>
+            ×
+          </button>
+        </div>
+        <p className={styles.panelNote}>Photos from Wikimedia Commons, cropped and toned.</p>
+        <ol className={styles.photoList}>
+          {faces.map(({ name, portrait }) => (
+            <li key={portrait.id}>
+              <b>{name}</b>
+              <span>
+                {portrait.credit.author ? `${portrait.credit.author} · ` : ""}
+                {portrait.credit.licenseUrl ? (
+                  <a href={portrait.credit.licenseUrl} target="_blank" rel="noreferrer">
+                    {portrait.credit.license}
+                  </a>
+                ) : (
+                  portrait.credit.license
+                )}
+                {" · "}
+                <a href={portrait.credit.source} target="_blank" rel="noreferrer">
+                  Source ↗
+                </a>
+              </span>
+            </li>
+          ))}
+        </ol>
       </div>
     </div>
   );

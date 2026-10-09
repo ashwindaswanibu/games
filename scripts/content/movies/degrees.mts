@@ -10,7 +10,9 @@
  * Builds the bipartite actor–film graph from every catalog credit, then for each date picks a
  * start and an end actor among the best-known actors so that the shortest chain between them is
  * 2 or 3 links. Par is that length; the solution is the most recognisable shortest chain (famous
- * films, famous co-stars, top-billed credits). Needs the catalog (`content:movies:catalog`).
+ * films, famous co-stars, top-billed credits). Scores rank chain lengths, so the puzzle also lists
+ * any length up to par + the spare moves that no chain has (`missingLengths`; almost never any).
+ * Needs the catalog (`content:movies:catalog`).
  *
  * Never overwrites a real puzzle: a date that already has one is skipped, whoever wrote it. The one
  * exception is `--replace-fixtures`, which replaces a DEV FIXTURE puzzle (payload `fixture: true`)
@@ -37,6 +39,7 @@ import type { FilmRef, PersonRef } from "@/games/_movies/schemas";
 import {
   DEGREES_MAX_PAR,
   DEGREES_MIN_PAR,
+  DEGREES_SPARE_MOVES,
   degreesPuzzleSchema,
   degreesSolutionSchema,
   isConsistentSolution,
@@ -52,6 +55,7 @@ import {
   chainIntact,
   isNonFictionFilm,
   linkDistances,
+  missingChainLengths,
   pickPuzzle,
   popularityLinkScore,
   reparDecision,
@@ -184,7 +188,9 @@ function filmRef(films: ReadonlyMap<number, FilmInfo>, id: number): FilmRef {
  * day keeps exactly the names its players were shown.
  */
 function checkedPuzzle(gen: Generator, start: PersonRef, end: PersonRef, path: readonly PathLink[]): { puzzle: DegreesPuzzle; solution: DegreesSolution } {
-  const puzzle = degreesPuzzleSchema.parse({ start, end, par: path.length });
+  // Scores rank chain lengths; a length no chain has is no rank (see `rankOf` in the game's logic).
+  const missingLengths = missingChainLengths(gen.graph, start.id, end.id, path.length, path.length + DEGREES_SPARE_MOVES);
+  const puzzle = degreesPuzzleSchema.parse({ start, end, par: path.length, ...(missingLengths.length > 0 ? { missingLengths } : {}) });
   const solution = degreesSolutionSchema.parse({
     path: path.map((link) => ({ film: filmRef(gen.films, link.filmId), person: link.personId === end.id ? end : personRef(gen.people, link.personId) })),
   });

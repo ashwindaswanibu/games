@@ -4,18 +4,19 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import { filmSearchResponseSchema, personSearchResponseSchema, type FilmRef, type FilmSearchHit, type PersonRef, type PersonSearchHit } from "@/games/_movies/schemas";
 import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
-import { HINT_COST, type DegreesHintKind } from "../logic";
+import type { DegreesHintKind } from "../logic";
 import styles from "./screen.module.css";
 
-type Confirming = DegreesHintKind | "give-up";
+type Confirming = DegreesHintKind | "undo" | "give-up";
 
 /**
  * The link line: the next link is made in two steps, a film the current actor was in, then a
  * co-star from it. The film chosen rides in front of the field while the cast is searched; Escape
  * or Backspace in the empty field (or its ×) puts it back.
  *
- * Under it, the play's other moves: Undo (free), the two hints at their cost, Give up. A hint or
- * giving up asks first: the question takes the line's place, and the safe answer has focus.
+ * Under it, the play's other moves: Undo, the two hints, Give up. Each asks first (an undo or a hint
+ * uses a move; giving up ends the day): the question takes the line's place, and the safe answer
+ * has focus.
  */
 export function Slate(props: {
   from: PersonRef;
@@ -24,20 +25,23 @@ export function Slate(props: {
   /** Everyone in the chain: shown in the cast, but not choosable. */
   chainIds: readonly number[];
   disabled: boolean;
+  /** An undo or a hint may be made: there's a link to undo, and a move would still be left after. */
   canUndo: boolean;
+  canHint: boolean;
   wayInTaken: boolean;
   nextShowing: boolean;
-  lastLink: boolean;
+  /** Who an undo would take off the chain. */
+  undoing: PersonRef | null;
   /** Put the cursor in the field when it mounts (only once the player has acted: it raises a phone's keyboard). */
   focus: boolean;
   onFilm(film: FilmRef): void;
   onBack(): void;
   onCoStar(person: PersonRef): Promise<boolean>;
-  onUndo(): void;
+  onUndo(): Promise<unknown>;
   onHint(kind: DegreesHintKind): Promise<unknown>;
   onGiveUp(): void;
 }) {
-  const { from, end, draft, disabled, canUndo, wayInTaken, nextShowing, onHint, onGiveUp } = props;
+  const { from, end, draft, disabled, canUndo, canHint, wayInTaken, nextShowing, undoing, onUndo, onHint, onGiveUp } = props;
   const [confirming, setConfirming] = useState<Confirming | null>(null);
   const backTo = useRef<Confirming | null>(null);
   const buttons = useRef<Partial<Record<Confirming, HTMLButtonElement | null>>>({});
@@ -74,28 +78,29 @@ export function Slate(props: {
       onGiveUp();
       return;
     }
-    // Shown or refused (the error says why), the question goes.
-    await onHint(asked);
+    // Made or refused (the error says why), the question goes.
+    await (asked === "undo" ? onUndo() : onHint(asked));
     setConfirming(null);
   }
 
   if (confirming) {
-    const question =
-      confirming === "film"
-        ? `Show the way in to ${end.name}: the film a shortest route reaches them through? It costs ${HINT_COST.film} points.`
-        : confirming === "link"
-          ? `Show a next link from ${from.name}, on a shortest route from there? It costs ${HINT_COST.link} points.`
-          : "Give up today's chain? You'll score 0 and see a shortest route.";
+    const questions: Record<Confirming, { ask: string; label: string; safe: string; go: string }> = {
+      film: { ask: `Show the way in to ${end.name}, a film a shortest route reaches them through? It uses a move.`, label: "Take a hint?", safe: "Keep trying", go: "Show it" },
+      link: { ask: `Show a next link from ${from.name}, on a shortest route from there? It uses a move.`, label: "Take a hint?", safe: "Keep trying", go: "Show it" },
+      undo: { ask: `Take ${undoing?.name ?? "the last link"} off your chain? It uses a move.`, label: "Undo?", safe: "Keep it", go: "Undo" },
+      "give-up": { ask: "Give up today's chain? You'll score 0 and see a shortest route.", label: "Give up?", safe: "Keep playing", go: "Give up" },
+    };
+    const q = questions[confirming];
     return (
       <div key="confirm" className={styles.slateBlock}>
-        <div className={styles.slate} role="group" aria-label={confirming === "give-up" ? "Give up?" : "Take a hint?"}>
-          <p className={styles.confirmText}>{question}</p>
+        <div className={styles.slate} role="group" aria-label={q.label}>
+          <p className={styles.confirmText}>{q.ask}</p>
           <div className={styles.slateActions}>
             <button type="button" className={styles.quiet} disabled={disabled} onClick={backOut} autoFocus>
-              {confirming === "give-up" ? "Keep playing" : "Keep trying"}
+              {q.safe}
             </button>
             <button type="button" className={styles.go} disabled={disabled} onClick={() => void answer()}>
-              {confirming === "give-up" ? "Give up" : `Show it for ${HINT_COST[confirming]}`}
+              {q.go}
             </button>
           </div>
         </div>
@@ -113,7 +118,7 @@ export function Slate(props: {
     <div key="line" className={styles.slateBlock}>
       {draft ? <CastLine key={`cast-${from.id}-${draft.id}`} {...props} draft={draft} /> : <FilmLine key={`films-${from.id}`} {...props} />}
       <div className={styles.moves}>
-        <button type="button" className={styles.quiet} disabled={disabled || !canUndo} onClick={props.onUndo}>
+        <button ref={keep("undo")} type="button" className={styles.quiet} disabled={disabled || !canUndo} onClick={ask("undo")}>
           <span aria-hidden>↶ </span>Undo
         </button>
         <span className={styles.movesGap} />
@@ -121,21 +126,21 @@ export function Slate(props: {
           ref={keep("film")}
           type="button"
           className={styles.hintControl}
-          disabled={disabled || wayInTaken}
+          disabled={disabled || wayInTaken || !canHint}
           onClick={ask("film")}
-          aria-label={wayInTaken ? `The way in to ${end.name}: showing` : `The way in to ${end.name}: a hint, costs ${HINT_COST.film} points`}
+          aria-label={wayInTaken ? `The way in to ${end.name}: showing` : `The way in to ${end.name}: a hint, uses a move`}
         >
-          The way in<span className={styles.hintCost}>{wayInTaken ? "✓" : `−${HINT_COST.film}`}</span>
+          The way in{wayInTaken && <span className={styles.hintCost}>✓</span>}
         </button>
         <button
           ref={keep("link")}
           type="button"
           className={styles.hintControl}
-          disabled={disabled || nextShowing}
+          disabled={disabled || nextShowing || !canHint}
           onClick={ask("link")}
-          aria-label={nextShowing ? "Next link: showing" : `Next link from ${from.name}: a hint, costs ${HINT_COST.link} points`}
+          aria-label={nextShowing ? "Next link: showing" : `Next link from ${from.name}: a hint, uses a move`}
         >
-          Next link<span className={styles.hintCost}>{nextShowing ? "✓" : `−${HINT_COST.link}`}</span>
+          Next link{nextShowing && <span className={styles.hintCost}>✓</span>}
         </button>
         <button ref={keep("give-up")} type="button" className={styles.quiet} disabled={disabled} onClick={ask("give-up")}>
           Give up
@@ -189,7 +194,7 @@ function CastLine({ draft, chainIds, disabled, onBack, onCoStar }: LineProps & {
       focus
       label={`Who else is in ${draft.title}?`}
       placeholder={`Who else is in ${draft.title}?`}
-      describe={(hit) => ({ primary: hit.name, secondary: hit.knownFor ? `Known for ${hit.knownFor}` : "" })}
+      describe={(hit) => ({ primary: hit.name, secondary: hit.knownFor ? `Known for ${hit.knownFor}` : "", face: hit.portrait })}
       excludedNote="Already in your chain"
       emptyNote={(q) => `Nobody in the cast of ${draft.title} matches “${q}”.`}
       onBack={onBack}
@@ -213,7 +218,7 @@ function SearchLine<Hit extends { id: number }>(props: {
   italic?: boolean;
   label: string;
   placeholder: string;
-  describe(hit: Hit): { primary: string; secondary: string };
+  describe(hit: Hit): { primary: string; secondary: string; face?: string | null };
   excludedNote: string;
   emptyNote(query: string): string;
   prefix?: ReactNode;
@@ -250,7 +255,7 @@ function SearchLine<Hit extends { id: number }>(props: {
             {status === "ready" &&
               results.map((hit, index) => {
                 const isExcluded = excluded.has(hit.id);
-                const { primary, secondary } = describe(hit);
+                const { primary, secondary, face } = describe(hit);
                 return (
                   <li
                     key={hit.id}
@@ -259,6 +264,7 @@ function SearchLine<Hit extends { id: number }>(props: {
                     aria-selected={index === active}
                     aria-disabled={isExcluded || undefined}
                     className={styles.option}
+                    data-face={face !== undefined || undefined}
                     onMouseDown={(event) => event.preventDefault()}
                     onMouseMove={() => {
                       if (!isExcluded && index !== active) search.setActive(index);
@@ -269,6 +275,12 @@ function SearchLine<Hit extends { id: number }>(props: {
                       {primary}
                     </span>
                     {(secondary || isExcluded) && <span className={styles.optionMeta}>{isExcluded ? [excludedNote, secondary].filter(Boolean).join(" · ") : secondary}</span>}
+                    {face !== undefined && (
+                      <span className={styles.optionFace} aria-hidden>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {face && <img src={face} alt="" decoding="async" />}
+                      </span>
+                    )}
                   </li>
                 );
               })}

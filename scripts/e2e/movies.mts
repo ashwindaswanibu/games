@@ -28,7 +28,7 @@ import { describeClue, spokenClues } from "@/games/_movies/clue-text";
 import { computeClues } from "@/games/_movies/hints";
 import type { ClueKind, FilmDetails, PersonRef } from "@/games/_movies/schemas";
 import { fadeToColor, LAST_REEL_SCORE, LEVEL_COUNT, MAX_GUESSES as BARCODE_GUESSES, OPTION_COUNT, pickWorth } from "@/games/fade-to-color/logic";
-import { degrees, degreesScore, HINT_COST, maxLinks } from "@/games/degrees/logic";
+import { degrees, maxMoves, pointsFor } from "@/games/degrees/logic";
 import { FRAME_COUNT, frameByFrame, CLUE_KINDS as FRAME_CLUES } from "@/games/frame-by-frame/logic";
 import { assetKey } from "@/server/asset-seal";
 import type { PlayRow } from "@/server/database.types";
@@ -335,9 +335,11 @@ async function playDegrees(ctx: Ctx): Promise<void> {
   await clickButton(page, "Start linking");
   const started = await waitForPlayVersion(ctx.db, { userId: ctx.userId, gameId: degrees.id, date: ctx.date, version: 0 });
   report.equal("the play starts in progress", started.status, "in_progress");
-  const limit = maxLinks(puzzle);
-  await page.waitForFunction((want) => (document.querySelector("main section p")?.textContent ?? "").includes(want), { timeout: 15000 }, `Link 1 of ${limit}`);
-  report.check("the status line shows the link, par and the worth", (await statusLine()).startsWith(`Link 1 of ${limit} · par ${puzzle.par} · worth 100`), await statusLine());
+  const limit = maxMoves(puzzle);
+  const onMove = (n: number) =>
+    page.waitForFunction((want) => (document.querySelector("main section p")?.textContent ?? "").includes(want), { timeout: 15000 }, `Move ${n} of ${limit}`);
+  await onMove(1);
+  report.check("the status line shows the move, par and the worth", (await statusLine()).startsWith(`Move 1 of ${limit} · par ${puzzle.par} · worth 100`), await statusLine());
   report.check("the thread names both ends", (await chainSays(puzzle.start.name)) && (await chainSays(puzzle.end.name)));
 
   // --- Wrong moves: a co-star already in the chain is refused; an off-route link costs a link. ---
@@ -360,27 +362,33 @@ async function playDegrees(ctx: Ctx): Promise<void> {
   report.check("the refused pick sends no move", (await loadPlay(ctx.db, ctx.userId, degrees.id, ctx.date))?.version === 0);
 
   await playMove(ctx, degrees, 1, () => pickFromSearch(page, castLabel, detour.person.name, { primary: detour.person.name }));
-  await page.waitForFunction((want) => (document.querySelector("main section p")?.textContent ?? "").includes(want), { timeout: 15000 }, `Link 2 of ${limit}`);
+  await onMove(2);
   report.check("the off-route link joins the chain", await chainSays(detour.person.name));
   await spoilerCheckpoint(ctx, degrees, loaded, "after the off-route link", await secretsFor());
   await checkNoSidewaysScroll(ctx, "mid-play");
   await shot(ctx, "degrees-mid");
 
-  const undone = await playMove(ctx, degrees, 2, () => clickButton(page, { pattern: "Undo$" }));
+  // An undo asks first: it uses a move.
+  await clickButton(page, { pattern: "Undo$" });
+  await waitForText(page, "button", "Keep it");
+  report.check("an undo asks first, saying it uses a move", await pageSays(page, "It uses a move."));
+  const undone = await playMove(ctx, degrees, 2, () => clickButton(page, "Undo"));
   report.equal("undo removes the link", degreesStateSchema.parse(undone.state).links.length, 0);
-  await page.waitForFunction((want) => (document.querySelector("main section p")?.textContent ?? "").includes(want), { timeout: 15000 }, `Link 1 of ${limit}`);
-  report.check("the undone co-star leaves the thread", !(await chainSays(detour.person.name)));
+  // The undone link no longer counts; the undo does: still on move 2.
+  await onMove(2);
+  report.check("the undone co-star leaves the thread, and the undo used a move", !(await chainSays(detour.person.name)));
 
-  // --- Hints: each asks first, then shows on the thread and under the status line, and costs points. ---
+  // --- Hints: each asks first, then shows on the thread and under the status line, and uses a move. ---
   const wayIn = route.at(-1)!.film;
   await clickButton(page, { pattern: "^The way in" });
   await waitForText(page, "button", "Keep trying");
-  report.check("a hint asks first, with its cost", await pageSays(page, `It costs ${HINT_COST.film} points.`));
+  report.check("a hint asks first, saying it uses a move", await pageSays(page, "It uses a move."));
   const hinted = await playMove(ctx, degrees, 3, () => clickButton(page, { pattern: "^Show it" }));
   report.equal("the way in is kept with the play", degreesStateSchema.parse(hinted.state).hints?.[0]?.film.id, wayIn.id);
   await page.waitForFunction((want) => [...document.querySelectorAll("main section p")].some((p) => (p.textContent ?? "").includes(want)), { timeout: 15000 }, wayIn.title);
   report.check("the way in shows its film", true);
-  report.check("the worth drops by its cost", (await statusLine()).includes(`worth ${100 - HINT_COST.film}`), await statusLine());
+  await onMove(3);
+  report.check("the worth drops a rank for each move spent off the route", (await statusLine()).includes(`worth ${pointsFor(puzzle, puzzle.par + 2)}`), await statusLine());
 
   await clickButton(page, { pattern: "^Next link" });
   await waitForText(page, "button", "Keep trying");
@@ -407,13 +415,14 @@ async function playDegrees(ctx: Ctx): Promise<void> {
   }
 
   report.equal("the play is won", row.status, "won");
-  const hints = [{ kind: "film" as const, film: wayIn }, { kind: "link" as const, fromPersonId: puzzle.start.id, film: route[0]!.film, person: route[0]!.person }];
-  report.equal("score: par less both hints", row.score, degreesScore(route.length, puzzle.par, hints));
-  report.equal("label counts the hints", row.result_label, `${route.length} ${route.length === 1 ? "link" : "links"} · par ${puzzle.par} · 2 hints`);
-  report.equal("share grid: a strip per link, a bulb per hint", row.share_grid, `${"🎞".repeat(route.length)}💡💡⭐`);
+  // The route's links, one undo and two hints.
+  const moves = route.length + 3;
+  report.equal("score: by the rank of the moves used", row.score, pointsFor(puzzle, moves));
+  report.equal("label counts the moves", row.result_label, `${moves} moves · par ${puzzle.par}`);
+  report.equal("share grid: a strip per link, scissors per undo, a bulb per hint", row.share_grid, `${"🎞".repeat(route.length)}✂️💡💡⭐`);
   await page.waitForSelector('section[aria-label="Today\'s result"]');
   await page.waitForFunction(() => document.querySelector('section[aria-label="Today\'s result"]')?.closest("[data-show]") !== null, { timeout: 10000 });
-  report.check("the end card says connected at par", await pageSays(page, "Connected · at par"));
+  report.check("the end card says how far over par", await pageSays(page, `Connected · ${moves - puzzle.par} over par`));
   report.check("…with the score", await page.evaluate((want) => (document.querySelector('section[aria-label="Today\'s result"] h2')?.textContent ?? "").startsWith(want), String(row.score)));
   report.check("…and a Share button", await hasText(page, "button", "Share"));
 

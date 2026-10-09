@@ -87,9 +87,31 @@ export const filmSearchHitSchema = filmRefSchema.extend({
 });
 export type FilmSearchHit = z.infer<typeof filmSearchHitSchema>;
 
+/** Where a person's face loads from (`/api/catalog/portraits/<id>?v=<version>`, see `src/server/portraits.ts`). */
+export const portraitSrcSchema = z.string().regex(/^\/api\/catalog\/portraits\/[1-9][0-9]*\?v=[0-9a-f]{12}$/);
+
+/** A person's face and the credit its photo's license asks for. */
+export const portraitSchema = z.object({
+  id: personIdSchema,
+  src: portraitSrcSchema,
+  credit: z.object({
+    /** The photographer as Commons names them; null when the file names nobody (public domain). */
+    author: z.string().max(300).nullable(),
+    /** "CC BY-SA 4.0", "Public domain". */
+    license: z.string().min(1).max(80),
+    licenseUrl: z.string().url().nullable(),
+    /** The photo's Commons page. */
+    source: z.string().url(),
+  }),
+});
+export type Portrait = z.infer<typeof portraitSchema>;
+export const portraitsResponseSchema = z.object({ portraits: z.array(portraitSchema) });
+
 export const personSearchHitSchema = personRefSchema.extend({
   /** Title of their best-known film, to tell namesakes apart. */
   knownFor: titleSchema.nullable(),
+  /** Their face, when the catalog has one. */
+  portrait: portraitSrcSchema.nullable().default(null),
 });
 export type PersonSearchHit = z.infer<typeof personSearchHitSchema>;
 

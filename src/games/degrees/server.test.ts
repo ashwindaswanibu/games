@@ -200,7 +200,7 @@ describe("degrees through the move pipeline", () => {
       if (!last.ok) throw new Error(last.error);
       state = last.state;
     }
-    expect(last).toMatchObject({ ok: true, outcome: "won", result: { score: 100, label: "3 links · par 3", shareGrid: "🎞🎞🎞⭐" } });
+    expect(last).toMatchObject({ ok: true, outcome: "won", result: { score: 100, label: "3 moves · par 3", shareGrid: "🎞🎞🎞⭐" } });
   });
 
   it("plays a hinted chain to a win at the hinted score", async () => {
@@ -211,7 +211,7 @@ describe("degrees through the move pipeline", () => {
       if (!last.ok) throw new Error(last.error);
       state = last.state;
     }
-    expect(last).toMatchObject({ ok: true, outcome: "won", result: { score: 80, label: "3 links · par 3 · 1 hint", shareGrid: "🎞🎞🎞💡⭐" } });
+    expect(last).toMatchObject({ ok: true, outcome: "won", result: { score: 80, label: "4 moves · par 3", shareGrid: "🎞🎞🎞💡⭐" } });
   });
 
   it("surfaces resolver rejections without changing the state", async () => {

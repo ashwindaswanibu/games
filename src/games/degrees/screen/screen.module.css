@@ -164,6 +164,8 @@
 
 .board {
   position: relative;
+  /* The ends' faces sit behind everything on the board, but in front of the room. */
+  isolation: isolate;
   width: min(1320px, calc(100vw - 32px));
   height: clamp(280px, 44vh, 440px);
   animation: fadeIn 900ms ease both;
@@ -505,6 +507,87 @@
   animation: develop 700ms ease calc(500ms + var(--i) * 260ms) both;
 }
 
+/* ----- Faces ----- */
+
+/*
+ * A face is lit out of the dark: a soft round mask, no edge, toned to the room while playing (the
+ * photos come from every decade and camera; toned, they belong to one room). A co-star's face is
+ * their knot. The two ends' faces are large and dim behind their names, like a title card's.
+ */
+.face {
+  --d: 74px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--d);
+  height: var(--d);
+  margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
+  transform: translate(var(--x), var(--y));
+  opacity: 0;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(circle at 50% 44%, #000 34%, transparent 66%);
+  mask-image: radial-gradient(circle at 50% 44%, #000 34%, transparent 66%);
+  transition: opacity 900ms ease;
+}
+
+.board[data-settled] .face {
+  transition:
+    transform var(--glide) var(--ease),
+    opacity 900ms ease;
+}
+
+.face[data-loaded] {
+  opacity: 1;
+}
+
+/* A hint's co-star: there, faintly, until tied. */
+.face[data-ghost][data-loaded] {
+  opacity: 0.4;
+}
+
+.face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(0.9) sepia(0.3) contrast(1.3) brightness(0.82);
+  transition: filter 1200ms ease calc(var(--i) * 170ms);
+}
+
+.face[data-side] {
+  --d: clamp(210px, 21vw, 320px);
+  z-index: -1;
+  -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 22%, transparent 64%);
+  mask-image: radial-gradient(circle at 50% 42%, #000 22%, transparent 64%);
+}
+
+.face[data-side][data-loaded] {
+  opacity: 0.5;
+}
+
+/* Set in from the room's edge, behind the name, the face's chin near the thread. */
+.face[data-side="start"] {
+  transform: translate(calc(var(--x) + var(--d) * 0.24), calc(var(--y) - var(--d) * 0.37));
+}
+
+.face[data-side="end"] {
+  transform: translate(calc(var(--x) - var(--d) * 0.24), calc(var(--y) - var(--d) * 0.37));
+}
+
+/* A co-star's name clears their face. */
+.name[data-face] {
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) + 40px));
+}
+
+/* Reached: as the light runs the thread, every face takes its colour, in order. */
+.board[data-reached]:not([data-variant="ours"]) .face img {
+  filter: none;
+}
+
+.board[data-reached]:not([data-variant="ours"]) .face[data-side][data-loaded] {
+  opacity: 0.7;
+}
+
 /* ----- Down a phone ----- */
 
 .board[data-vertical] {
@@ -541,6 +624,30 @@
   text-align: left;
   -webkit-line-clamp: 1;
   line-clamp: 1;
+}
+
+/* Down a phone the ends' faces sit on their knots too, larger, and every name clears its face. */
+.board[data-vertical] .face {
+  --d: 56px;
+}
+
+.board[data-vertical] .face[data-side] {
+  --d: 92px;
+  z-index: 0;
+  transform: translate(var(--x), var(--y));
+}
+
+.board[data-vertical] .face[data-side][data-loaded],
+.board[data-vertical][data-reached] .face[data-side][data-loaded] {
+  opacity: 1;
+}
+
+.board[data-vertical] .name[data-face] {
+  transform: translate(calc(var(--x) + 32px), calc(var(--y) - 50%));
+}
+
+.board[data-vertical] .endName[data-face] {
+  transform: translate(calc(var(--x) + 44px), calc(var(--y) - 50%));
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -1317,4 +1424,79 @@
     transition-duration: 1ms !important;
     transition-delay: 0ms !important;
   }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Faces elsewhere: the cast's hits, and the portraits' credits
+ * ------------------------------------------------------------------------------------------- */
+
+/* A hit with a face: the face at the left, the name and its note beside it. */
+.option[data-face] {
+  grid-template-columns: 34px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: center;
+}
+
+.option[data-face] > :not(.optionFace) {
+  grid-column: 2;
+}
+
+.optionFace {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgb(239 233 223 / 0.06);
+}
+
+.optionFace img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(0.9) sepia(0.3) contrast(1.2) brightness(0.9);
+}
+
+.photoCreditsLink {
+  margin-top: 6px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  font: 500 9.5px/1.4 var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.photoCreditsLink:hover,
+.photoCreditsLink:focus-visible {
+  color: var(--ink-2);
+}
+
+.photoList {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photoList li {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.photoList b {
+  font: 400 17px/1.2 var(--display);
+}
+
+.photoList span {
+  font: 500 10.5px/1.5 var(--mono);
+  color: var(--ink-3);
+}
+
+.photoList a {
+  color: var(--ink-2);
 }

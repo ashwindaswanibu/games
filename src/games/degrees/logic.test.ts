@@ -1,19 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { FinishedOutcome } from "@/core/game";
 import {
+  bestStillPossible,
   chainPersonIds,
-  chainScore,
   currentActor,
   degrees,
-  degreesScore,
   filmHint,
-  HINT_COST,
   hintRefusal,
   linkHint,
-  worthAt,
   degreesMoveSchema,
   degreesResolvedMoveSchema,
-  maxLinks,
+  maxMoves,
+  movesLeft,
+  movesUsed,
+  pointsFor,
+  rankOf,
   type DegreesHint,
   type DegreesPuzzle,
   type DegreesResolvedMove,
@@ -51,7 +52,11 @@ const link = (fromPersonId: number, film: typeof heat, person: { id: number; nam
 
 /** Applies moves in order, failing the test on any rejection. */
 function play(...moves: DegreesResolvedMove[]): DegreesState {
-  let state = degrees.initialState(puzzle);
+  return playFrom(degrees.initialState(puzzle), ...moves);
+}
+
+function playFrom(start: DegreesState, ...moves: DegreesResolvedMove[]): DegreesState {
+  let state = start;
   for (const move of moves) {
     const result = degrees.applyMove({ puzzle, solution, state, move });
     if (!result.ok) throw new Error(`move rejected: ${result.error}`);
@@ -106,7 +111,7 @@ describe("schemas", () => {
 describe("applyMove", () => {
   it("starts from the start actor with an empty chain", () => {
     const state = degrees.initialState(puzzle);
-    expect(state).toEqual({ links: [], gaveUp: false, hints: [] });
+    expect(state).toEqual({ links: [], gaveUp: false, hints: [], undos: 0 });
     expect(currentActor(puzzle, state)).toEqual(pacino);
     expect(degrees.outcome({ puzzle, solution, state })).toBe("in_progress");
   });
@@ -138,21 +143,25 @@ describe("applyMove", () => {
     expect(reject(state, link(2, heat, deNiro))).toMatch(/Robert De Niro is already in your chain/);
   });
 
-  it("undoes the last link for free, and refuses to undo an empty chain", () => {
+  it("undoes the last link for a move, and refuses to undo an empty chain", () => {
     expect(reject(degrees.initialState(puzzle), { type: "undo" })).toBe("There's no link to undo yet.");
     const state = play(link(1, heat, deNiro), link(2, taxiDriver, keitel), { type: "undo" });
     expect(state.links).toEqual([{ film: heat, person: deNiro }]);
+    expect(state.undos).toBe(1);
+    // The undone link no longer counts as a link; the undo counts as a move.
+    expect(movesUsed(state)).toBe(2);
     expect(currentActor(puzzle, state)).toEqual(deNiro);
   });
 
   it("lets a removed co-star be picked again after an undo", () => {
     const state = play(link(1, heat, deNiro), { type: "undo" }, link(1, heat, deNiro));
     expect(state.links).toHaveLength(1);
+    expect(movesUsed(state)).toBe(2);
   });
 
-  it("allows par + 4 links, and the last one must reach the end actor", () => {
-    expect(maxLinks(puzzle)).toBe(7);
-    // A wandering chain of 6 links (none of them the end actor).
+  it("gives par + 4 moves, and the last one must reach the end actor", () => {
+    expect(maxMoves(puzzle)).toBe(7);
+    // A wandering chain of 6 links (none of them the end actor): one move left.
     const wander = [deNiro, keitel, kilmer, foster, { id: 7, name: "Extra A" }, { id: 8, name: "Extra B" }];
     let from = pacino.id;
     const moves = wander.map((person) => {
@@ -161,21 +170,31 @@ describe("applyMove", () => {
       return move;
     });
     const state = play(...moves);
-    expect(state.links).toHaveLength(6);
-    expect(reject(state, link(8, lambs, { id: 9, name: "Extra C" }))).toBe(
-      "That's your last link, so it has to reach Anthony Hopkins. Undo a link to try another route.",
-    );
+    expect(movesLeft(puzzle, state)).toBe(1);
+    expect(reject(state, link(8, lambs, { id: 9, name: "Extra C" }))).toBe("That's your last move, so it has to reach Anthony Hopkins.");
+    expect(reject(state, { type: "undo" })).toBe("Your last move has to reach Anthony Hopkins.");
+    expect(hintRefusal(puzzle, state, "link")).toBe("Your last move has to reach Anthony Hopkins.");
     const won = play(...moves, link(8, lambs, hopkins));
     expect(won.links).toHaveLength(7);
     expect(degrees.outcome({ puzzle, solution, state: won })).toBe("won");
   });
 
-  it("refuses a link once the chain is full (a guard; the last-link rule normally prevents it)", () => {
-    const full: DegreesState = {
+  it("counts undos and hints against the moves, so the last move can come sooner", () => {
+    // 2 links, 2 undos, 2 hints: 6 of 7 moves used.
+    const state: DegreesState = {
+      links: [{ film: heat, person: deNiro }, { film: taxiDriver, person: foster }],
       gaveUp: false,
-      links: Array.from({ length: 7 }, (_, i) => ({ film: heat, person: { id: 100 + i, name: `P${i}` } })),
+      undos: 2,
+      hints: [{ kind: "film", film: lambs }, { kind: "link", fromPersonId: 3, film: lambs, person: hopkins }],
     };
-    expect(reject(full, link(106, heat, hopkins))).toBe("You've used all 7 links. Undo one to try another route.");
+    expect(movesLeft(puzzle, state)).toBe(1);
+    expect(reject(state, link(3, heat, keitel))).toBe("That's your last move, so it has to reach Anthony Hopkins.");
+    expect(degrees.outcome({ puzzle, solution, state: playFrom(state, link(3, lambs, hopkins)) })).toBe("won");
+  });
+
+  it("refuses a link once every move is used (a guard; the last-move rule normally prevents it)", () => {
+    const spent: DegreesState = { gaveUp: false, undos: 4, links: [{ film: heat, person: deNiro }, { film: heat, person: keitel }, { film: heat, person: kilmer }] };
+    expect(reject(spent, link(6, lambs, hopkins))).toBe("You've used all your moves.");
   });
 
   it("gives up at any time, even before the first link", () => {
@@ -196,25 +215,33 @@ describe("applyMove", () => {
 });
 
 describe("score, share grid and reveal", () => {
-  it("scores 100 at par and 15 less per extra link, floored at 40", () => {
-    expect([2, 3, 4, 5, 6, 7, 8].map((n) => chainScore(n, 3))).toEqual([100, 100, 85, 70, 55, 40, 40]);
+  it("scores by rank: 100 at par, 20 fewer per route length longer", () => {
+    expect([2, 3, 4, 5, 6, 7].map((moves) => pointsFor(puzzle, moves))).toEqual([100, 100, 80, 60, 40, 20]);
+  });
+
+  it("ranks densely: a length no chain has is no rank, so the next one up isn't marked down for it", () => {
+    // No 3-link chain exists on this par-2 day: 4 links is the second-best route there is.
+    const gap = { par: 2, missingLengths: [3] };
+    expect([2, 3, 4, 5, 6].map((moves) => rankOf(gap, moves))).toEqual([1, 2, 2, 3, 4]);
+    expect([2, 3, 4, 5, 6].map((moves) => pointsFor(gap, moves))).toEqual([100, 80, 80, 60, 40]);
+  });
+
+  it("says the most a play can still score", () => {
+    expect(bestStillPossible(puzzle, degrees.initialState(puzzle))).toBe(100);
+    expect(bestStillPossible(puzzle, play(link(1, heat, deNiro)))).toBe(100);
+    expect(bestStillPossible(puzzle, play(link(1, heat, deNiro), { type: "undo" }))).toBe(80);
+    // Three links off par's route and not there yet: the next link is the 4th move at best.
+    expect(bestStillPossible(puzzle, play(link(1, heat, kilmer), link(6, heat, keitel), link(5, taxiDriver, foster)))).toBe(80);
   });
 
   it("reports a par finish", () => {
     const state = play(link(1, heat, deNiro), link(2, taxiDriver, foster), link(3, lambs, hopkins));
-    expect(finish(state, "won")).toEqual({ score: { score: 100, label: "3 links · par 3" }, share: "🎞🎞🎞⭐" });
+    expect(finish(state, "won")).toEqual({ score: { score: 100, label: "3 moves · par 3" }, share: "🎞🎞🎞⭐" });
   });
 
-  it("reports a longer chain", () => {
-    const state = play(
-      link(1, heat, kilmer),
-      { type: "undo" },
-      link(1, heat, deNiro),
-      link(2, taxiDriver, keitel),
-      link(5, taxiDriver, foster),
-      link(3, lambs, hopkins),
-    );
-    expect(finish(state, "won")).toEqual({ score: { score: 85, label: "4 links · par 3" }, share: "🎞🎞🎞🎞⭐" });
+  it("reports a finish with an undo: the undone link's move counts", () => {
+    const state = play(link(1, heat, kilmer), { type: "undo" }, link(1, heat, deNiro), link(2, taxiDriver, foster), link(3, lambs, hopkins));
+    expect(finish(state, "won")).toEqual({ score: { score: 80, label: "4 moves · par 3" }, share: "🎞🎞🎞✂️⭐" });
   });
 
   it("scores 0 for giving up", () => {
@@ -294,35 +321,25 @@ describe("hints", () => {
     expect(hintRefusal(puzzle, over, "link")).toBe("Today's game is already over.");
   });
 
-  it("charges each hint off the score, never below 10, and keeps undo free", () => {
+  it("uses a move per hint, like a link or an undo", () => {
     const state = play({ type: "hint", hint: wayIn }, nextFrom(pacino, heat, deNiro), link(1, heat, deNiro), link(2, taxiDriver, foster), link(3, lambs, hopkins));
-    expect(finish(state, "won")).toEqual({
-      score: { score: 100 - HINT_COST.film - HINT_COST.link, label: "3 links · par 3 · 2 hints" },
-      share: "🎞🎞🎞💡💡⭐",
-    });
-    const many: DegreesHint[] = Array.from({ length: 5 }, () => ({ kind: "link", fromPersonId: 1, film: heat, person: deNiro }));
-    expect(degreesScore(7, 3, many)).toBe(10);
-    expect(degreesScore(3, 3, [])).toBe(chainScore(3, 3));
+    expect(movesUsed(state)).toBe(5);
+    expect(finish(state, "won")).toEqual({ score: { score: 60, label: "5 moves · par 3" }, share: "🎞🎞🎞💡💡⭐" });
   });
 
-  it("says what the chain is worth if it lands at a given length", () => {
-    const state = play({ type: "hint", hint: wayIn });
-    expect(worthAt(puzzle, state, 2)).toBe(90);
-    expect(worthAt(puzzle, state, 3)).toBe(90);
-    expect(worthAt(puzzle, state, 4)).toBe(75);
-  });
-
-  it("shares the chain with friends: who, through which films, and how many hints", () => {
+  it("shares the chain with friends: who, through which films, and the undos and hints", () => {
     const state = play(nextFrom(pacino, heat, deNiro), link(1, heat, deNiro), link(2, taxiDriver, foster), link(3, lambs, hopkins));
     expect(degrees.friendDetail?.(state)).toEqual({
       people: ["Robert De Niro", "Jodie Foster", "Anthony Hopkins"],
       films: ["Heat", "Taxi Driver", "The Silence of the Lambs"],
+      undos: 0,
       hints: 1,
     });
   });
 
-  it("reads plays from before hints existed", () => {
+  it("reads plays from before hints and undo counts existed", () => {
     const old: DegreesState = { links: [{ film: heat, person: deNiro }], gaveUp: false };
+    expect(movesUsed(old)).toBe(1);
     expect(hintRefusal(puzzle, old, "film")).toBeNull();
     expect(degrees.applyMove({ puzzle, solution, state: old, move: { type: "hint", hint: wayIn } })).toMatchObject({ ok: true, state: { hints: [wayIn] } });
   });

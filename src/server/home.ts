@@ -5,7 +5,7 @@ import type { AnyGame } from "@/core/game";
 import type { PlayView } from "@/core/view";
 import type { HomeModel, HomeTile, TileMaterial, TileResult } from "@/components/home-field/model";
 import type { DegreesPuzzle, DegreesSolution } from "@/games/degrees/schema";
-import type { DegreesState } from "@/games/degrees/logic";
+import { movesUsed, type DegreesState } from "@/games/degrees/logic";
 import { describeGrid, parseGrid } from "@/games/fade-to-color/theater/grid";
 import { canPlay, getGame, visibleGames } from "@/games/registry";
 import { assetKey } from "./asset-seal";
@@ -130,13 +130,11 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const reveal = view?.reveal as DegreesSolution | null | undefined;
       // The viewer's chain if they reached the end, else the shortest one (once the play is over).
       const finishedChain = links.length > 0 && links.at(-1)!.person.id === p.end.id ? links : (reveal?.path ?? []);
-      const hinted = s?.hints?.length ?? 0;
-      const line =
-        (s?.gaveUp ? "Gave up" : links.length <= p.par ? `At par · ${links.length} links` : `${links.length} links · par ${p.par}`) +
-        (hinted > 0 && !s?.gaveUp ? ` · ${hinted} ${hinted === 1 ? "hint" : "hints"}` : "");
+      const moves = s ? movesUsed(s) : 0;
+      const line = s?.gaveUp ? "Gave up" : moves <= p.par ? `At par · ${moves} moves` : `${moves} moves · par ${p.par}`;
       return {
         sub: `PAR ${p.par}`,
-        progress: `${links.length} ${links.length === 1 ? "link" : "links"} in`,
+        progress: `move ${(s ? movesUsed(s) : 0) + 1}`,
         material: { kind: "thread", from: p.start.name, to: p.end.name, knots: p.par, drawn: links.length },
         result: view && view.status !== "in_progress"
           ? { title: "", line, score, image: null, chain: { people: [p.start.name, ...finishedChain.map((l) => l.person.name)], films: finishedChain.map((l) => l.film.title) }, frames: null }
