@@ -208,7 +208,7 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const left = Math.max(0, Date.parse(model.rolloverAt) - now);
   const clock = [Math.floor(left / 3600_000), Math.floor((left % 3600_000) / 60_000), Math.floor((left % 60_000) / 1000)].map((n) => String(n).padStart(2, "0")).join(":");
   const allDone = tiles.length > 0 && tiles.every((t) => t.state === "finished");
-  const stillToPlay = tiles.filter((t) => t.state !== "finished").length * 100;
+  const played = tiles.filter((t) => t.state === "finished").length;
   const arrive = v.arrive ?? 1;
 
   return (
@@ -223,12 +223,11 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
         <span className={styles.score} aria-live="polite">
           {metrics.compact ? (
             <>
-              <b>{model.won}</b>/{model.max}
-              {allDone && ` · ${clock}`}
+              <b>{played}</b>/{tiles.length} played{allDone && ` · ${clock}`}
             </>
           ) : (
             <>
-              <b>{model.won}</b> of {model.max} today · {allDone ? `done · next day in ${clock}` : `${stillToPlay} still to play`}
+              <b>{played}</b> of {tiles.length} played · {allDone ? `${model.won} points · next day in ${clock}` : `${tiles.length - played} to go · ${model.won} points`}
             </>
           )}
         </span>
@@ -292,7 +291,8 @@ function Tile({ tile, box, lean, collapse, print, opened, arrive, peek, onEnter,
   const cover: CSSProperties = { left: box.x[0] - k - 40, top: box.y[0], width: w + 2 * k + 80, height: h };
   const live = finished ? 0 : 1 - opened;
   const strip = finished ? clamp(collapse * 1.6 - 0.4) * (1 - print) : 0;
-  const labelAt = { left: seamAt(box, lean, box.y[0] + pad + 10) + pad, top: box.y[0] + pad };
+  // The bottom of a game still to play is its title card; its picture keeps above it.
+  const footer = finished ? 0 : Math.max(96, Math.min(h * 0.3, w < 300 ? 150 : 196));
 
   return (
     <a
@@ -305,14 +305,10 @@ function Tile({ tile, box, lean, collapse, print, opened, arrive, peek, onEnter,
       aria-label={tile.label}
       data-state={tile.state}
     >
-      <Material tile={tile} box={box} lean={lean} cover={cover} arrive={arrive} finished={finished} pad={pad} />
+      <Material tile={tile} box={box} lean={lean} cover={cover} arrive={arrive} finished={finished} pad={pad} footer={footer} />
+      {!finished && <span className={styles.glow} style={cover} aria-hidden />}
 
-      {!finished && (
-        <span className={styles.label} style={{ ...labelAt, opacity: live * clamp(arrive * 2 - 0.4) }}>
-          {tile.name}
-          <i>{tile.sub}</i>
-        </span>
-      )}
+      {!finished && <TitleCard tile={tile} box={box} lean={lean} pad={pad} footer={footer} opacity={live * clamp(arrive * 2 - 0.4)} />}
 
       {finished && tile.result && strip > 0 && <PlayedStrip tile={tile} box={box} lean={lean} opacity={strip} settle={collapse} peek={peek} />}
       {finished && tile.result && print > 0 && <Print tile={tile} box={box} lean={lean} cover={cover} amount={print} />}
@@ -323,16 +319,18 @@ function Tile({ tile, box, lean, collapse, print, opened, arrive, peek, onEnter,
 }
 
 /** The tile's material: today's puzzle, the game's way. A finished game shows it resolved. */
-function Material({ tile, box, lean, cover, arrive, finished, pad }: { tile: HomeTile; box: TileBox; lean: number; cover: CSSProperties; arrive: number; finished: boolean; pad: number }) {
+function Material({ tile, box, lean, cover, arrive, finished, pad, footer }: { tile: HomeTile; box: TileBox; lean: number; cover: CSSProperties; arrive: number; finished: boolean; pad: number; footer: number }) {
   const m = tile.material;
   const w = box.x[1] - box.x[0];
-  const h = box.y[1] - box.y[0];
+  // Room for the picture: above the title card.
+  const h = box.y[1] - box.y[0] - footer;
+  const bottom = box.y[1] - footer;
 
   if (m.kind === "light") {
     return (
       <>
         <SealedImage asset={m.image} className={`${styles.strip} ${styles.grey}`} style={cover} />
-        <SealedImage asset={m.image} className={`${styles.strip} ${finished ? "" : styles.drift}`} style={{ ...cover, opacity: finished ? 0.85 : arrive }} />
+        <SealedImage asset={m.image} className={`${styles.strip} ${finished ? styles.rested : styles.drift}`} style={{ ...cover, opacity: finished ? 0.6 : arrive }} />
         <span className={styles.shade} style={cover} />
       </>
     );
@@ -344,7 +342,7 @@ function Material({ tile, box, lean, cover, arrive, finished, pad }: { tile: Hom
     const ax = seamAt(box, lean, box.y[0] + h * 0.18) + pad + 14;
     const ay = box.y[0] + Math.max(70, h * 0.16);
     const bx = box.x[1] - (lean * h) / 2 - pad - 14;
-    const by = box.y[1] - Math.max(60, h * 0.2);
+    const by = bottom - Math.max(30, h * 0.12);
     const p0: [number, number] = [ax + size * 1.2, ay + size * 2];
     const p1: [number, number] = [bx - size * 1.1, by - size * 0.9];
     const taut = backOut(clamp((arrive - 0.35) / 0.5));
@@ -379,7 +377,7 @@ function Material({ tile, box, lean, cover, arrive, finished, pad }: { tile: Hom
     const frameW = Math.max(80, Math.min(room, 640, ((h - 200) * m.image.width) / m.image.height));
     const frameH = (frameW * m.image.height) / m.image.width;
     const cx = (box.x[0] + box.x[1]) / 2;
-    const top = (box.y[0] + box.y[1]) / 2 - frameH / 2 - 10;
+    const top = (box.y[0] + 40 + bottom) / 2 - frameH / 2 - 10;
     const tickW = Math.min(36, (frameW - (m.total - 1) * 8) / m.total);
     return (
       <>
@@ -402,7 +400,7 @@ function Material({ tile, box, lean, cover, arrive, finished, pad }: { tile: Hom
   return (
     <>
       <span className={styles.dark} style={cover} />
-      <span className={styles.word} style={{ left: box.x[0], width: w, top: (box.y[0] + box.y[1]) / 2 - 30, fontSize: Math.max(24, Math.min(72, w / 7, h / 5)), opacity: finished ? 0.25 : arrive }}>
+      <span className={styles.word} style={{ left: box.x[0], width: w, top: (box.y[0] + bottom) / 2 - 30, fontSize: Math.max(24, Math.min(72, w / 7, h / 5)), opacity: finished ? 0.25 : arrive }}>
         {m.headline}
       </span>
     </>
@@ -438,7 +436,7 @@ function PlayedStrip({ tile, box, lean, opacity, settle, peek }: { tile: HomeTil
         </span>
         <span className={styles.playedTitleFlat} style={{ left: box.x[0] + 96, top: box.y[0] + h / 2 - 20, maxWidth: w - 120, opacity: write }}>
           {r.title || r.line}
-          <i>{r.title ? r.line : tile.name}</i>
+          <i>✓ Played · {r.title ? r.line : tile.name}</i>
         </span>
       </span>
     );
@@ -447,17 +445,20 @@ function PlayedStrip({ tile, box, lean, opacity, settle, peek }: { tile: HomeTil
   const digits = String(r.score).length;
   const score = Math.max(24, Math.min(64, w * 0.5, (w - 30) / (0.62 * digits)));
   const title = Math.max(16, Math.min(30, w * 0.22));
-  const chainTop = box.y[0] + score * 1.9 + 70;
+  const chainTop = box.y[0] + score * 1.9 + 90;
   const chainBottom = box.y[1] - 70;
   const people = r.chain?.people ?? [];
   return (
     <span className={styles.played} style={{ opacity }}>
       {m.kind === "frames" && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.playedPicture}`} style={area} />}
       <span className={styles.playedShade} style={area} />
-      <span className={styles.playedScore} style={{ left: middle(box.y[0] + 26 + score / 2), top: box.y[0] + 26, fontSize: score, transform: "translateX(-50%)" }}>
+      <span className={styles.playedMark} style={{ left: middle(box.y[0] + 24), top: box.y[0] + 18, transform: "translateX(-50%)" }}>
+        ✓ Played
+      </span>
+      <span className={styles.playedScore} style={{ left: middle(box.y[0] + 46 + score / 2), top: box.y[0] + 46, fontSize: score, transform: "translateX(-50%)" }}>
         {shown}
       </span>
-      <span className={styles.playedUnit} style={{ left: middle(box.y[0] + 34 + score), top: box.y[0] + 30 + score, transform: "translateX(-50%)" }}>
+      <span className={styles.playedUnit} style={{ left: middle(box.y[0] + 54 + score), top: box.y[0] + 50 + score, transform: "translateX(-50%)" }}>
         of 100
       </span>
       {people.length > 1 && (
@@ -490,6 +491,32 @@ function PlayedStrip({ tile, box, lean, opacity, settle, peek }: { tile: HomeTil
       )}
       <span className={styles.playedLine} style={{ left: (people.length > 1 ? middle(box.y[1] - 44) - 22 : cx + title * 0.62 + 2), top: box.y[1] - 44, maxWidth: h - score * 2 - 140, opacity: write * (people.length > 1 ? 1 - peek : 1) }}>
         {people.length > 1 ? `${r.line}` : r.line}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * A game still to play says so: its name, what it is, and a button (Play · 100, or Continue · reel 4
+ * for one you've started). The whole tile is the link; the button is where the eye goes.
+ */
+function TitleCard({ tile, box, lean, pad, footer, opacity }: { tile: HomeTile; box: TileBox; lean: number; pad: number; footer: number; opacity: number }) {
+  const w = box.x[1] - box.x[0];
+  const top = box.y[1] - footer + 8;
+  const x = seamAt(box, lean, top + footer / 2) + pad;
+  const narrow = w < 300;
+  const size = Math.max(22, Math.min(46, w * 0.085));
+  return (
+    <span className={styles.card} style={{ left: x, top, width: Math.max(140, w - (lean * (box.y[1] - box.y[0])) / 2 - 2 * pad), opacity }}>
+      <span className={styles.cardTitle} style={{ fontSize: size }}>
+        {tile.title}
+      </span>
+      {!narrow && footer > 150 && <span className={styles.cardTagline}>{tile.tagline}</span>}
+      <span className={styles.cardRow}>
+        <span className={styles.cta} data-verb={tile.cta.verb}>
+          {tile.cta.verb} · {tile.cta.detail} <span aria-hidden>▸</span>
+        </span>
+        {!narrow && tile.sub && <span className={styles.cardSub}>{tile.sub}</span>}
       </span>
     </span>
   );

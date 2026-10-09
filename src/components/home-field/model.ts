@@ -50,8 +50,14 @@ export interface HomeTile {
   /** Its category: each starts a row of the field. */
   group: string;
   name: string;
+  /** The game's name as written ("Fade to Color"), for its title card. */
+  title: string;
+  /** What the game is, in a line ("Name the film from a single frame"). */
+  tagline: string;
   /** Under the name: what the game is today, or where you are in it. */
   sub: string;
+  /** The title card's button: "Play · 100", or "Continue · reel 4" for a game you've started. */
+  cta: { verb: "Play" | "Continue"; detail: string };
   href: string;
   state: TileState;
   material: TileMaterial;
