@@ -6,8 +6,9 @@ import { db } from "./supabase/admin";
 /**
  * Faces of catalog people (`movie_person_portraits`, written by `content:movies:portraits`). A face
  * is served by its own URL with the bytes' version in it, so browsers and the CDN keep it for good
- * and a new photo gets a new URL. A face says no more than the name it sits beside, so neither the
- * bytes nor which people have one are a spoiler.
+ * and a new photo gets a new URL. A face says no more than the name it sits beside. Which people
+ * have one isn't a spoiler either, because the pipeline never picks them by the puzzles' routes:
+ * it takes the best-known actors and each day's start and end actors (shown by the puzzle).
  */
 
 export const PORTRAIT_PATH = "/api/catalog/portraits";
@@ -18,7 +19,12 @@ export function portraitSrc(personId: number, version: string): string {
   return `${PORTRAIT_PATH}/${personId}?v=${version}`;
 }
 
-const cleanIds = (ids: readonly number[]) => [...new Set(ids)].filter((id) => Number.isSafeInteger(id) && id > 0).slice(0, MAX_PORTRAIT_IDS);
+/** Catalog ids are Postgres integers. */
+export const MAX_PERSON_ID = 2_147_483_647;
+
+export const isPersonId = (id: number) => Number.isSafeInteger(id) && id > 0 && id <= MAX_PERSON_ID;
+
+const cleanIds = (ids: readonly number[]) => [...new Set(ids)].filter(isPersonId).slice(0, MAX_PORTRAIT_IDS);
 
 /** The face of each of `ids` that has one, with its credit. */
 export async function loadPortraits(ids: readonly number[]): Promise<Portrait[]> {

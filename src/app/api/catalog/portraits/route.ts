@@ -3,7 +3,7 @@ import type { z } from "zod";
 import type { portraitsResponseSchema } from "@/games/_movies/schemas";
 import { canUseMoviesCatalog } from "@/server/catalog";
 import { guardRequest, jsonError } from "@/server/http";
-import { loadPortraits, MAX_PORTRAIT_IDS } from "@/server/portraits";
+import { isPersonId, loadPortraits, MAX_PORTRAIT_IDS } from "@/server/portraits";
 
 /**
  * Which of some people have a face, where it loads from, and its photo's credit:
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const raw = request.nextUrl.searchParams.get("ids") ?? "";
   const ids = raw.split(",").filter(Boolean).map(Number);
-  if (ids.length === 0 || ids.length > MAX_PORTRAIT_IDS || !ids.every((id) => Number.isSafeInteger(id) && id > 0)) {
+  if (ids.length === 0 || ids.length > MAX_PORTRAIT_IDS || !ids.every(isPersonId)) {
     return jsonError(400, `ids must be 1–${MAX_PORTRAIT_IDS} person ids, comma-separated.`);
   }
   const body: z.infer<typeof portraitsResponseSchema> = { portraits: await loadPortraits(ids) };

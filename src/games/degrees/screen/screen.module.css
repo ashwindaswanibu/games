@@ -383,9 +383,10 @@
   color: var(--ink-3);
 }
 
-/* The film a stretch passes through, riding just above it. */
+/* The film a stretch passes through, riding just above it (and above any face beside it). */
 .film {
   position: absolute;
+  z-index: 1;
   left: 0;
   top: 0;
   width: var(--w);
