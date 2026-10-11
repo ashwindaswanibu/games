@@ -2,6 +2,7 @@ import type { AnyGame } from "@/core/game";
 import { fadeToColor } from "./fade-to-color/logic";
 import { degrees } from "./degrees/logic";
 import { frameByFrame } from "./frame-by-frame/logic";
+import { lexicon } from "./lexicon/logic";
 import { numberHunt } from "./number-hunt/logic";
 
 /**
@@ -10,6 +11,7 @@ import { numberHunt } from "./number-hunt/logic";
  */
 export const GAMES: readonly AnyGame[] = [
   numberHunt,
+  lexicon,
   degrees,
   frameByFrame,
   fadeToColor,

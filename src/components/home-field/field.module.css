@@ -351,6 +351,30 @@
   line-height: 1;
 }
 
+/* A day's letters, lower case as a dictionary sets them, spaced like type in a row. */
+.letters {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  gap: 0.18em;
+  font-family: var(--hf-serif);
+  line-height: 1;
+  color: var(--hf-ink);
+}
+
+.lettersSlots {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.lettersSlots span {
+  width: 14px;
+  height: 2px;
+  background: rgba(236, 230, 218, 0.45);
+}
+
 /* Finished: the strip's writing, the day's print. */
 .stripText {
   font: 500 11px/1 var(--hf-mono);

@@ -7,6 +7,7 @@ import type { HomeModel, HomeTile, TileMaterial, TileResult } from "@/components
 import type { DegreesPuzzle, DegreesSolution } from "@/games/degrees/schema";
 import { movesUsed, type DegreesState } from "@/games/degrees/logic";
 import { describeGrid, parseGrid } from "@/games/fade-to-color/theater/grid";
+import type { LexiconPuzzle, LexiconReveal, LexiconState } from "@/games/lexicon/logic";
 import { canPlay, getGame, visibleGames } from "@/games/registry";
 import { assetKey } from "./asset-seal";
 import type { ProfileRow } from "./database.types";
@@ -24,7 +25,7 @@ import { getOrCreatePuzzle, PuzzleUnavailableError } from "./puzzles";
  */
 
 /** The games the home features, in order: the ones that are ready. Others play from their pages. */
-const HOME_GAME_IDS = ["fade-to-color", "degrees", "frame-by-frame"];
+const HOME_GAME_IDS = ["fade-to-color", "degrees", "frame-by-frame", "lexicon"];
 
 export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_admin">): Promise<HomeModel> {
   const date = today();
@@ -154,6 +155,20 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
         material: { kind: "frames", image: seen.at(-1)!, total: 6, shown: seen.length },
         result: reveal
           ? { title: reveal.film.title, line: won ? `Named on frame ${seen.length}` : "Not named in six frames", score, image: seen.at(-1)!, chain: null, frames: seen }
+          : null,
+      };
+    }
+    case "lexicon": {
+      const p = puzzle as LexiconPuzzle;
+      const s = view?.state as LexiconState | undefined;
+      const reveal = view?.reveal as LexiconReveal | null | undefined;
+      const guesses = s?.guesses.length ?? 0;
+      return {
+        sub: "NINE LETTERS",
+        progress: `guess ${guesses + 1}`,
+        material: { kind: "letters", letters: p.letters, length: p.length },
+        result: reveal
+          ? { title: reveal.answer, line: view?.status === "won" ? `Found on guess ${guesses}` : "Gave up", score, image: null, chain: null, frames: null }
           : null,
       };
     }

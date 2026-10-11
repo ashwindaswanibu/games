@@ -1,7 +1,7 @@
 import { Bodoni_Moda } from "next/font/google";
 
 /**
- * The movie screens' display face (Fade to Color, Degrees of Separation): a Didone, the
+ * The full-screen games' display face (Fade to Color, Degrees of Separation, Lexicon): a Didone, the
  * high-contrast serif of film title cards. Text and figures use the app's Geist and Geist Mono (set
  * on `<html>`). Self-hosted by next/font; `DISPLAY_FONT_VARS` on a screen's root defines
  * `--cb-display`.
