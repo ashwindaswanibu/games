@@ -21,6 +21,8 @@ export type TileMaterial =
   | { kind: "thread"; from: string; to: string; knots: number; drawn: number }
   /** A slot of frames, the latest lit (Frame by Frame). */
   | { kind: "frames"; image: AssetRef; total: number; shown: number }
+  /** A day's letters, set large in a row (Lexicon), with the length of the word hidden among them. */
+  | { kind: "letters"; letters: string; length: number }
   /** Any other game: its name, set large. */
   | { kind: "word"; headline: string };
 

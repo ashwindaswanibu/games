@@ -9,6 +9,7 @@
  *                                                        faces whose photo is gone or no longer usable)
  *   npm run content:movies:portraits -- --dry-run --preview /tmp/faces   crop, write the crops there, store nothing
  *   npm run content:movies:portraits -- --concurrency 2                  downloads at once (default 2; Wikimedia limits bursts)
+ *   npm run content:movies:portraits -- --pace 1500                      ms between downloads (default 400; slower avoids 429s)
  *
  * For each person: their photo on Wikidata (P18) → its Wikimedia Commons file, if its license is
  * one we can use with a credit (`isUsableLicense`) → a 960px copy → Apple Vision finds the face
@@ -45,6 +46,7 @@ const { values: args } = parseArgs({
     people: { type: "string" },
     refresh: { type: "boolean", default: false },
     concurrency: { type: "string", default: "2" },
+    pace: { type: "string", default: "400" },
     "dry-run": { type: "boolean", default: false },
     preview: { type: "string" },
     "allow-remote": { type: "boolean", default: false },
@@ -60,12 +62,12 @@ const ROUND = 24;
  * Wikimedia's image servers turn away fast bursts (HTTP 429): downloads start at least this far
  * apart, and a refused one waits several seconds before trying again.
  */
-const DOWNLOAD_SPACING_MS = 400;
+let downloadSpacingMs = 400;
 let nextDownload = 0;
 async function downloadSlot(): Promise<void> {
   const now = Date.now();
   const at = Math.max(now, nextDownload);
-  nextDownload = at + DOWNLOAD_SPACING_MS;
+  nextDownload = at + downloadSpacingMs;
   if (at > now) await new Promise((resolve) => setTimeout(resolve, at - now));
 }
 const WIKIDATA_API = "https://www.wikidata.org/w/api.php";
@@ -306,6 +308,7 @@ async function main() {
   }
   const top = positiveInt(args.top, "top", { min: 0, max: 50_000 });
   const concurrency = positiveInt(args.concurrency, "concurrency", { min: 1, max: 8 });
+  downloadSpacingMs = positiveInt(args.pace, "pace", { min: 0, max: 60_000 });
   const db = pipelineDb({ allowRemote: args["allow-remote"], allowRemoteRead: args["allow-remote-read"] });
   if (args.preview) await mkdir(args.preview, { recursive: true });
 

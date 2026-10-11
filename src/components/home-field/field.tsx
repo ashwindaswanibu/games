@@ -397,6 +397,30 @@ function Material({ tile, box, lean, cover, arrive, finished, pad, footer }: { t
     );
   }
 
+  if (m.kind === "letters") {
+    if (finished) return <span className={styles.dark} style={cover} />;
+    // The nine letters across the tile, arriving one by one; the hidden word's length in hairlines beneath.
+    const size = Math.max(22, Math.min(68, (w - 2 * pad - lean * h) / (m.letters.length * 1.05), h / 4));
+    const top = (box.y[0] + bottom) / 2 - size * 0.75;
+    return (
+      <>
+        <span className={styles.dark} style={cover} />
+        <span className={styles.letters} style={{ left: box.x[0], width: w, top, fontSize: size }}>
+          {[...m.letters].map((ch, j) => (
+            <span key={j} style={{ opacity: clamp(arrive * 2.4 - 0.4 - j * 0.08) }}>
+              {ch}
+            </span>
+          ))}
+        </span>
+        <span className={styles.lettersSlots} style={{ left: box.x[0], width: w, top: top + size * 1.45, opacity: clamp(arrive * 2 - 1) }}>
+          {Array.from({ length: m.length }, (_, j) => (
+            <span key={j} />
+          ))}
+        </span>
+      </>
+    );
+  }
+
   return (
     <>
       <span className={styles.dark} style={cover} />

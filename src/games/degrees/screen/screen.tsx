@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatPuzzleDate } from "@/core/day";
 import type { ImmersiveGameUiProps } from "@/core/view";
 import type { FilmRef, PersonRef } from "@/games/_movies/schemas";
-import { DISPLAY_FONT_VARS } from "@/games/_movies/ui/display-font";
+import { DISPLAY_FONT_VARS } from "@/components/display-font";
 import {
   bestStillPossible,
   chainPersonIds,
