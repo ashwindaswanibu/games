@@ -22,6 +22,8 @@ export interface FilmInfo {
   title: string;
   year: number | null;
   popularity: number;
+  /** IMDb votes (0 without an IMDb rating): how many people have seen it. */
+  votes: number;
   /**
    * A documentary or a concert film (see `isNonFictionFilm`): its cast appear as themselves, so a
    * credit there doesn't show that someone acts. Still a link like any other credit.
@@ -245,18 +247,27 @@ export function eligibleActors(graph: CastGraph, people: ReadonlyMap<number, Per
 }
 
 /**
- * The start and end actors: eligible actors (`eligibleActors`) whom at least `minViews` English
- * Wikipedia readers look up a day. Readership, not Wikipedia's language editions: editions measure
- * how far a career travelled (a national star of the 1950s tops them), readers measure who players
- * know now, across Hollywood, Britain and India alike. Ids, ascending.
+ * The start and end actors: eligible actors (`eligibleActors`) whom players know, and know from
+ * films. Known: at least `minViews` English Wikipedia readers look them up a day. Readership, not
+ * Wikipedia's language editions: editions measure how far a career travelled (a national star of
+ * the 1950s tops them), readers measure who players know now, across Hollywood, Britain and India
+ * alike. From films: the fiction films they lead (top-`leadBilling` billed) have at least
+ * `minLeadVotes` IMDb votes between them, so people have watched them in their own films, and fame
+ * from elsewhere (a president, a boxer or a singer with a part or two) doesn't count. Ids, ascending.
  */
 export function actorPool(
   graph: CastGraph,
   people: ReadonlyMap<number, PersonInfo>,
   films: ReadonlyMap<number, FilmInfo>,
-  options: ActorRules & { minViews: number },
+  options: ActorRules & { minViews: number; minLeadVotes: number },
 ): number[] {
-  return eligibleActors(graph, people, films, options).filter((id) => (people.get(id)?.views ?? 0) >= options.minViews);
+  const leadVotes = (personId: number) =>
+    (graph.filmsOf.get(personId) ?? []).reduce((sum, filmId) => {
+      const film = films.get(filmId);
+      const leads = film !== undefined && !film.nonFiction && (graph.billing(filmId, personId) ?? Infinity) < options.leadBilling;
+      return leads ? sum + film.votes : sum;
+    }, 0);
+  return eligibleActors(graph, people, films, options).filter((id) => (people.get(id)?.views ?? 0) >= options.minViews && leadVotes(id) >= options.minLeadVotes);
 }
 
 export interface PickedPuzzle {

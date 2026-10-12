@@ -9,9 +9,9 @@
  *   npm run content:movies:degrees -- --renew-unplayed      remake stored days today's rules wouldn't pick (below)
  *
  * Builds the bipartite actor–film graph from every catalog credit, then for each date picks a
- * start and an end actor among the actors players know (`actorPool`: at least --min-views English
- * Wikipedia readers a day, measured by `content:movies:fame`) so that the shortest chain between
- * them is 3 or 4 links. Par is that length; the solution is the most recognisable shortest chain
+ * start and an end actor among the actors players know from films (`actorPool`: at least
+ * --min-views English Wikipedia readers a day, measured by `content:movies:fame`, and 200,000 IMDb
+ * votes across the films they lead) so that the shortest chain between them is 3 or 4 links. Par is that length; the solution is the most recognisable shortest chain
  * (famous films, co-stars players know, top-billed credits). Scores rank chain lengths, so the puzzle also lists
  * any length up to par + the spare moves that no chain has (`missingLengths`; almost never any).
  * Needs the catalog (`content:movies:catalog`).
@@ -86,11 +86,13 @@ import {
 const GAME_ID = "degrees";
 
 /**
- * English Wikipedia readers a day an actor needs to start or end a puzzle. Players should know
- * both names on sight: working actors with a run of known films clear it (a character actor whose
- * films people have seen), a national star known only at home doesn't.
+ * What an actor needs to start or end a puzzle (see `actorPool`): English Wikipedia readers a day,
+ * and IMDb votes between the films they lead. Players should know both names on sight, from films:
+ * working actors with a run of watched films clear both (a character actor whose films people have
+ * seen); a national star known only at home, or someone famous for something else, doesn't.
  */
-const MIN_VIEWS = 1500;
+const MIN_VIEWS = 2000;
+const MIN_LEAD_VOTES = 200_000;
 
 /** The pars the generator makes: three or four links, never two (too easy with names everyone knows). */
 const PARS = [3, 4] as const;
@@ -369,8 +371,8 @@ async function main() {
   const db = pipelineDb({ allowRemote: args["allow-remote"], allowRemoteRead: args["allow-remote-read"] });
 
   const { graph, films, people, creditCount } = await loadDegreesCatalog(db);
-  const pool = actorPool(graph, people, films, { ...ACTOR_RULES, minViews });
-  console.log(`Graph: ${graph.filmsOf.size} people, ${graph.castOf.size} films, ${creditCount} credits. Actor pool: ${pool.length} (at least ${minViews} readers a day).`);
+  const pool = actorPool(graph, people, films, { ...ACTOR_RULES, minViews, minLeadVotes: MIN_LEAD_VOTES });
+  console.log(`Graph: ${graph.filmsOf.size} people, ${graph.castOf.size} films, ${creditCount} credits. Actor pool: ${pool.length} (at least ${minViews} readers a day, ${MIN_LEAD_VOTES} IMDb votes across their leads).`);
   if (pool.length < 20) throw new Error("Too few well-known actors to make puzzles. Measure them first: `npm run content:movies:fame`.");
 
   const registered = await registeredGameSchemas();

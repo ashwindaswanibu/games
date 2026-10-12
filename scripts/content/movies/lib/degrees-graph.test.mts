@@ -42,7 +42,7 @@ const credits: Credit[] = [
 ];
 const graph = buildGraph(credits);
 const films = new Map<number, FilmInfo>(
-  [100, 101, 102, 103, 104, 105].map((id) => [id, { id, title: `Film ${id}`, year: 2000, popularity: id >= 103 ? 2 : 80, nonFiction: false }]),
+  [100, 101, 102, 103, 104, 105].map((id) => [id, { id, title: `Film ${id}`, year: 2000, popularity: id >= 103 ? 2 : 80, votes: id >= 103 ? 900 : 120_000, nonFiction: false }]),
 );
 const people = new Map<number, PersonInfo>(
   [1, 2, 3, 4, 5, 6, 7].map((id) => [id, { id, name: `Person ${id}`, popularity: id === 5 ? 1 : 60, isActor: true, isHuman: true, views: id === 5 ? 40 : 3000 }]),
@@ -84,7 +84,7 @@ describe("bestShortestPath", () => {
 });
 
 describe("actorPool", () => {
-  const options = { minViews: 0, minFilms: 2, minLeads: 1, leadBilling: 5 };
+  const options = { minViews: 0, minLeadVotes: 0, minFilms: 2, minLeads: 1, leadBilling: 5 };
 
   it("keeps people with enough (leading) credits whom enough readers look up", () => {
     expect(actorPool(graph, people, films, options)).toEqual([1, 2, 3, 5]);
@@ -100,6 +100,15 @@ describe("actorPool", () => {
     national.set(2, { ...people.get(2)!, popularity: 100, views: 200 });
     national.set(3, { ...people.get(3)!, views: null });
     expect(actorPool(graph, national, films, { ...options, minViews: 1000 })).toEqual([1]);
+  });
+
+  it("needs films people have watched them lead, so fame from elsewhere doesn't count", () => {
+    // Person 5 leads only obscure films (103, 104: 1,800 votes); persons 1–3 lead seen ones.
+    expect(actorPool(graph, people, films, { ...options, minLeadVotes: 50_000 })).toEqual([1, 2, 3]);
+    // Persons 2 and 3 lead two seen films (240,000 votes); person 1, one (and 103, billed 12th).
+    expect(actorPool(graph, people, films, { ...options, minLeadVotes: 200_000 })).toEqual([2, 3]);
+    // Only top billing: person 3 is billed second in 101.
+    expect(actorPool(graph, people, films, { ...options, minLeadVotes: 200_000, leadBilling: 1 })).toEqual([]);
   });
 
   it("leaves out people who aren't actors (they stay in the graph as links)", () => {

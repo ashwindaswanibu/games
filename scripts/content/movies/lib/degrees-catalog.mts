@@ -20,8 +20,8 @@ export async function loadDegreesCatalog(db: ContentDb): Promise<DegreesCatalog>
     selectAllPages<{ film_id: number; person_id: number; billing: number | null }>((from, to) =>
       db.from("movie_credits").select("film_id, person_id, billing").order("film_id").order("person_id").range(from, to),
     ),
-    selectAllPages<{ id: number; title: string; year: number | null; popularity: number; genres: string[]; is_adult: boolean }>((from, to) =>
-      db.from("movie_films").select("id, title, year, popularity, genres, is_adult").order("id").range(from, to),
+    selectAllPages<{ id: number; title: string; year: number | null; popularity: number; imdb_votes: number | null; genres: string[]; is_adult: boolean }>((from, to) =>
+      db.from("movie_films").select("id, title, year, popularity, imdb_votes, genres, is_adult").order("id").range(from, to),
     ),
     selectAllPages<{ id: number; name: string; popularity: number; is_actor: boolean; is_human: boolean | null }>((from, to) =>
       db.from("movie_people").select("id, name, popularity, is_actor, is_human").order("id").range(from, to),
@@ -34,7 +34,7 @@ export async function loadDegreesCatalog(db: ContentDb): Promise<DegreesCatalog>
   const hidden = new Set(filmRows.filter((f) => f.is_adult).map((f) => f.id));
   const credits: Credit[] = creditRows.filter((r) => !hidden.has(r.film_id)).map((r) => ({ filmId: r.film_id, personId: r.person_id, billing: r.billing }));
   const films = new Map<number, FilmInfo>(
-    filmRows.map((f) => [f.id, { id: f.id, title: f.title, year: f.year, popularity: f.popularity, nonFiction: isNonFictionFilm(f.genres) }]),
+    filmRows.map((f) => [f.id, { id: f.id, title: f.title, year: f.year, popularity: f.popularity, votes: f.imdb_votes ?? 0, nonFiction: isNonFictionFilm(f.genres) }]),
   );
   const people = new Map<number, PersonInfo>(
     personRows.map((p) => [p.id, { id: p.id, name: p.name, popularity: p.popularity, isActor: p.is_actor, isHuman: p.is_human, views: views.get(p.id) ?? null }]),
