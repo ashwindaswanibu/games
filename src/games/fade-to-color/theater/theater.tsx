@@ -23,6 +23,7 @@ import styles from "./theater.module.css";
 import { LEADER_MS } from "./timing";
 import { TitleAura, TitleCard } from "./title-matte";
 import { HOUSE_ACCENT, useLevelArt } from "./use-level-art";
+import { useCompact } from "./viewer";
 import { useWinTimeline, type WinCelebration } from "./win-timeline";
 import { Wordmark } from "./wordmark";
 
@@ -90,9 +91,13 @@ function endWords(state: State, status: Outcome, title: string): string {
  * Naming the film, seen live, plays the win (`win`, see `win-timeline.ts`): the film says its name
  * back as a title matte, then rolls on to its last reel and the end card. Until it rolls on, the
  * screen and the console hold the play as it was (the guess line as `HeardSlate`).
+ *
+ * On a phone the reel is too small to look into, so under it is the viewer (see `viewer.tsx`): the
+ * same reel three times larger, a third at a time, to drag along. It holds the win's title there.
  */
 export function FadeToColorTheater(props: Props) {
   const { view, start, submitMove, pending, notice, date, friends, viewerId } = props;
+  const compact = useCompact();
   const status = view?.status ?? null;
   const playing = status === "in_progress";
   const finished = status === "won" || status === "lost";
@@ -337,6 +342,23 @@ export function FadeToColorTheater(props: Props) {
   const dipped = resolve !== null && !relit;
   const today = formatPuzzleDate(date, { weekday: "short", month: "short", day: "numeric" });
 
+  // The win's title card, on the reel's screen; on a phone the viewer holds it and the reel keeps
+  // only the black and the last reel unreeling over it. The title's light goes behind whichever has it.
+  const titleCard = (place: "reel" | "lens" | "bare") =>
+    win &&
+    cardUp && (
+      <TitleCard
+        title={win.title}
+        picture={win.picture}
+        bars={barsFill(columns, win.title, 7)}
+        next={win.shown !== LEVEL_COUNT - 1 && lastLevel ? (lastSrc ?? assetUrl(lastLevel.id)) : null}
+        reduced={win.reduced}
+        place={place}
+        onNextReady={place === "lens" ? undefined : setLastDecoded}
+      />
+    );
+  const titleAura = win && !win.reduced && win.stage !== "done" ? <TitleAura fill={firstArt?.graded || null} /> : null;
+
   const guessed = new Map<number, number>();
   turns.forEach((turn, i) => {
     if (isGuess(turn)) guessed.set(turn.film.id, i + 1);
@@ -426,20 +448,9 @@ export function FadeToColorTheater(props: Props) {
           leader={<Leader threading={rolled} />}
           boxRef={reelBox}
           edgeTitle={win && !win.reduced && win.stage !== "done" ? "Main title" : null}
-          aura={win && !win.reduced && win.stage !== "done" ? <TitleAura fill={firstArt?.graded || null} /> : null}
-          overlay={
-            win &&
-            cardUp && (
-              <TitleCard
-                title={win.title}
-                picture={win.picture}
-                bars={barsFill(columns, win.title, 7)}
-                next={win.shown !== LEVEL_COUNT - 1 && lastLevel ? (lastSrc ?? assetUrl(lastLevel.id)) : null}
-                reduced={win.reduced}
-                onNextReady={setLastDecoded}
-              />
-            )
-          }
+          aura={compact ? null : titleAura}
+          overlay={titleCard(compact ? "bare" : "reel")}
+          lens={compact ? { overlay: titleCard("lens"), aura: titleAura } : null}
         />
 
         <section ref={consoleBox} className={styles.console}>

@@ -29,6 +29,9 @@ import { DOWN, exitBeats, HOLD_MS, LETTER_MS, openingBeats, PRINT_RUN_STEP_MS, R
  * Named on the last reel, the card lifts off the picture instead (no print run). If the last reel's
  * picture isn't in by the hold, the card holds for it a while, then lifts off the picture on screen.
  * With reduced motion: no card at all; the last reel fades up, then the end card, as one block.
+ *
+ * On a phone the title is in the viewer, and the reel's own screen has a card of its own with only
+ * the black and the last reel (see `TitleCard`): the parts both have play on both, as one.
  */
 
 /** How long the card waits (after the hold) for the last reel's picture before lifting off the one on screen. */
@@ -167,7 +170,10 @@ export function useWinTimeline(props: {
     if (!started || !at || !el) return;
     const tl = new Timeline(el);
     const q = (selector: string) => el.querySelector<HTMLElement>(selector);
+    const all = (selector: string) => [...el.querySelectorAll<HTMLElement>(selector)];
     const part = (name: string) => q(`[data-win="${name}"]`);
+    // Every one: on a phone the reel's card and the viewer's share these parts.
+    const parts = (name: string) => all(`[data-win="${name}"]`);
     const cls = (name: string) => q(`.${name}`);
     const set = (patch: Partial<WinCelebration>) => flushSync(() => setWin((w) => (w ? { ...w, ...patch } : w)));
     const lastReel = at.shown === LEVEL_COUNT - 1;
@@ -177,8 +183,8 @@ export function useWinTimeline(props: {
     let waiting = false;
     let waitTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // The room and the header, as the house goes down and comes back up.
-    const house = [cls(styles.back), cls(styles.wmMovie), q('[data-edge="start"]'), q('[data-edge="end"]'), cls(styles.contact)];
+    // The room and the header, as the house goes down and comes back up (on a phone, the viewfinder too).
+    const house = [cls(styles.back), cls(styles.wmMovie), q('[data-edge="start"]'), q('[data-edge="end"]'), cls(styles.contact), cls(styles.viewfinder)];
     const room: [HTMLElement | null, number, number][] = [
       // element, its light at rest, its light with the house down
       [cls(styles.washLight), 0.07, 0.02],
@@ -223,7 +229,7 @@ export function useWinTimeline(props: {
 
       // 2 · Fade to black, except the name. The black comes down over the picture; the title, cut out
       //     of that same picture above it, is what's left. Then the rail prints its name for it.
-      tl.track(part("dip"), "opacity", [[beats.dip, 0, DOWN], [beats.black, 1]]);
+      for (const dip of parts("dip")) tl.track(dip, "opacity", [[beats.dip, 0, DOWN], [beats.black, 1]]);
       tl.track(q('[data-edge="title"]'), "opacity", [[beats.black, 0, "ease"], [beats.black + 700, 1]]);
 
       // 3 · A beat on the bare cut-out, then Color: each letter fades from picture to the film's
@@ -257,18 +263,20 @@ export function useWinTimeline(props: {
       const E = Math.max(0, tl.now);
       const x = exitBeats(kind, at.reduced);
       const L = E + x.light;
-      const card = cls(styles.titleCard);
-      if (live.current.lastAccent) card?.style.setProperty("--incoming", live.current.lastAccent);
+      const accent = live.current.lastAccent;
+      if (accent) for (const card of all(`.${styles.titleCard}`)) card.style.setProperty("--incoming", accent);
 
       if (at.reduced) {
-        if (kind === "roll") tl.track(part("wipe"), "opacity", [[E, 0, "ease"], [E + x.light, 1]]);
+        if (kind === "roll") for (const wipe of parts("wipe")) tl.track(wipe, "opacity", [[E, 0, "ease"], [E + x.light, 1]]);
       } else if (kind === "roll") {
         // The last reel unreels over the card, the reel's own sweep of light leading it.
-        tl.track(part("wipe"), "transform", [[E, "translate3d(-100%,0,0)", UNREEL_EASE], [E + UNREEL_MS, "translate3d(0,0,0)"]]);
-        tl.track(part("next"), "transform", [[E, "translate3d(100%,0,0)", UNREEL_EASE], [E + UNREEL_MS, "translate3d(0,0,0)"]]);
-        tl.track(part("bar"), "transform", [[E, "translate3d(0,0,0)", UNREEL_EASE], [E + UNREEL_MS, "translate3d(100%,0,0)"]]);
-        tl.track(part("bar"), "opacity", [[E - 1, 0], [E, 1], [E + UNREEL_MS - 1, 1], [E + UNREEL_MS, 0]]);
-        tl.track(part("flare"), "opacity", [[E, 0, "ease-out"], [E + 280, 1, "ease-out"], [E + 560, 0]]);
+        for (const wipe of parts("wipe")) tl.track(wipe, "transform", [[E, "translate3d(-100%,0,0)", UNREEL_EASE], [E + UNREEL_MS, "translate3d(0,0,0)"]]);
+        for (const next of parts("next")) tl.track(next, "transform", [[E, "translate3d(100%,0,0)", UNREEL_EASE], [E + UNREEL_MS, "translate3d(0,0,0)"]]);
+        for (const bar of parts("bar")) {
+          tl.track(bar, "transform", [[E, "translate3d(0,0,0)", UNREEL_EASE], [E + UNREEL_MS, "translate3d(100%,0,0)"]]);
+          tl.track(bar, "opacity", [[E - 1, 0], [E, 1], [E + UNREEL_MS - 1, 1], [E + UNREEL_MS, 0]]);
+        }
+        for (const flare of parts("flare")) tl.track(flare, "opacity", [[E, 0, "ease-out"], [E + 280, 1, "ease-out"], [E + 560, 0]]);
         tl.track(cls(styles.contact), "opacity", [[E, 0.06, "ease"], [E + UNREEL_MS, 1]]);
         // The reels you didn't need develop in order, under a playhead that lands on the last.
         tl.cue(E, () => {
@@ -278,7 +286,7 @@ export function useWinTimeline(props: {
       } else {
         // Already on the last reel (or it never came): the title goes and the black lifts off the picture.
         tl.track(part("card"), "opacity", [[E, 1, DOWN], [E + 600, 0]]);
-        tl.track(part("dip"), "opacity", [[E + 200, 1, RISE], [E + 1200, 0]]);
+        for (const dip of parts("dip")) tl.track(dip, "opacity", [[E + 200, 1, RISE], [E + 1200, 0]]);
         tl.track(cls(styles.contact), "opacity", [[E, 0.06, "ease"], [E + 1000, 1]]);
       }
 
@@ -302,7 +310,9 @@ export function useWinTimeline(props: {
         tl.track(credits, "transform", [[E + x.creditsFrom, "none"]]);
         return;
       }
-      for (const item of [cls(styles.back), cls(styles.wmMovie), q('[data-edge="start"]')]) tl.track(item, "opacity", [[L, 0.06, "ease"], [L + 1000, 1]]);
+      for (const item of [cls(styles.back), cls(styles.wmMovie), q('[data-edge="start"]'), cls(styles.viewfinder)]) {
+        tl.track(item, "opacity", [[L, 0.06, "ease"], [L + 1000, 1]]);
+      }
       // The reel's own label takes the rail back from "Main title": one out, then the other in.
       tl.track(q('[data-edge="title"]'), "opacity", [[L, 1, DOWN], [L + 300, 0]]);
       tl.track(q('[data-edge="end"]'), "opacity", [[L + 250, 0.06, RISE], [L + 700, 1]]);
@@ -385,10 +395,11 @@ export function useWinTimeline(props: {
 
 /**
  * Sizes the title card from the screen's width, stepping down until the title fits in two-thirds of
- * the screen's height; then gives each lit unit its slice of the one barcode spread across the
- * whole title. The size is kept in the screen's own units (`cqw`) and every slice in `em`, so when
- * the reel takes the end layout mid-roll (one relayout, then a glide) the card keeps its proportions
- * on the screen. Returns the units.
+ * the screen's height (on a phone, the viewer's window, where it starts larger); then gives each
+ * lit unit its slice of the one barcode spread across the whole title. The size is kept in the
+ * screen's own units (`cqw`) and every slice in `em`, so when the reel takes the end layout
+ * mid-roll (one relayout, then a glide) the card keeps its proportions on the screen. Returns the
+ * units.
  */
 function layoutCard(root: HTMLElement): HTMLElement[] {
   const card = root.querySelector<HTMLElement>(`.${styles.card}`);
@@ -396,8 +407,9 @@ function layoutCard(root: HTMLElement): HTMLElement[] {
   const screen = card?.closest<HTMLElement>(`.${styles.screen}`);
   if (!card || !lit || !screen) return [];
   const { clientWidth: sw, clientHeight: sh } = screen;
-  // On a phone the card is the only thing lit in a short screen: the title takes a little more of it.
-  let size = sw * (sw < 640 ? 0.1 : 0.078);
+  // On a phone the card is the only thing lit in a short screen: the title takes a little more of
+  // it, and more again in the viewer's window, which is nearly square.
+  let size = sw * (screen.classList.contains(styles.lensGate) ? 0.15 : sw < 640 ? 0.1 : 0.078);
   for (;;) {
     card.style.setProperty("--card-fs", `${((size / sw) * 100).toFixed(3)}cqw`);
     if (lit.offsetHeight <= sh * 0.66 || size < 14) break;

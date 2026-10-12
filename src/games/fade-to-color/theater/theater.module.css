@@ -2092,13 +2092,149 @@
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Phones: the reel runs edge to edge; the console stacks.
+ * The viewer (phones): the reel under the bench's lens
+ * ------------------------------------------------------------------------------------------- */
+
+/*
+ * The same reel three times larger, a third of its run at a time, in a window the screen's full
+ * width: its own film (thin rails and the picture, three screens wide) slides through the window,
+ * moved by transform (see `Lens`). Drawn only on a phone, under the reel.
+ */
+.lensBox {
+  position: relative;
+  width: 100vw;
+  height: calc(var(--lens-h) + 2 * var(--lens-rail));
+}
+
+.lens {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--film);
+  box-shadow: 0 40px 90px -40px rgb(0 0 0 / 0.9);
+  /* A sideways drag is the viewer's; an upright one still scrolls the page. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  outline: none;
+}
+
+/* Focused from the keyboard: a hairline of ink inside the window. */
+.lens:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 1px var(--ink-2);
+  pointer-events: none;
+}
+
+.lensFilm {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 300%;
+  will-change: transform;
+}
+
+/* The viewer's own rails: thin, with perforations that travel with the picture. */
+.lensRail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--lens-rail);
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><rect x='5.4' y='6' width='9.2' height='8' rx='1.7' fill='%23020203' stroke='%23ffffff' stroke-opacity='0.06' stroke-width='0.5'/></svg>")
+    0 50% / var(--lens-rail) var(--lens-rail) repeat-x;
+}
+
+.lensRail:first-child {
+  top: 0;
+}
+
+.lensRail:last-child {
+  bottom: 0;
+}
+
+.lensScreen,
+.lensGate {
+  position: absolute;
+  inset: var(--lens-rail) 0;
+  aspect-ratio: auto;
+}
+
+/* Three times larger, the light falling behind the bar reaches three times as far. */
+.lensScreen .lightbar::before {
+  width: 360px;
+}
+
+/* Over the window and still while the film moves under it: where the viewer holds the win's title. */
+.lensGate {
+  background: none;
+  pointer-events: none;
+}
+
+/* The title, cut out of the third of the picture in the window (`--at`, written by `Lens`). */
+.lensGate .matte {
+  background-size: 300% auto;
+  background-position: calc(var(--at, 0) * 150%) 50%;
+}
+
+/* The last reel, unreeling over the title: the third in the window, in register with the film beneath. */
+.lensNext {
+  position: absolute;
+  top: 0;
+  left: calc(var(--at, 0) * -300%);
+  width: 300%;
+  max-width: none;
+  height: 100%;
+  object-fit: cover;
+}
+
+/*
+ * On the reel, the third that's in the viewer: four corner marks in ink, no box. Moved by
+ * transform, in its own widths, as the viewer moves.
+ */
+.viewfinder {
+  --mark: rgb(239 233 223 / 0.9);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / 3);
+  pointer-events: none;
+  will-change: transform;
+  background:
+    linear-gradient(var(--mark), var(--mark)) left 3px top 3px / 8px 1.5px,
+    linear-gradient(var(--mark), var(--mark)) left 3px top 3px / 1.5px 8px,
+    linear-gradient(var(--mark), var(--mark)) right 3px top 3px / 8px 1.5px,
+    linear-gradient(var(--mark), var(--mark)) right 3px top 3px / 1.5px 8px,
+    linear-gradient(var(--mark), var(--mark)) left 3px bottom 3px / 8px 1.5px,
+    linear-gradient(var(--mark), var(--mark)) left 3px bottom 3px / 1.5px 8px,
+    linear-gradient(var(--mark), var(--mark)) right 3px bottom 3px / 8px 1.5px,
+    linear-gradient(var(--mark), var(--mark)) right 3px bottom 3px / 1.5px 8px;
+  background-repeat: no-repeat;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phones: the bench. The reel runs edge to edge, the viewer under it; the console docks at the
+ * bottom, in thumb reach.
  * ------------------------------------------------------------------------------------------- */
 
 @media (max-width: 640px) {
   .theater {
     --sprocket: 11px;
     --reel-w: 100vw;
+    --lens-rail: 7px;
+    /*
+     * The viewer's picture: the reel's full height three times larger, as far as the screen allows
+     * with the four up (the tallest the console gets in play), so it never changes size mid-play.
+     * Everything else in that layout is the reel (a third of the width, and its rails) and 347px.
+     */
+    --lens-h: max(
+      150px,
+      min(100vw, 46dvh, calc(100dvh - 100vw / 3 - 347px - max(env(safe-area-inset-top), 12px) - max(env(safe-area-inset-bottom), 12px)))
+    );
   }
 
   .top {
@@ -2114,10 +2250,20 @@
     font-size: 24px;
   }
 
+  /* The reel, the viewer (its row is kept before it's drawn, so nothing moves when it is), the console. */
   .stage {
-    align-content: start;
-    padding-top: 9vh;
-    gap: 12px;
+    grid-template-rows: auto calc(var(--lens-h) + 2 * var(--lens-rail)) 1fr;
+    padding: 10px 0 0;
+    gap: 10px;
+  }
+
+  .lensBox {
+    grid-row: 2;
+  }
+
+  /* The reel's screen moves the viewfinder; an upright drag still scrolls the page. */
+  .screen {
+    touch-action: pan-y;
   }
 
   .reel {
@@ -2135,7 +2281,35 @@
   }
 
   .console {
+    grid-row: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: 12px;
+    padding-bottom: max(env(safe-area-inset-bottom), 12px);
+  }
+
+  /*
+   * The strip stays under the viewer; the guess line, the four and the rules dock at the bottom.
+   * The whisper after a miss sits over the guess line, nearer the viewer the eye is on.
+   */
+  .console > .whisper,
+  .console > .fourSlot,
+  .console > .opening {
+    margin-top: auto;
+  }
+
+  .console > .whisper {
+    order: 1;
+    margin-bottom: -4px;
+  }
+
+  .console > .slate {
+    order: 2;
+  }
+
+  .console > .alert {
+    order: 3;
   }
 
   .slate {
@@ -2148,7 +2322,7 @@
   }
 
   .input {
-    font-size: 21px;
+    font-size: 22px;
   }
 
   .slateActions {
@@ -2156,8 +2330,17 @@
     justify-content: space-between;
   }
 
-  .fourThe {
-    display: none;
+  /* Guess (and the confirm's answer) a full 44px, under the thumb. */
+  .slateActions .go {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 22px;
+  }
+
+  /* As the film stops, the guess line goes out where it was: at the foot. */
+  .fadingSlate {
+    align-self: end;
   }
 
   .fourControl {
@@ -2166,13 +2349,26 @@
     border-right: 0;
   }
 
+  /* The four laid out as the guess line was: the tiles in the line's place, the stake and Pick in its actions'. */
+  .four {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px 8px;
+  }
+
   .fourRow {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
+    display: contents;
+  }
+
+  .four .kicker {
+    grid-row: 2;
+    justify-self: start;
+    font-size: 10px;
+    letter-spacing: 0.26em;
   }
 
   .optionGrid {
+    grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
@@ -2183,17 +2379,22 @@
   }
 
   .pickButton {
-    align-self: center;
-    min-width: 132px;
+    grid-row: 2;
+    justify-self: end;
+    min-width: 116px;
+    min-height: 44px;
   }
 
   .cardTitle {
     max-width: 90%;
   }
 
-  .endTitle,
+  .endTitle {
+    font-size: clamp(40px, 11vw, 52px);
+  }
+
   .theater[data-long-title] .endTitle {
-    font-size: clamp(36px, 10.5vw, 48px);
+    font-size: clamp(34px, 9vw, 44px);
   }
 
   /* The score on its own line; Share (a full 44px) beside How everyone did under it. */

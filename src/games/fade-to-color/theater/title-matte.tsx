@@ -15,6 +15,10 @@ import styles from "./theater.module.css";
  *
  * Nothing here moves by itself: the win's timeline (`win-timeline.ts`) plays every part, found by
  * `data-win`. The card is for looking at only; the end card names the film for everyone.
+ *
+ * On a phone the viewer holds the title, larger (`place="lens"`: over the viewer's window, the
+ * picture it's cut from and the last reel registered to the film beneath by the viewer's `--at`),
+ * and the reel's own screen keeps only the black and the last reel unreeling over it (`bare`).
  */
 export function TitleCard(props: {
   title: string;
@@ -25,10 +29,12 @@ export function TitleCard(props: {
   /** The last reel's picture, when the card leaves by unreeling onto it. */
   next: string | null;
   reduced: boolean;
+  /** Where the card is: on the reel's screen (`reel`), over the viewer's window (`lens`), or on the reel's screen with no title (`bare`). */
+  place?: "reel" | "lens" | "bare";
   /** The last reel's picture is decoded (true) or failed to load (false). */
-  onNextReady(ok: boolean): void;
+  onNextReady?(ok: boolean): void;
 }) {
-  const { title, picture, bars, next, reduced, onNextReady } = props;
+  const { title, picture, bars, next, reduced, place = "reel", onNextReady } = props;
   // Letter by letter, or word by word on WebKit and for long titles (fewer layers to composite).
   const [byWord] = useState(() => title.length > 20 || isWebKit());
   const nextImg = useRef<HTMLImageElement>(null);
@@ -42,8 +48,8 @@ export function TitleCard(props: {
     if (!img || !next) return;
     let live = true;
     img.decode().then(
-      () => live && readyRef.current(true),
-      () => live && readyRef.current(false),
+      () => live && readyRef.current?.(true),
+      () => live && readyRef.current?.(false),
     );
     return () => {
       live = false;
@@ -54,7 +60,7 @@ export function TitleCard(props: {
   return (
     <div className={styles.titleCard} data-reduced={reduced || undefined} aria-hidden>
       {!reduced && <div className={styles.dip} data-win="dip" />}
-      {!reduced && (
+      {!reduced && place !== "bare" && (
         <div className={styles.card} data-win="card">
           <canvas className={styles.cardLight} data-win="bloom" />
           <canvas className={styles.cardLight} data-win="halo" />
@@ -71,8 +77,16 @@ export function TitleCard(props: {
       )}
       {next && (
         <div className={styles.cardWipe} data-win="wipe">
-          {/* eslint-disable-next-line @next/next/no-img-element -- a same-origin asset, decoded and animated by hand */}
-          <img ref={nextImg} className={styles.frame} src={next} alt="" decoding="async" data-win="next" />
+          {place === "lens" ? (
+            // In the viewer it moves against the wipe by the window's width, holding the third of the picture in view.
+            <div className={styles.frame} data-win="next">
+              {/* eslint-disable-next-line @next/next/no-img-element -- a same-origin asset, decoded and animated by hand */}
+              <img ref={nextImg} className={styles.lensNext} src={next} alt="" decoding="async" />
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- a same-origin asset, decoded and animated by hand
+            <img ref={nextImg} className={styles.frame} src={next} alt="" decoding="async" data-win="next" />
+          )}
         </div>
       )}
       {next && !reduced && (
