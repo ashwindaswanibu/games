@@ -163,3 +163,10 @@ An overview strip plus a viewer showing a third of the film at three times the s
 ### Review fixes — live
 An independent review of the four redesigns found four real defects, all fixed: Lexicon's letters dropped and rose twice after opening; the phone's all-played print ran friends' marks under the row's cut; a deep Degrees sag could hide a face under the end titles at 1280x720; Degrees' short rules said an undo costs a move.
   Builder's notes to weigh: after each unreel the viewer pans back to the film's head (900ms) — "rewind" or busy? The viewer is sized so the four fit without resizing, which leaves ~85px of room above the guess line during play; the alternative is a viewer that shrinks when the four come up.
+
+### Sign in and sign up — live
+The starter template's pages now stand in the games' room: the day along the top edge, "Daily" in Bodoni italic as a title card, mono labels, fields written on a line in Bodoni italic like a guess, Sign in as the ink pill, Google as the quiet outline pill. The name "Daily" and the app icon are unchanged (brand calls are yours). Nothing of today's puzzles shows (anyone can open these pages).
+- Alternative: show a glimpse of today (the barcode strip) behind the name — rejected because it would show the day's puzzle to anyone on the internet.
+
+### Safari check — fixed
+Every screen was checked in WebKit 18.4 (iPhone 15 and laptop). One defect: the all-played home's film title drew twice (its ink and bars layers wrapped differently); fixed.
