@@ -13,9 +13,12 @@ import { filmRefSchema, personIdSchema, personRefSchema } from "@/games/_movies/
  * a co-star. A chain of `par` links runs from `start` to `end`.
  */
 
-/** Shortest possible chains are 2–3 links (the generator only publishes those). */
+/**
+ * Shortest possible chains a stored puzzle may have: 2–7 links. The generator makes 3–4 (days
+ * before 12 October 2026 were 2–3).
+ */
 export const DEGREES_MIN_PAR = 2;
-export const DEGREES_MAX_PAR = 3;
+export const DEGREES_MAX_PAR = 7;
 /** Moves a player gets beyond par: a link, an undo and a hint each use one. */
 export const DEGREES_SPARE_MOVES = 4;
 

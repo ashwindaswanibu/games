@@ -10,9 +10,9 @@ describe("degrees schema", () => {
     expect(isConsistentSolution(puzzle, solution)).toBe(true);
   });
 
-  it("rejects pars outside 2–3 and identical start and end", () => {
+  it("rejects pars outside 2–7 and identical start and end", () => {
     expect(degreesPuzzleSchema.safeParse({ ...puzzle, par: 1 }).success).toBe(false);
-    expect(degreesPuzzleSchema.safeParse({ ...puzzle, par: 4 }).success).toBe(false);
+    expect(degreesPuzzleSchema.safeParse({ ...puzzle, par: 8 }).success).toBe(false);
     expect(degreesPuzzleSchema.safeParse({ ...puzzle, end: puzzle.start }).success).toBe(false);
   });
 

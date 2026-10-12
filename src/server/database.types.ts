@@ -181,6 +181,35 @@ export type Database = {
           },
         ];
       };
+      movie_person_fame: {
+        Row: {
+          person_id: number;
+          en_title: string | null;
+          daily_views: number;
+          measured_at: string;
+        };
+        Insert: {
+          person_id: number;
+          en_title?: string | null;
+          daily_views: number;
+          measured_at?: string;
+        };
+        Update: {
+          person_id?: number;
+          en_title?: string | null;
+          daily_views?: number;
+          measured_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "movie_person_fame_person_id_fkey";
+            columns: ["person_id"];
+            isOneToOne: true;
+            referencedRelation: "movie_people";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       puzzle_assets: {
         Row: {
           id: string;

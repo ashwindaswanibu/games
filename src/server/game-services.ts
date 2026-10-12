@@ -40,8 +40,8 @@ export interface ChainStep {
   links: number;
 }
 
-/** The deepest chain `nextLink` searches (puzzles' par is at most 3). */
-export const MAX_NEXT_LINK_DEPTH = 3;
+/** The deepest chain `nextLink` searches (the generator makes puzzles of at most 4 links). */
+export const MAX_NEXT_LINK_DEPTH = 4;
 
 export interface FilmRecord {
   id: number;
