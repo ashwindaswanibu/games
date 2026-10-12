@@ -41,7 +41,7 @@ You asked for a radical visual upgrade with the gameplay unchanged. Each screen 
 
 ## Degrees of Separation
 
-**Status:** building
+**Status:** live 2026-10-11 night.
 
 **Direction.** Keep the dark room and the thread. Tonight the thread becomes the whole page. The frame is a two-shot. The two people you must connect stand above the line as stacked Bodoni title cards, with their faces large, dim and silver behind them. The people you find hang below it, each portrait under its knot. The films ride the line as the loudest supporting type. You write each link onto the line itself, where it will live, instead of into a form beneath it.
 
