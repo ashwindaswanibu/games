@@ -3,7 +3,7 @@
 .room {
   --ink: #ece6da;
   --ink-2: rgb(236 230 218 / 0.62);
-  --ink-3: rgb(236 230 218 / 0.38);
+  --ink-3: rgb(236 230 218 / 0.56); /* 4.5:1 on the room, for small type */
   --line: rgb(236 230 218 / 0.22);
   --bad: #e07a5f;
   --display: var(--cb-display), "Bodoni Moda", serif;
