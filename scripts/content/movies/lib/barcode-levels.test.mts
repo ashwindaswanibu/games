@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   areaWeights,
   averageColor,
+  bandColumns,
+  bandRuns,
+  BANDED_RATIO,
   chooseFrame,
   chunkIn,
   chunkOf,
@@ -10,23 +13,29 @@ import {
   createImage,
   crop,
   cropMattes,
+  detectBands,
   detectMattes,
   dominantColor,
   filmLook,
+  imageColumns,
   infoScore,
+  LEVEL1_BANDS,
   layoutColumns,
   linearToSrgb,
   lumaOf,
   meanBrightness,
+  missingFrameLimit,
   NEAR_BLACK_FRAME,
   PACES,
   pasteStrip,
   pickStripX,
+  rebandLevel1,
   REJECTED,
   sampleFrames,
   squeezeColumn,
   srgbToLinear,
   stripEdges,
+  stripFrames,
   stripSchedule,
   storyRange,
   textLikeness,
@@ -171,6 +180,112 @@ describe("level 1: squeezed frames", () => {
   });
 });
 
+describe("level 1: bands of frames", () => {
+  /** A one-row squeezed column of one colour. */
+  const flat = (r: number, g: number, b: number) => Float32Array.from([r, g, b]);
+
+  it("splits frames into runs as even as possible, in order, every frame in exactly one run", () => {
+    expect(bandRuns(10, 5)).toEqual([0, 2, 4, 6, 8].map((start) => ({ start, end: start + 2 })));
+    // 7 into 3: lengths 2, 2, 3.
+    expect(bandRuns(7, 3)).toEqual([
+      { start: 0, end: 2 },
+      { start: 2, end: 4 },
+      { start: 4, end: 7 },
+    ]);
+    for (const [count, bands] of [
+      [2400, LEVEL1_BANDS],
+      [2345, LEVEL1_BANDS],
+      [1601, 320],
+    ] as const) {
+      const runs = bandRuns(count, bands);
+      expect(runs).toHaveLength(bands);
+      expect(runs[0]!.start).toBe(0);
+      expect(runs.at(-1)!.end).toBe(count);
+      runs.forEach((run, i) => i > 0 && expect(run.start).toBe(runs[i - 1]!.end));
+      const lengths = runs.map((r) => r.end - r.start);
+      expect(Math.max(...lengths) - Math.min(...lengths)).toBeLessThanOrEqual(1);
+    }
+    // Fewer frames than bands: each frame is its own band.
+    expect(bandRuns(3, 10)).toEqual([0, 1, 2].map((start) => ({ start, end: start + 1 })));
+    expect(() => bandRuns(0, 4)).toThrow();
+  });
+
+  it("makes each band the exact mean of its run of frames, in film order", () => {
+    const columns = [flat(0, 10, 200), flat(10, 20, 100), flat(30, 30, 0), flat(60, 40, 50), flat(100, 50, 25), flat(150, 60, 75), flat(210, 70, 100)];
+    const bands = bandColumns(columns, 3); // runs of 2, 2 and 3 frames
+    expect(bands.map((b) => Array.from(b))).toEqual([
+      [5, 15, 150],
+      [45, 35, 25],
+      [(100 + 150 + 210) / 3, 60, (25 + 75 + 100) / 3].map((v) => Math.fround(v)),
+    ]);
+    // Rows are averaged row by row: sky stays above ground.
+    const skyOverSand = [Float32Array.from([40, 90, 200, 210, 180, 120]), Float32Array.from([60, 110, 220, 190, 160, 100])];
+    expect(Array.from(bandColumns(skyOverSand, 1)[0]!)).toEqual([50, 100, 210, 200, 170, 110]);
+    expect(() => bandColumns([flat(1, 1, 1), Float32Array.from([1, 1, 1, 2, 2, 2])], 1)).toThrow(/same number of rows/);
+  });
+
+  it("lays 2,400 frames out as 480 bands of 5 px on a 2,400-pixel canvas", () => {
+    const columns = Array.from({ length: 2400 }, (_, i) => flat(i % 256, (i * 7) % 256, 100));
+    const strip = layoutColumns(bandColumns(columns, LEVEL1_BANDS), 2400);
+    for (const band of [0, 1, 239, 479]) {
+      const mean = (c: number) => columns.slice(band * 5, band * 5 + 5).reduce((sum, col) => sum + col[c]!, 0) / 5;
+      const expected = [Math.round(mean(0)), Math.round(mean(1)), 100];
+      for (let x = band * 5; x < band * 5 + 5; x++) expect(pixel(strip, x, 0)).toEqual(expected);
+    }
+  });
+
+  it("re-bands a stored level 1 exactly as if it had been rendered with bands", () => {
+    // A stored level: one sampled frame per column, two rows (sky over ground).
+    const frames = Array.from({ length: 60 }, (_, i) => Float32Array.from([i * 4, 200 - i * 3, (i * 37) % 256, i, i * 2, 255 - i]));
+    const stored = layoutColumns(frames, 60);
+    expect(imageColumns(stored).map((c) => Array.from(c))).toEqual(frames.map((c) => Array.from(c)));
+    const rendered = layoutColumns(bandColumns(frames, 12), 60);
+    const rebanded = rebandLevel1(stored, 12);
+    expect([rebanded.width, rebanded.height]).toEqual([60, 2]);
+    expect(Array.from(rebanded.data)).toEqual(Array.from(rendered.data));
+  });
+});
+
+describe("detectBands: is a stored level 1 banded already?", () => {
+  /** Deterministic pseudo-random bytes. */
+  const noise = (seed: number) => () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  /** A film-like level: one frame per column, frames drifting in colour with a cut now and then. */
+  function oneFramePerColumn(width: number, height: number): RgbImage {
+    const random = noise(7);
+    let colour: [number, number, number] = [120, 90, 60];
+    const columns = Array.from({ length: width }, () => {
+      if (random() < 0.08) colour = [random() * 255, random() * 255, random() * 255];
+      colour = colour.map((c) => Math.min(255, Math.max(0, c + (random() - 0.5) * 30))) as [number, number, number];
+      return Float32Array.from({ length: height * 3 }, (_, v) => colour[v % 3]! * (0.6 + (0.4 * Math.floor(v / 3)) / height));
+    });
+    return layoutColumns(columns, width);
+  }
+  /** Compression-like noise of up to ±`amount` on every channel. */
+  function jitter(image: RgbImage, amount: number): RgbImage {
+    const random = noise(11);
+    return { ...image, data: image.data.map((v) => Math.min(255, Math.max(0, Math.round(v + (random() * 2 - 1) * amount)))) };
+  }
+
+  it("finds no bands in a level with one frame per column", () => {
+    const found = detectBands(oneFramePerColumn(480, 4));
+    expect(found.banded).toBe(false);
+    expect(found.ratio).toBeGreaterThan(BANDED_RATIO);
+  });
+
+  it("finds the bands of a re-banded level, through compression noise, at any band width", () => {
+    const level = oneFramePerColumn(480, 4);
+    for (const bands of [96, 64, 160]) {
+      const found = detectBands(jitter(rebandLevel1(level, bands), 2));
+      expect(found.banded).toBe(true);
+      expect(found.ratio).toBeLessThan(BANDED_RATIO);
+    }
+    expect(detectBands(rebandLevel1(level, 96)).bands).toBe(96);
+  });
+});
+
 describe("levels 2–10: the edges-first schedule", () => {
   it("moves the crop from the frame edge to its centre over nine levels", () => {
     const schedule = stripSchedule(PACES.normal);
@@ -263,6 +378,55 @@ describe("chooseFrame: skipping near-black frames", () => {
     const inTiny = chooseFrame(tiny, total, sampled, new Map(sampled.map((n) => [n, n === tiny.target ? 0 : 99])));
     expect(inTiny).toBeGreaterThanOrEqual(tiny.first);
     expect(inTiny).toBeLessThanOrEqual(tiny.last);
+  });
+});
+
+describe("stripFrames: frames the source turns out not to have", () => {
+  const total = 10_000;
+  const sampled = sampleFrames(total, 2000); // every 5th frame
+  const story = storyRange(total, DEFAULT_STORY_TRIM);
+  const brightness = new Map(sampled.map((n) => [n, 120]));
+
+  it("allows 1% of the sampled frames to be missing", () => {
+    expect(missingFrameLimit(2400)).toBe(24);
+    expect(missingFrameLimit(1600)).toBe(16);
+    expect(missingFrameLimit(99)).toBe(0);
+  });
+
+  it("is chooseFrame for every stretch when nothing is missing", () => {
+    expect(stripFrames(story, 30, total, sampled, brightness)).toEqual(
+      Array.from({ length: 30 }, (_, i) => chooseFrame(chunkIn(story, 30, i), total, sampled, brightness)),
+    );
+  });
+
+  it("swaps a missing frame for a nearby one in the same stretch and leaves every other strip alone", () => {
+    const before = stripFrames(story, 30, total, sampled, brightness);
+    const lost = before[11]!;
+    const after = stripFrames(story, 30, total, sampled, brightness, new Set([lost]));
+    const chunk = chunkIn(story, 30, 11);
+    expect(after[11]).not.toBe(lost);
+    expect(sampled).toContain(after[11]);
+    expect(after[11]).toBeGreaterThanOrEqual(chunk.first);
+    expect(after[11]).toBeLessThanOrEqual(chunk.last);
+    expect(Math.abs(after[11]! - lost)).toBeLessThanOrEqual(5);
+    expect(after.filter((_, i) => i !== 11)).toEqual(before.filter((_, i) => i !== 11));
+    expect(after.every((n, i) => i === 0 || n > after[i - 1]!)).toBe(true);
+  });
+
+  it("still skips near-black frames when it picks the replacement", () => {
+    const before = stripFrames(story, 30, total, sampled, brightness);
+    const lost = before[4]!;
+    // The frames either side of the lost one are a fade to black.
+    const fade = new Map(sampled.map((n) => [n, Math.abs(n - lost) <= 10 && n !== lost ? 4 : 120]));
+    const replacement = stripFrames(story, 30, total, sampled, fade, new Set([lost]))[4]!;
+    expect(replacement).not.toBe(lost);
+    expect(fade.get(replacement)).toBeGreaterThan(NEAR_BLACK_FRAME);
+  });
+
+  it("gives up on a stretch with no frame left", () => {
+    const chunk = chunkIn(story, 30, 7);
+    const all = new Set([...sampled.filter((n) => n >= chunk.first && n <= chunk.last), chunk.target]);
+    expect(() => stripFrames(story, 30, total, sampled, brightness, all)).toThrow(/No frame of the stretch/);
   });
 });
 

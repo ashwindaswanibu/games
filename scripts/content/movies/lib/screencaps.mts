@@ -5,7 +5,7 @@ import path from "node:path";
 import sharp from "sharp";
 import type { RgbImage } from "./barcode-levels.mjs";
 import type { FrameSource } from "./barcode-render.mjs";
-import { fetchWithRetry, mapPool } from "./http.mjs";
+import { fetchWithRetry, HttpError, mapPool } from "./http.mjs";
 
 /**
  * Frames from movie-screencaps.com: complete films as numbered screencaps in film order, free for
@@ -28,6 +28,8 @@ export const MAX_CONCURRENCY = 6;
 const REQUEST_PAUSE_MS = 60;
 /** The CDN's largest useful width: the 4K originals. */
 const MAX_FRAME_WIDTH = 3840;
+/** Statuses meaning the CDN doesn't have a cap (rather than failing to serve it): reported as missing. */
+const MISSING_STATUS = new Set([404, 410]);
 
 // ---------------------------------------------------------------------------------------------
 // Parsing (pure; tested in screencaps.test.mts)
@@ -305,14 +307,24 @@ export class ScreencapsSource implements FrameSource {
     this.dir = mkdtempSync(path.join(tmpdir(), "barcode-frames-"));
   }
 
-  private async download(url: string, file: string): Promise<Buffer> {
+  /** The image's bytes, or null when the CDN doesn't have it (404 or 410: a dead cap). */
+  private async download(url: string, file: string): Promise<Buffer | null> {
     const cached = await readFile(file).catch(() => null);
     if (cached) return cached;
-    const response = await fetchWithRetry(
-      url,
-      { headers: { "user-agent": BROWSER_USER_AGENT, referer: this.gallery.url, accept: "image/avif,image/webp,image/*;q=0.8" } },
-      { attempts: 5, baseDelayMs: 1500, timeoutMs: 45_000, label: "screencaps cdn" },
-    );
+    let response: Response;
+    try {
+      response = await fetchWithRetry(
+        url,
+        { headers: { "user-agent": BROWSER_USER_AGENT, referer: this.gallery.url, accept: "image/avif,image/webp,image/*;q=0.8" } },
+        { attempts: 5, baseDelayMs: 1500, timeoutMs: 45_000, label: "screencaps cdn" },
+      );
+    } catch (error) {
+      if (error instanceof HttpError && MISSING_STATUS.has(error.status)) {
+        this.requests++;
+        return null;
+      }
+      throw error;
+    }
     const type = response.headers.get("content-type") ?? "";
     if (!type.startsWith("image/")) throw new Error(`${url} answered ${type || "no content type"}, not an image`);
     const bytes = Buffer.from(await response.arrayBuffer());
@@ -323,31 +335,35 @@ export class ScreencapsSource implements FrameSource {
     return bytes;
   }
 
-  async thumbnails(numbers: readonly number[], onProgress?: (done: number, total: number) => void): Promise<RgbImage[]> {
+  async thumbnails(numbers: readonly number[], onProgress?: (done: number, total: number) => void): Promise<(RgbImage | null)[]> {
     let done = 0;
     const images = await mapPool(numbers, this.concurrency, async (n) => {
-      const image = await decode(await this.download(capUrl(this.gallery, n, { thumbnail: true }), path.join(this.dir, `thumb-${n}.jpg`)));
+      const bytes = await this.download(capUrl(this.gallery, n, { thumbnail: true }), path.join(this.dir, `thumb-${n}.jpg`));
       onProgress?.(++done, numbers.length);
-      return image;
+      return bytes ? decode(bytes) : null;
     });
     // One gallery's thumbnails share a size; normalise any odd one out to the first's.
-    const { width, height } = images[0]!;
+    const first = images.find((img) => img !== null);
+    if (!first) return images;
+    const { width, height } = first;
     return Promise.all(
       images.map(async (img) => {
-        if (img.width === width && img.height === height) return img;
+        if (img === null || (img.width === width && img.height === height)) return img;
         const { data } = await sharp(img.data, { raw: { width: img.width, height: img.height, channels: 3 } }).resize({ width, height, fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
         return { width, height, data: new Uint8Array(data.buffer, data.byteOffset, data.length) };
       }),
     );
   }
 
-  async prefetchFrames(numbers: readonly number[], options: { width: number }, onProgress?: (done: number, total: number) => void): Promise<void> {
+  async prefetchFrames(numbers: readonly number[], options: { width: number }, onProgress?: (done: number, total: number) => void): Promise<number[]> {
     this.frameWidth = Math.min(MAX_FRAME_WIDTH, Math.ceil(options.width / 16) * 16);
     let done = 0;
-    await mapPool(numbers, this.concurrency, async (n) => {
-      await this.download(this.frameUrl(n), this.framePath(n));
+    const found = await mapPool(numbers, this.concurrency, async (n) => {
+      const bytes = await this.download(this.frameUrl(n), this.framePath(n));
       onProgress?.(++done, numbers.length);
+      return bytes !== null;
     });
+    return numbers.filter((_, i) => !found[i]);
   }
 
   private frameUrl(n: number): string {
@@ -360,7 +376,9 @@ export class ScreencapsSource implements FrameSource {
   }
 
   async frame(n: number): Promise<RgbImage> {
-    return decode(await this.download(this.frameUrl(n), this.framePath(n)));
+    const bytes = await this.download(this.frameUrl(n), this.framePath(n));
+    if (!bytes) throw new Error(`Cap ${n} of ${this.gallery.url} is missing`);
+    return decode(bytes);
   }
 
   /** Deletes every cached frame. Safe to call twice. */
