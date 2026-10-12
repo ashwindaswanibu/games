@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
-import type { Rgb } from "../palette";
-import { barsFill } from "./bars";
+import { barsFill, type Rgb } from "../palette";
 import styles from "./theater.module.css";
 
 /**

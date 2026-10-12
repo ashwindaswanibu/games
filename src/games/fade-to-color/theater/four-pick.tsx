@@ -2,8 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { FilmRef } from "@/games/_movies/schemas";
-import type { Rgb } from "../palette";
-import { barsFill } from "./bars";
+import { barsFill, type Rgb } from "../palette";
 import { Letters } from "./letters";
 import styles from "./theater.module.css";
 import { letterStep } from "./timing";

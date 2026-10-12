@@ -15,14 +15,18 @@ export type TileState = "unplayed" | "playing" | "finished";
 
 /** What a tile is made of: today's puzzle itself, drawn the game's way. */
 export type TileMaterial =
-  /** A picture that is light (Fade to Color's strip): it fades from black into colour and drifts. */
-  | { kind: "light"; image: AssetRef }
+  /** A picture that is light (Fade to Color's strip), on a cut of the reel with its edge print ("LEADER ◂ 10", "REEL 04 ◂ 10"). */
+  | { kind: "light"; image: AssetRef; edge: string }
   /** Two names and the taut thread between them, a knot per link of par (Degrees). */
   | { kind: "thread"; from: string; to: string; knots: number; drawn: number }
   /** A slot of frames, the latest lit (Frame by Frame). */
   | { kind: "frames"; image: AssetRef; total: number; shown: number }
-  /** A day's letters, set large in a row (Lexicon), with the length of the word hidden among them. */
-  | { kind: "letters"; letters: string; length: number }
+  /**
+   * A day's letters under its dictionary's fore-edge (Lexicon): `total` pages, the gap still open
+   * (`low`/`high` are the closest pages guessed either side, -1 and `total` for none), a ribbon at
+   * each page guessed (`edge` for the two that bound the gap), and the hidden word's length.
+   */
+  | { kind: "letters"; letters: string; length: number; total: number; gap: { low: number; high: number }; ribbons: { page: number; edge: boolean }[] }
   /** Any other game: its name, set large. */
   | { kind: "word"; headline: string };
 
@@ -52,14 +56,20 @@ export interface HomeTile {
   /** Its category's id: the category's plate leads its games (see `fieldPlan`). */
   group: string;
   name: string;
-  /** The game's name as written ("Fade to Color"), for its title card. */
+  /** The game's name as written ("Movie Barcode"), for its title card. */
   title: string;
+  /** The same name in its wordmark's parts, italic where the game's own header sets it so ("Movie *Barcode*"). */
+  titleParts: { text: string; italic?: boolean }[];
   /** What the game is, in a line ("Name the film from a single frame"). */
   tagline: string;
   /** Under the name: what the game is today, or where you are in it. */
   sub: string;
-  /** The title card's button: "Play · 100", or "Continue · reel 4" for a game you've started. */
-  cta: { verb: "Play" | "Continue"; detail: string };
+  /** The title card's button: the game's own first verb ("Roll film"), or where you are in it ("Reel 4"). */
+  cta: { label: string; continuing: boolean };
+  /** The game's light, "r g b" (its button and edges); null when the browser takes it from the picture (the film's). */
+  accent: string | null;
+  /** Text on the game's light (its button filled). */
+  onAccent: string;
   href: string;
   state: TileState;
   material: TileMaterial;
@@ -73,6 +83,8 @@ export interface HomeModel {
   date: string;
   /** "THURSDAY · 8 OCTOBER" */
   dateLabel: string;
+  /** "SUN, OCT 11", as the reel's edge prints it. */
+  dateShort: string;
   /** The next New York midnight, ISO. */
   rolloverAt: string;
   /** Midnight to midnight in New York, ISO, for the day's line. */
@@ -93,7 +105,8 @@ export interface HomeModel {
  */
 export function fieldMetrics(width: number): { strip: number; band: number; minRow: number; slot: { min: number; max: number }; lean: number; compact: boolean } {
   const compact = width < 720;
-  return { strip: compact ? 64 : 132, band: compact ? 72 : 96, minRow: compact ? 220 : 280, slot: { min: 270, max: 520 }, lean: 0.083, compact };
+  // A phone holds one game a row: two bands and three rows fill a 390×844 screen under the header exactly.
+  return { strip: compact ? 64 : 132, band: compact ? 64 : 96, minRow: compact ? 220 : 280, slot: { min: 270, max: 520 }, lean: 0.083, compact };
 }
 
 /** A category on the home: its plate carries its name. */
@@ -107,22 +120,25 @@ export interface HomeCategory {
 /**
  * How the field is cut: rows of pieces, each piece a game's tile or a category's plate. Every row
  * holds `perRow` game-sized slots, so every game is the same size wherever it sits. A category's
- * plate (its name, set large) leads its games and takes the slots they leave in its row; small
- * categories share a row. A category whose games fill their rows exactly gets its plate as a band
- * above them instead.
+ * plate (its name, standing up its seam) leads its games in half a slot (`PLATE`), and takes the
+ * slots they leave in its row; small categories share a row. A category whose games fill their
+ * rows exactly gets its plate as a band above them instead.
  *
  * Pieces are numbered tiles first (their index in `tiles`), then plates (`tiles.length + c` for
  * the c-th category in `categories`).
  */
 export interface FieldPlan {
   rows: number[][];
-  /** Each piece's share of its row, in slots: 1 for a game, what's left for a plate. */
+  /** Each piece's share of its row, in slots: 1 for a game, `PLATE` or what's left for a plate. */
   slots: number[];
   /** Rows that are a plate alone (a band of fixed height). */
   bands: boolean[];
   /** The categories in order of their first game, as group ids. */
   categories: string[];
 }
+
+/** A plate's least share of its row, in slots: its name stands up the cut, so half a game's width holds it. */
+export const PLATE = 0.5;
 
 export function fieldPlan(tiles: readonly Pick<HomeTile, "group">[], perRow: number): FieldPlan {
   const categories: string[] = [];
@@ -135,7 +151,7 @@ export function fieldPlan(tiles: readonly Pick<HomeTile, "group">[], perRow: num
       games.push([i]);
     }
   });
-  const slots = [...tiles.map(() => 1), ...categories.map(() => 1)];
+  const slots = [...tiles.map(() => 1), ...categories.map(() => PLATE)];
   const rows: number[][] = [];
   const bands: boolean[] = [];
   // The row being filled with small categories, and the slots it has used.
@@ -152,14 +168,15 @@ export function fieldPlan(tiles: readonly Pick<HomeTile, "group">[], perRow: num
   };
   games.forEach((own, c) => {
     const plate = tiles.length + c;
-    if (own.length + 1 <= perRow) {
-      if (used + own.length + 1 > perRow) close();
+    if (own.length + PLATE <= perRow) {
+      if (used + own.length + PLATE > perRow) close();
       open.push(plate, ...own);
-      used += own.length + 1;
+      used += own.length + PLATE;
       return;
     }
     close();
-    // A big category: full rows of games, the first short by what its plate needs.
+    // A big category: full rows of games, the first short by what its plate needs (for whole
+    // counts of games, rounding n + 1 slots up to rows is the same as rounding n + PLATE).
     const count = Math.ceil((own.length + 1) / perRow);
     const first = own.length - (count - 1) * perRow;
     if (first === 0) {
@@ -304,24 +321,25 @@ export function fieldLayout(params: {
 }
 
 /**
- * The plan for a screen: how many slots a row holds is chosen, not fixed. On a phone it's two. On
- * a wider screen it's anything from rows of slots no wider than `slot.max` to rows of slots no
- * narrower than `slot.min`, and the field takes the count that leaves plates least to fill
- * (games, not names, should fill the screen), preferring one whose rows fit the screen, then fewer
- * rows (taller games).
+ * The plan for a screen: how many slots a row holds is chosen, not fixed. On a phone it's one: a
+ * game a row, each category's plate a band above its games. On a wider screen it's anything from
+ * rows of slots no wider than `slot.max` to rows of slots no narrower than `slot.min`, and the
+ * field takes the count that leaves plates least to fill (games, not names, should fill the
+ * screen), preferring one whose rows fit the screen, then fewer rows (taller games).
  */
 export function choosePlan(
   tiles: readonly Pick<HomeTile, "group">[],
   screen: { width: number; height: number },
   metrics: { band: number; minRow: number; compact: boolean; slot: { min: number; max: number } },
 ): FieldPlan {
-  const low = metrics.compact ? 2 : Math.max(2, Math.ceil(screen.width / metrics.slot.max));
-  const high = metrics.compact ? 2 : Math.max(low, Math.floor(screen.width / metrics.slot.min));
+  if (metrics.compact) return fieldPlan(tiles, 1);
+  const low = Math.max(2, Math.ceil(screen.width / metrics.slot.max));
+  const high = Math.max(low, Math.floor(screen.width / metrics.slot.min));
   let best: { plan: FieldPlan; cost: [number, number, number] } | null = null;
   for (let perRow = low; perRow <= high; perRow++) {
     const plan = fieldPlan(tiles, perRow);
-    // A plate's slots beyond its first; a plate alone in a band counts as one.
-    const spare = plan.rows.reduce((n, row, r) => n + (plan.bands[r] ? 1 : row.filter((i) => i >= tiles.length).reduce((m, i) => m + plan.slots[i]! - 1, 0)), 0);
+    // A plate's slots beyond its least; a plate alone in a band counts as one.
+    const spare = plan.rows.reduce((n, row, r) => n + (plan.bands[r] ? 1 : row.filter((i) => i >= tiles.length).reduce((m, i) => m + plan.slots[i]! - PLATE, 0)), 0);
     const overflows = fieldHeight(0, plan, metrics) > screen.height ? 1 : 0;
     const cost: [number, number, number] = [overflows, spare, plan.rows.length];
     if (!best || before(cost, best.cost)) best = { plan, cost };
@@ -364,10 +382,55 @@ export function seamAt(box: TileBox, lean: number, y: number): number {
   return box.x[0] + k - 2 * k * u;
 }
 
+/** The tile's right seam at height `y` (the screen's edge for the last in its row). */
+export function rightSeamAt(box: TileBox, lean: number, y: number): number {
+  if (box.col === box.cols - 1) return box.x[1];
+  const k = leanOf(box, lean);
+  const u = (y - box.y[0]) / Math.max(1, box.y[1] - box.y[0]);
+  return box.x[1] + k - 2 * k * u;
+}
+
+/**
+ * The angle a plate's name stands at, in degrees: upright, turned to read up the seam beside it
+ * (the seams lean `lean` across per unit down, so the name is a quarter turn less that angle).
+ */
+export function spineAngle(lean: number): number {
+  return -(90 - (Math.atan(lean) * 180) / Math.PI);
+}
+
+/**
+ * On a phone the field is rows, one game a row, and every cut between rows is the seams' angle
+ * turned on its side: rising to the right, through the row's edge `y` at the screen's middle.
+ * This is where that cut crosses `x`.
+ */
+export function rowCut(y: number, lean: number, width: number, x: number): number {
+  return y + lean * (width / 2 - x);
+}
+
+/** A row's clip on a phone: its cuts above and below, the field's first top and last bottom straight; all run off the screen. */
+export function rowClip(box: TileBox, lean: number, width: number, first: boolean, last: boolean): string {
+  const a = -400;
+  const b = width + 400;
+  const top = (x: number) => (first ? box.y[0] : rowCut(box.y[0], lean, width, x));
+  const bottom = (x: number) => (last ? box.y[1] : rowCut(box.y[1], lean, width, x));
+  return `polygon(${a}px ${top(a)}px, ${b}px ${top(b)}px, ${b}px ${bottom(b)}px, ${a}px ${bottom(a)}px)`;
+}
+
 /** Order on the home: games are equal, so the field keeps the registry's order (finishing moves nothing, it collapses in place). */
 export function tileTargets(tiles: readonly Pick<HomeTile, "state">[]): { collapse: number[]; print: number } {
   const collapse = tiles.map((t) => (t.state === "finished" ? 1 : 0));
   return { collapse, print: tiles.length > 0 && collapse.every((c) => c === 1) ? 1 : 0 };
+}
+
+/**
+ * The header's one line about the day: what's left to play, then the points once some are won,
+ * then (all played) the points and the countdown to the next day. A phone says less.
+ */
+export function dayLine(tiles: readonly Pick<HomeTile, "state">[], won: number, clock: string, compact: boolean): string {
+  const left = tiles.filter((t) => t.state !== "finished").length;
+  const points = `${won} ${won === 1 ? "point" : "points"}`;
+  if (tiles.length > 0 && left === 0) return compact ? `All played · ${clock}` : `All played · ${won} · Next day in ${clock}`;
+  return left < tiles.length && !compact ? `${left} to play · ${points}` : `${left} to play`;
 }
 
 /** How far through the New York day `now` is (0 at midnight, 1 at the next). */

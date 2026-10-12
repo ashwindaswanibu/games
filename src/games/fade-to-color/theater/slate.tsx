@@ -4,8 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import { filmSearchResponseSchema, type FilmSearchHit } from "@/games/_movies/schemas";
 import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
-import type { Rgb } from "../palette";
-import { barsFill } from "./bars";
+import { barsFill, type Rgb } from "../palette";
 import { Letters } from "./letters";
 import styles from "./theater.module.css";
 

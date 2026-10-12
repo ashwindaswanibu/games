@@ -6,8 +6,9 @@ import type { PlayView } from "@/core/view";
 import type { HomeModel, HomeTile, TileMaterial, TileResult } from "@/components/home-field/model";
 import type { DegreesPuzzle, DegreesSolution } from "@/games/degrees/schema";
 import { movesUsed, type DegreesState } from "@/games/degrees/logic";
+import { LEVEL_COUNT } from "@/games/fade-to-color/logic";
 import { describeGrid, parseGrid } from "@/games/fade-to-color/theater/grid";
-import type { LexiconPuzzle, LexiconReveal, LexiconState } from "@/games/lexicon/logic";
+import { gapOf, type LexiconPuzzle, type LexiconReveal, type LexiconState } from "@/games/lexicon/logic";
 import { getBucket } from "@/games/buckets";
 import { canPlay, getGame, visibleGames } from "@/games/registry";
 import { assetKey } from "./asset-seal";
@@ -65,9 +66,12 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
           group: game.bucket,
           name: game.name.toUpperCase(),
           title: game.name,
+          titleParts: tile.titleParts ?? [{ text: game.name }],
           tagline: game.tagline,
           sub: tile.sub,
-          cta: state === "playing" ? { verb: "Continue", detail: tile.progress } : { verb: "Play", detail: "100" },
+          cta: state === "playing" ? { label: tile.progress, continuing: true } : { label: tile.start, continuing: false },
+          accent: tile.light.accent,
+          onAccent: tile.light.on,
           href: `/play/${game.id}`,
           state,
           material: tile.material,
@@ -83,6 +87,7 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
   return {
     date,
     dateLabel: formatPuzzleDate(date, { weekday: "long", day: "numeric", month: "long" }).replace(",", " ·").toUpperCase(),
+    dateShort: formatPuzzleDate(date).toUpperCase(),
     rolloverAt: nextRollover().toISOString(),
     dayStartsAt: startOfDay(date).toISOString(),
     won,
@@ -107,11 +112,19 @@ async function friendMarks(viewerId: string, game: AnyGame, date: PuzzleDate) {
 type Show = (ref: AssetRef | null | undefined) => AssetRef | null;
 interface Described {
   sub: string;
-  /** Where a started play is, for "Continue · …". */
+  /** The wordmark's parts, as the game's own header sets them (the plain name if absent). */
+  titleParts?: { text: string; italic?: boolean }[];
+  /** The game's own first button ("Roll film"), for a game not yet started. */
+  start: string;
+  /** Where a started play is, in the game's words ("Reel 4"), for its button. */
   progress: string;
+  /** The game's light, "r g b" (null: the browser samples it from the picture), and text on it. */
+  light: { accent: string | null; on: string };
   material: TileMaterial;
   result: TileResult | null;
 }
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** Each game's tile: its material from today's puzzle and the viewer's play, and its result. */
 function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: Show): Described {
@@ -124,11 +137,16 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       // The latest reel the viewer has seen: the strip of light, or where they are.
       const shown = show(s?.unlocked.at(-1) ?? p.first)!;
       show(p.first);
-      const reel = Math.min(10, (s?.turns.length ?? 0) + 1);
+      const reel = Math.min(LEVEL_COUNT, (s?.turns.length ?? 0) + 1);
+      const playing = view?.status === "in_progress";
       return {
         sub: "TEN REELS",
-        progress: `reel ${reel}`,
-        material: { kind: "light", image: view && view.status !== "in_progress" ? p.first : shown },
+        titleParts: [{ text: "Movie" }, { text: "Barcode", italic: true }],
+        start: "Roll film",
+        progress: `Reel ${reel}`,
+        light: { accent: null, on: "#0b0b0c" },
+        // The reel's edge print, as the game prints it (theater.tsx).
+        material: { kind: "light", image: view && view.status !== "in_progress" ? p.first : shown, edge: playing ? `REEL ${pad2(reel)} ◂ ${LEVEL_COUNT}` : `LEADER ◂ ${LEVEL_COUNT}` },
         result: reveal ? { title: reveal.film.title, line: view?.result ? describeGrid(parseGrid(view.result.shareGrid)) : "", score, image: p.first, chain: null, frames: null } : null,
       };
     }
@@ -143,7 +161,10 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const line = s?.gaveUp ? "Gave up" : moves <= p.par ? `At par · ${moves} moves` : `${moves} moves · par ${p.par}`;
       return {
         sub: `PAR ${p.par}`,
-        progress: `move ${(s ? movesUsed(s) : 0) + 1}`,
+        titleParts: [{ text: "Degrees" }, { text: "of", italic: true }, { text: "Separation" }],
+        start: "Start linking",
+        progress: `Move ${(s ? movesUsed(s) : 0) + 1}`,
+        light: { accent: "236 178 92", on: "#0b0b0c" },
         material: { kind: "thread", from: p.start.name, to: p.end.name, knots: p.par, drawn: links.length },
         result: view && view.status !== "in_progress"
           ? { title: "", line, score, image: null, chain: { people: [p.start.name, ...finishedChain.map((l) => l.person.name)], films: finishedChain.map((l) => l.film.title) }, frames: null }
@@ -159,7 +180,9 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const won = view?.status === "won";
       return {
         sub: "SIX FRAMES",
-        progress: `frame ${seen.length}`,
+        start: "Play",
+        progress: `Frame ${seen.length}`,
+        light: { accent: "239 233 223", on: "#050506" },
         material: { kind: "frames", image: seen.at(-1)!, total: 6, shown: seen.length },
         result: reveal
           ? { title: reveal.film.title, line: won ? `Named on frame ${seen.length}` : "Not named in six frames", score, image: seen.at(-1)!, chain: null, frames: seen }
@@ -171,10 +194,15 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const s = view?.state as LexiconState | undefined;
       const reveal = view?.reveal as LexiconReveal | null | undefined;
       const guesses = s?.guesses.length ?? 0;
+      // The viewer's own guesses: the gap they've closed to and a ribbon at each page they tried.
+      const gap = s ? gapOf(p, s) : { low: -1, high: p.total };
+      const ribbons = (s?.guesses ?? []).filter((g) => g.side !== "found").map((g) => ({ page: g.page, edge: g.page === gap.low || g.page === gap.high }));
       return {
         sub: "NINE LETTERS",
-        progress: `guess ${guesses + 1}`,
-        material: { kind: "letters", letters: p.letters, length: p.length },
+        start: "Start guessing",
+        progress: `Guess ${guesses + 1}`,
+        light: { accent: "190 48 34", on: "#f6ecdc" },
+        material: { kind: "letters", letters: p.letters, length: p.length, total: p.total, gap: { low: gap.low, high: gap.high }, ribbons },
         result: reveal
           ? { title: reveal.answer, line: view?.status === "won" ? `Found on guess ${guesses}` : "Gave up", score, image: null, chain: null, frames: null }
           : null,
@@ -183,7 +211,9 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
     default:
       return {
         sub: "",
-        progress: "in progress",
+        start: "Play",
+        progress: "Continue",
+        light: { accent: "239 233 223", on: "#050506" },
         material: { kind: "word", headline: game.name },
         result: view?.result ? { title: game.name, line: view.result.label, score, image: null, chain: null, frames: null } : null,
       };

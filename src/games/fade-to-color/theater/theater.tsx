@@ -9,7 +9,7 @@ import type { Outcome } from "@/core/game";
 import type { ImmersiveGameUiProps } from "@/core/view";
 import type { FilmRef, FilmSearchHit } from "@/games/_movies/schemas";
 import { fadeToColor, guessedFilmIds, isGuess, isSkip, LEVEL_COUNT, levelsInView, MAX_GUESSES, OPTION_COUNT, pickWorth, reelOf, stoppedEarly, type State } from "../logic";
-import { barsFill } from "./bars";
+import { barsFill } from "../palette";
 import { ContactStrip } from "./contact-strip";
 import { Credits } from "./credits";
 import { Crossfade } from "./crossfade";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choosePlan, dayFraction, fieldHeight, fieldLayout, fieldMetrics, fieldPlan, spans, tileTargets } from "./model";
+import { choosePlan, dayFraction, dayLine, fieldHeight, fieldLayout, fieldMetrics, fieldPlan, PLATE, rightSeamAt, rowClip, seamAt, spans, spineAngle, tileTargets } from "./model";
 
 const groups = (ids: string[]) => ids.map((group) => ({ group }));
 
@@ -57,10 +57,17 @@ describe("fieldPlan", () => {
     expect(plan.bands).toEqual([false, false]);
   });
 
-  it("lets small categories share a row", () => {
+  it("lets small categories share a row, each plate in half a slot", () => {
     const plan = fieldPlan(tiles(["movies", "movies", "movies", "words", "words", "geography", "chess"]), 4);
-    expect(plan.rows).toEqual([[7, 0, 1, 2], [8, 3, 4], [9, 5, 10, 6]]);
-    expect(plan.slots.slice(7)).toEqual([1, 2, 1, 1]);
+    expect(plan.rows).toEqual([[7, 0, 1, 2], [8, 3, 4, 9, 5], [10, 6]]);
+    expect(plan.slots.slice(7)).toEqual([1, PLATE, PLATE, 3]);
+  });
+
+  it("fits two categories' plates beside their games when half slots allow", () => {
+    // Today: two Movies games and Lexicon, rows of four: one row, the plates half a game each.
+    const plan = fieldPlan(tiles(["movies", "movies", "words"]), 4);
+    expect(plan.rows).toEqual([[3, 0, 1, 4, 2]]);
+    expect(plan.slots).toEqual([1, 1, 1, PLATE, PLATE]);
   });
 
   it("gives every row the same number of game-sized slots", () => {
@@ -104,12 +111,27 @@ describe("fieldLayout", () => {
   });
 
   it("makes a finished row a band, its plate with it, and gives the others the height", () => {
-    const boxes = fieldLayout({ width: 1440, height: 700, plan: plan(["movies", "movies", "words"]), collapse: [1, 1, 0], print: 0, open: null, metrics });
+    // Rows of three: [Movies plate (its half slot and the half left), game, game], [Words plate, game].
+    const boxes = fieldLayout({ width: 1440, height: 700, plan: plan(["movies", "movies", "words"], 3), collapse: [1, 1, 0], print: 0, open: null, metrics });
     expect(width(boxes[0]!.y)).toBeCloseTo(72);
     expect(width(boxes[2]!.y)).toBeCloseTo(628);
-    // The band is shared by slots: the plate's two, half; each game a quarter.
-    expect(width(boxes[3]!.x)).toBeCloseTo(720);
-    expect(width(boxes[0]!.x)).toBeCloseTo(360);
+    // The band is shared by slots: the plate's one and each game's one, a third each.
+    expect(width(boxes[3]!.x)).toBeCloseTo(480);
+    expect(width(boxes[0]!.x)).toBeCloseTo(480);
+    // Below it, the Words plate takes the two slots its game leaves.
+    expect(width(boxes[4]!.x)).toBeCloseTo(960);
+  });
+
+  it("gives today's games a quarter more width on a laptop: 180/360/360/180/360", () => {
+    const p = choosePlan(groups(["movies", "movies", "words"]), { width: 1440, height: 844 }, fieldMetrics(1440));
+    const boxes = fieldLayout({ width: 1440, height: 844, plan: p, collapse: [0, 0, 0], print: 0, open: null, metrics });
+    expect(p.rows[0]!.map((i) => Math.round(width(boxes[i]!.x)))).toEqual([180, 360, 360, 180, 360]);
+    // Every game the same width, whatever its category.
+    expect(new Set(boxes.slice(0, 3).map((b) => Math.round(width(b.x)))).size).toBe(1);
+    // A 1280 screen: rows of four still, so 160/320.
+    const small = choosePlan(groups(["movies", "movies", "words"]), { width: 1280, height: 744 }, fieldMetrics(1280));
+    const narrow = fieldLayout({ width: 1280, height: 744, plan: small, collapse: [0, 0, 0], print: 0, open: null, metrics });
+    expect(small.rows[0]!.map((i) => Math.round(width(narrow[i]!.x)))).toEqual([160, 320, 320, 160, 320]);
   });
 
   it("keeps a plate band its height, even in the day's print", () => {
@@ -140,27 +162,99 @@ describe("tileTargets and fieldMetrics", () => {
     expect(tileTargets([{ state: "finished" }, { state: "finished" }])).toEqual({ collapse: [1, 1], print: 1 });
   });
 
-  it("holds two games a row on a phone", () => {
-    const plan = choosePlan(groups(["movies", "movies", "words"]), { width: 390, height: 780 }, fieldMetrics(390));
-    expect(plan.rows).toEqual([[3], [0, 1], [4, 2]]);
-    expect(plan.bands).toEqual([true, false, false]);
+  it("holds one game a row on a phone, each category's plate a band above its games", () => {
+    const plan = choosePlan(groups(["movies", "movies", "words"]), { width: 390, height: 788 }, fieldMetrics(390));
+    expect(plan.rows).toEqual([[3], [0], [1], [4], [2]]);
+    expect(plan.bands).toEqual([true, false, false, true, false]);
+  });
+
+  it("fills a phone exactly: two 64px bands and three 220px rows under the header", () => {
+    const metrics = fieldMetrics(390);
+    const plan = choosePlan(groups(["movies", "movies", "words"]), { width: 390, height: 788 }, metrics);
+    const height = fieldHeight(844 - 56, plan, metrics);
+    expect(height).toBe(788);
+    const boxes = fieldLayout({ width: 390, height, plan, collapse: [0, 0, 0], print: 0, open: null, metrics });
+    expect(boxes.slice(0, 3).map((b) => width(b.y))).toEqual([220, 220, 220]);
+    expect(boxes.slice(3).map((b) => width(b.y))).toEqual([64, 64]);
+    expect(boxes.every((b) => b.x[0] === 0 && b.x[1] === 390)).toBe(true);
+  });
+
+  it("scrolls a phone with more than four games, keeping rows 220px", () => {
+    const metrics = fieldMetrics(390);
+    const plan = choosePlan(groups(["movies", "movies", "words", "geography", "geography"]), { width: 390, height: 788 }, metrics);
+    const height = fieldHeight(788, plan, metrics);
+    expect(height).toBe(3 * 64 + 5 * 220);
+    const boxes = fieldLayout({ width: 390, height, plan, collapse: [0, 0, 0, 0, 0], print: 0, open: null, metrics });
+    expect(boxes.slice(0, 5).map((b) => Math.round(width(b.y)))).toEqual([220, 220, 220, 220, 220]);
   });
 
   it("chooses the row length that leaves plates least to fill", () => {
     const laptop = { width: 1440, height: 844 };
-    // Two Movies games and Lexicon: one row of five.
+    // Two Movies games and Lexicon: one row of four slots (each plate half a slot).
     expect(choosePlan(groups(["movies", "movies", "words"]), laptop, fieldMetrics(1440)).rows).toEqual([[3, 0, 1, 4, 2]]);
-    // Three and one: rows of four.
-    expect(choosePlan(groups(["movies", "movies", "movies", "words"]), laptop, fieldMetrics(1440)).rows).toEqual([[4, 0, 1, 2], [5, 3]]);
+    // Three and one: one row of five slots.
+    expect(choosePlan(groups(["movies", "movies", "movies", "words"]), laptop, fieldMetrics(1440)).rows).toEqual([[4, 0, 1, 2, 5, 3]]);
+    // Seven in four categories: two rows of five.
+    expect(choosePlan(groups(["movies", "movies", "movies", "words", "words", "geography", "geography"]), laptop, fieldMetrics(1440)).rows).toEqual([
+      [7, 0, 1, 2],
+      [8, 3, 4, 9, 5, 6],
+    ]);
   });
 
   it("prefers rows that fit the screen", () => {
-    const plan = choosePlan(groups(["movies", "movies", "movies", "words", "words", "geography", "geography"]), { width: 1440, height: 844 }, fieldMetrics(1440));
-    expect(plan.rows).toHaveLength(3);
-    expect(plan.rows[0]).toHaveLength(4);
+    // Rows of four would leave plates less to fill, but need four rows (a band and three) where 844px holds three.
+    const groupsOf = groups(["movies", "words", "words", "words", "words", "geography"]);
+    const metrics = fieldMetrics(1440);
+    const plan = choosePlan(groupsOf, { width: 1440, height: 844 }, metrics);
+    expect(plan.rows).toEqual([[6, 0], [7, 1, 2, 3, 4], [8, 5]]);
+    expect(fieldHeight(0, plan, metrics)).toBeLessThanOrEqual(844);
+    expect(fieldHeight(0, fieldPlan(groupsOf, 4), metrics)).toBeGreaterThan(844);
+  });
+
+  it("says what's left, then the points, then the countdown", () => {
+    const tiles = (...states: ("unplayed" | "playing" | "finished")[]) => states.map((state) => ({ state }));
+    expect(dayLine(tiles("unplayed", "playing", "unplayed"), 0, "05:00:00", false)).toBe("3 to play");
+    expect(dayLine(tiles("finished", "playing", "unplayed"), 80, "05:00:00", false)).toBe("2 to play · 80 points");
+    expect(dayLine(tiles("finished", "finished", "finished"), 230, "05:00:00", false)).toBe("All played · 230 · Next day in 05:00:00");
+    expect(dayLine(tiles("finished", "playing", "unplayed"), 80, "05:00:00", true)).toBe("2 to play");
+    expect(dayLine(tiles("finished", "finished", "finished"), 230, "05:00:00", true)).toBe("All played · 05:00:00");
   });
 
   it("measures the New York day", () => {
     expect(dayFraction(Date.parse("2026-10-08T16:00:00Z"), "2026-10-08T04:00:00Z", "2026-10-09T04:00:00Z")).toBeCloseTo(0.5);
+  });
+});
+
+describe("seams and cuts", () => {
+  const lean = 0.083;
+
+  it("stands a plate's name parallel to its seam", () => {
+    // A quarter turn back, less the seams' lean: about -85.26°.
+    expect(spineAngle(lean)).toBeCloseTo(-85.256, 2);
+    const box = { x: [180, 540] as [number, number], y: [0, 844] as [number, number], row: 0, col: 1, cols: 5 };
+    // Both seams of a piece lean alike: its width holds at every height.
+    for (const y of [0, 300, 844]) expect(rightSeamAt(box, lean, y) - seamAt(box, lean, y)).toBeCloseTo(360);
+    // The last piece's right edge is the screen's.
+    expect(rightSeamAt({ ...box, col: 4 }, lean, 0)).toBe(540);
+  });
+
+  it("cuts a phone's rows along one shared line", () => {
+    const metrics = fieldMetrics(390);
+    const plan = choosePlan(groups(["movies", "movies", "words"]), { width: 390, height: 788 }, metrics);
+    const boxes = fieldLayout({ width: 390, height: 788, plan, collapse: [0, 0, 0], print: 0, open: null, metrics });
+    const points = (clip: string) => [...clip.matchAll(/(-?[\d.]+)px (-?[\d.]+)px/g)].map((m) => [Number(m[1]), Number(m[2])] as const);
+    const rows = plan.rows.map((row, r) => points(rowClip(boxes[row[0]!]!, metrics.lean, 390, r === 0, r === plan.rows.length - 1)));
+    // A cut's line through its two points, at x.
+    const at = (a: readonly [number, number], b: readonly [number, number], x: number) => a[1] + ((b[1] - a[1]) * (x - a[0])) / (b[0] - a[0]);
+    for (let r = 0; r + 1 < rows.length; r++) {
+      const [, , br, bl] = rows[r]!;
+      const [tl, tr] = rows[r + 1]!;
+      for (const x of [0, 390]) expect(at(bl!, br!, x)).toBeCloseTo(at(tl!, tr!, x));
+      // It rises 32px across the screen, low on the left.
+      expect(at(bl!, br!, 0) - at(bl!, br!, 390)).toBeCloseTo(lean * 390);
+    }
+    // The field's first top and last bottom are straight.
+    expect(rows[0]![0]![1]).toBe(rows[0]![1]![1]);
+    expect(rows.at(-1)![2]![1]).toBe(rows.at(-1)![3]![1]);
   });
 });
