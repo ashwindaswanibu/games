@@ -1,0 +1,538 @@
+/*
+ * Lexicon's book: today's dictionary standing on a desk, seen from its fore-edge at real size.
+ *
+ * Dark boards stand proud of bone paper (the binder's squares). A leaf for every word, each a dark
+ * hairline with a light edge so it reads as paper. A thumb index steps down the edge, a black tab
+ * with ivory capitals for each initial letter, a half-moon cut before it. Guesses are red silk
+ * ribbons: a thin thread between the leaves, a swallowtail hanging out of the foot. The pages
+ * today's word may still be on are lit, the count stamped on them in ink; the rest are in shadow.
+ *
+ * Every positioned piece carries its place as a fraction of the text block's width, twice: in the
+ * laptop lens (`--x`) and the phone's (`--xs`), from `lens.ts`. It is placed by transform alone,
+ * against the block's width in container units, so the book falls open at the gap without laying
+ * anything out frame by frame. Only opacity and transform animate.
+ */
+
+.book {
+  --tab: #121110;
+  --tab-ink: #ece6d9;
+  --stamp-ink: rgb(28 22 17 / 0.55);
+  --silk: #be3022;
+  --silk-md: #a82c1c;
+  --silk-dk: #7a1e12;
+  --lens-ease: cubic-bezier(0.65, 0, 0.35, 1);
+  /* The dolly: the book opening at the gap. */
+  --dolly: transform 1000ms var(--lens-ease);
+  --paper-face: linear-gradient(to bottom, #b9b1a1 0%, #ddd6c6 9%, #e9e2d3 50%, #d8d0bf 91%, #a9a191 100%);
+
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) 12px;
+  padding: 0 0 64px;
+  transition:
+    opacity 900ms ease,
+    transform 900ms var(--lens-ease);
+}
+
+/* The page has turned to face the player: the book steps back into the dark behind it. */
+.book[data-turned] {
+  opacity: 0.18;
+  transform: translateY(14px) scale(0.965);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Boards, paper, desk
+ * ------------------------------------------------------------------------------------------- */
+
+.board {
+  border-radius: 2px;
+  background: linear-gradient(#1a1613, #120f0d);
+}
+
+.front {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    inset -1px 0 0 rgb(255 255 255 / 0.05);
+}
+
+.back {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.07),
+    inset 1px 0 0 rgb(255 255 255 / 0.05);
+}
+
+/* The text block. The boards stretch with its row, so its margins are how far they stand proud. */
+.block {
+  position: relative;
+  height: clamp(190px, 31vh, 300px);
+  margin-block: 5px;
+  container-type: inline-size;
+}
+
+/* Its contact shadow on the desk. */
+.block::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 3%;
+  right: 3%;
+  top: calc(100% + 2px);
+  height: 28px;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.78), transparent);
+  pointer-events: none;
+}
+
+/* The fore-edge: bone paper, darker where it rounds away at the head and the tail. */
+.paper {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--paper-face);
+}
+
+/* Shut: the pages pressed together, too fine to read, and dim until the book is opened. */
+.book[data-closed] .paper {
+  background: repeating-linear-gradient(to right, rgb(58 48 36 / 0.1) 0 1px, transparent 1px 3px), var(--paper-face);
+}
+
+.paper::after {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  background: rgb(8 7 6 / 0.58);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.book[data-closed] .paper::after {
+  opacity: 1;
+}
+
+/* The desk the book stands on, its horizon a faint line at the foot, falling away into the dark. */
+.desk {
+  position: absolute;
+  z-index: -1;
+  top: calc(100% - 64px);
+  left: 50%;
+  width: 100vw;
+  height: 50vh;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom, #0d0c0b, rgb(6 6 7 / 0));
+  pointer-events: none;
+}
+
+.desk::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgb(239 233 223 / 0.07);
+  mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+}
+
+/* The lit pages' glow on the desk. */
+.reflection {
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: calc(100% + 12px);
+  width: 100cqw;
+  height: 70px;
+  transform-origin: 0 0;
+  transform: translate3d(calc(var(--gl) * 100cqw), 0, 0) scaleX(var(--gw));
+  background: radial-gradient(closest-side, rgb(230 224 212 / 0.085), transparent);
+  transition: var(--dolly);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Leaves, light, shadow, count
+ * ------------------------------------------------------------------------------------------- */
+
+.line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: linear-gradient(to right, rgb(58 48 36 / 0.3) 0 1px, rgb(255 250 240 / 0.2) 1px 2px);
+  transform: translate3d(calc(var(--x) * 100cqw), 0, 0);
+  transition: var(--dolly);
+}
+
+/* The lamp on the pages still in play. */
+.light {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transform: translate3d(calc(var(--gl) * 100cqw), 0, 0) scaleX(var(--gw));
+  background: radial-gradient(60% 85% at 50% 42%, rgb(255 251 243 / 0.3), rgb(255 251 243 / 0) 72%);
+  transition: var(--dolly);
+}
+
+/* How many words are left, stamped in ink on the lit pages. Under the shadow, so a guess darkens
+   the old count as the shade passes over it, before the new one presses in. */
+.stamp {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  transform: translate3d(calc(var(--gc) * 100cqw - 50%), -50%, 0);
+  transition: opacity 300ms ease;
+}
+
+.stamp b {
+  font: 400 min(124px, calc(var(--gw) * 100cqw * 1.2 / var(--digits))) / 0.9 var(--display);
+  font-variation-settings: "opsz" 96;
+  font-variant-numeric: lining-nums;
+  color: var(--stamp-ink);
+}
+
+.stamp small {
+  display: none;
+  margin-top: 10px;
+  padding-left: 0.32em; /* optical centring of the tracked caps */
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgb(28 22 17 / 0.48);
+}
+
+.stamp[data-label] small {
+  display: block;
+}
+
+.stamp[data-fresh] b {
+  animation: press 320ms cubic-bezier(0.2, 0.8, 0.2, 1) 520ms both;
+}
+
+.book[data-over] .stamp {
+  opacity: 0;
+}
+
+@keyframes press {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+/* The pages today's word can't be on, in shadow, closing in from each side as the gap closes. */
+.shade {
+  position: absolute;
+  inset: -2px 0; /* past the paper's head and foot, which clip it: no seam of paper when the book is scaled */
+  background: linear-gradient(to bottom, rgb(10 9 8 / 0.9), rgb(15 13 11 / 0.82) 50%, rgb(10 9 8 / 0.92));
+  transition: var(--dolly);
+}
+
+/* Slid in from each side, not scaled: a shade scaled down to a sliver leaves a seam of light at its foot. */
+.left {
+  transform: translate3d(calc((var(--sl) - 1) * 100cqw), 0, 0);
+}
+
+.right {
+  transform: translate3d(calc((1 - var(--sr)) * 100cqw), 0, 0);
+}
+
+/* A guess's first beat: the shadow falls over the pages it ruled out while every leaf stays put. */
+.book[data-stage="sweep"] .shade {
+  transition: transform 800ms cubic-bezier(0.5, 0, 0.1, 1) 180ms;
+}
+
+/* Shutting on today's word takes longer; longer still when given up. */
+.book[data-over="won"] .shade {
+  transition: transform 1300ms cubic-bezier(0.7, 0, 0.2, 1) 250ms;
+}
+
+.book[data-over="lost"] .shade {
+  transition: transform 1700ms cubic-bezier(0.7, 0, 0.2, 1) 250ms;
+}
+
+/* Today's word's leaf, once the book has shut on it: it catches the light. */
+.answerLeaf {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100cqw;
+  transform-origin: 0 50%;
+  transform: translate3d(calc(var(--ax) * 100cqw), 0, 0) scaleX(var(--aw));
+  transition:
+    var(--dolly),
+    opacity 120ms ease;
+}
+
+.answerLeaf i {
+  position: absolute;
+  inset: 0;
+  background: rgb(255 252 246 / 0.42);
+}
+
+.book[data-mode="closing"] .answerLeaf i {
+  animation: fadeIn 600ms ease 1300ms both;
+}
+
+/* It has turned to face the player as the page: the leaf it was is gone from the book. */
+.book[data-turned] .answerLeaf {
+  opacity: 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The thumb index
+ * ------------------------------------------------------------------------------------------- */
+
+.tabs {
+  position: absolute;
+  inset: 12px 0;
+}
+
+/* Stepped diagonally, the first initial at the head, the last at the tail, so tabs never collide. */
+.tab {
+  position: absolute;
+  left: 0;
+  top: calc(var(--i) * (100% - 20px) / max(1, var(--k) - 1));
+  width: 16px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--tab);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 1px 2px rgb(0 0 0 / 0.5);
+  font: 600 11px/20px var(--display);
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--tab-ink);
+  transform: translate3d(min(calc(var(--x) * 100cqw), calc(100cqw - 16px)), 0, 0);
+  transition: var(--dolly);
+}
+
+/* The half-moon cut into the pages before it, to thumb the letter open. */
+.tab:not([data-first])::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  border-radius: 11px 0 0 11px;
+  background: linear-gradient(to right, rgb(20 16 12 / 0), rgb(20 16 12 / 0.34));
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Ribbons
+ * ------------------------------------------------------------------------------------------- */
+
+.ribbon {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  opacity: 0.38;
+  transform: translate3d(calc(var(--x) * 100cqw), 0, 0);
+  transition:
+    opacity 600ms ease,
+    var(--dolly);
+}
+
+/* The two ribbons that bound the gap (and the one that found it) stand out; the rest have been passed. */
+.ribbon[data-edge] {
+  opacity: 1;
+}
+
+/* Once shut, only the ribbon on today's word is bright. */
+.book[data-over] .ribbon:not([data-side="found"]) {
+  opacity: 0.22;
+}
+
+/* The silk seen edge-on between the leaves, on down through the foot's square to where it hangs flat. */
+.thread {
+  position: absolute;
+  top: 0;
+  bottom: -5px;
+  left: -1.5px;
+  width: 3px;
+  background: linear-gradient(to right, #8a2315, var(--silk) 50%, var(--silk-md));
+}
+
+/* Hanging out of the foot, cut in a swallowtail. */
+.tail {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: -4.5px;
+  width: 9px;
+  height: 44px;
+  background: linear-gradient(to right, var(--silk-dk), var(--silk) 38%, var(--silk-md) 62%, var(--silk-dk));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 8px), 0 100%);
+}
+
+.tail::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 30%;
+  width: 1px;
+  background: rgb(255 255 255 / 0.14);
+}
+
+.ribbon[data-fresh] .thread {
+  transform-origin: 50% 0;
+  animation: thread-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.ribbon[data-fresh] .tail {
+  animation: tail-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms both;
+}
+
+@keyframes thread-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes tail-in {
+  from {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Opening: the shut book riffles into today's dictionary, its leaves appearing left to right like
+ * pages under a thumb. Opacity only: transform is where everything is.
+ * ------------------------------------------------------------------------------------------- */
+
+.book[data-mode="opening"] .paper::after {
+  animation: undim 700ms ease 150ms both;
+}
+
+.book[data-mode="opening"] .line {
+  animation: fadeIn 260ms ease-out calc(200ms + 1100ms * var(--f)) both;
+}
+
+/* Each letter's tab as the wave reaches its first page. */
+.book[data-mode="opening"] .tab {
+  animation: fadeIn 220ms ease calc(200ms + 1100ms * var(--f)) both;
+}
+
+.book[data-mode="opening"] .light,
+.book[data-mode="opening"] .reflection {
+  animation: fadeIn 700ms ease 200ms both;
+}
+
+.book[data-mode="opening"] .stamp b,
+.book[data-mode="opening"] .stamp small {
+  animation: press 320ms cubic-bezier(0.2, 0.8, 0.2, 1) 1350ms both;
+}
+
+@keyframes undim {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* While the window is resized, the leaves go straight to their places instead of trailing. */
+.book[data-resizing] * {
+  transition: none !important;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phones: the same book, full width, in the phone's lens.
+ * ------------------------------------------------------------------------------------------- */
+
+@media (max-width: 719px) {
+  .book {
+    grid-template-columns: 8px minmax(0, 1fr) 8px;
+    padding-bottom: 40px;
+  }
+
+  .desk {
+    top: calc(100% - 40px);
+  }
+
+  .line,
+  .ribbon {
+    transform: translate3d(calc(var(--xs) * 100cqw), 0, 0);
+  }
+
+  .light,
+  .reflection {
+    transform: translate3d(calc(var(--gls) * 100cqw), 0, 0) scaleX(var(--gws));
+  }
+
+  .stamp {
+    transform: translate3d(calc(var(--gcs) * 100cqw - 50%), -50%, 0);
+  }
+
+  .stamp b {
+    font-size: min(76px, calc(var(--gws) * 100cqw * 1.2 / var(--digits)));
+  }
+
+  .stamp[data-label] small {
+    display: none;
+  }
+
+  .stamp[data-label-s] small {
+    display: block;
+  }
+
+  .left {
+    transform: translate3d(calc((var(--sls) - 1) * 100cqw), 0, 0);
+  }
+
+  .right {
+    transform: translate3d(calc((1 - var(--srs)) * 100cqw), 0, 0);
+  }
+
+  .answerLeaf {
+    transform: translate3d(calc(var(--axs) * 100cqw), 0, 0) scaleX(var(--aws));
+  }
+
+  .tabs {
+    inset: 8px 0;
+  }
+
+  .tab {
+    top: calc(var(--i) * (100% - 15px) / max(1, var(--k) - 1));
+    width: 12px;
+    height: 15px;
+    font-size: 9.5px;
+    line-height: 15px;
+    transform: translate3d(min(calc(var(--xs) * 100cqw), calc(100cqw - 12px)), 0, 0);
+  }
+
+  .tab:not([data-first])::before {
+    width: 14px;
+    border-radius: 7.5px 0 0 7.5px;
+  }
+
+  .thread {
+    left: -1px;
+    width: 2px;
+  }
+
+  .tail {
+    left: -3px;
+    width: 6px;
+    height: 28px;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 5px), 0 100%);
+  }
+}

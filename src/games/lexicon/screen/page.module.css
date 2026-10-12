@@ -1,0 +1,303 @@
+/*
+ * The dictionary page: today's word as the dictionary prints it, on bone paper, turned up over the
+ * book once it has shut. Ink, not light: no glow, no gold; the rubric red is the part of speech
+ * and the ribbon. Seen live, the page turns from the lit leaf and its ink comes up line by line.
+ */
+
+/* Over the book and the console, from the top of the stage, where the running head was. */
+.pageLayer {
+  grid-row: 1 / span 2;
+  grid-column: 1;
+  align-self: start;
+  justify-self: center;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  visibility: hidden;
+}
+
+.pageLayer[data-show] {
+  visibility: visible;
+}
+
+.paper {
+  position: relative;
+  width: min(520px, calc(100vw - 32px));
+  min-height: clamp(320px, 44vh, 420px);
+  display: flex;
+  flex-direction: column;
+  padding: 34px 52px 26px;
+  border-radius: 1px;
+  background:
+    linear-gradient(to right, rgb(60 48 34 / 0.16), rgb(60 48 34 / 0) 22px),
+    linear-gradient(to bottom, #ede7da, #e3dac8);
+  color: #1c1915;
+  box-shadow:
+    0 40px 90px -30px rgb(0 0 0 / 0.85),
+    inset -1px -1px 0 #cdbfa8;
+  backface-visibility: hidden;
+}
+
+.ink {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Guide words at the head of the page, the folio between them. */
+.runningHead {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: baseline;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgb(28 25 21 / 0.28);
+  font: 700 16px/1.2 var(--display);
+}
+
+.runningHead span:last-child {
+  text-align: right;
+}
+
+.folio {
+  font: 400 13px/1 var(--display);
+  font-variant-numeric: lining-nums;
+  color: #6a6157;
+}
+
+.headword {
+  margin: clamp(36px, 7vh, 64px) 0 0;
+  font: 700 clamp(56px, 6.4vw, 92px) / 0.95 var(--display);
+  font-variation-settings: "opsz" 96;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.sense {
+  margin: 18px 0 0;
+  max-width: 17em;
+  font: 400 clamp(19px, 1.7vw, 24px) / 1.36 var(--display);
+  color: #2b2620;
+  text-wrap: pretty;
+}
+
+.sense i {
+  margin-right: 0.45em;
+  color: #a82c1c;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.imprint {
+  margin: 28px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgb(28 25 21 / 0.16);
+  font: 500 8.5px/1.5 var(--mono);
+  letter-spacing: 0.02em;
+  color: #8c8273;
+}
+
+/* The player's ribbon, lying in the page down its outer margin and hanging out of the foot. */
+.pageRibbon {
+  position: absolute;
+  top: -8px;
+  right: 34px;
+  width: 10px;
+  height: calc(100% + 64px);
+  transform-origin: 50% 0;
+  background: linear-gradient(to right, #7a1e12, #be3022 38%, #a82c1c 62%, #7a1e12);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 9px), 0 100%);
+}
+
+/* The face turning into the light. */
+.turnShade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(20 16 12 / 0.6), rgb(20 16 12 / 0.15) 70%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The result row
+ * ------------------------------------------------------------------------------------------- */
+
+.result {
+  margin-top: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Clear of the ribbon's tail. */
+.pageLayer[data-won] .result {
+  margin-top: 84px;
+}
+
+.label {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.resultBreak {
+  display: none;
+}
+
+/* Today's guesses at their true places in the dictionary: red where a guess was, today's word full height. */
+.trail {
+  position: relative;
+  width: 132px;
+  height: 16px;
+}
+
+.trail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgb(239 233 223 / 0.22);
+}
+
+.trail i,
+.trail b {
+  position: absolute;
+  width: 2px;
+  margin-left: -1px;
+}
+
+.trail i {
+  top: 3px;
+  bottom: 3px;
+  background: #be3022;
+  opacity: 0.55;
+}
+
+.trail b {
+  top: 0;
+  bottom: 0;
+  background: #efe9df;
+}
+
+.trail b[data-won] {
+  background: #be3022;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Seen live: the ink comes up once the page has nearly turned, then the row.
+ * ------------------------------------------------------------------------------------------- */
+
+.pageLayer[data-show][data-live] .turnShade {
+  animation: unshade 1100ms ease-out both;
+}
+
+.pageLayer[data-show][data-live] .runningHead {
+  animation: fadeIn 420ms ease 650ms both;
+}
+
+.pageLayer[data-show][data-live] .headword {
+  animation: fadeIn 420ms ease 780ms both;
+}
+
+.pageLayer[data-show][data-live] .sense {
+  animation: fadeIn 420ms ease 900ms both;
+}
+
+.pageLayer[data-show][data-live] .imprint {
+  animation: fadeIn 420ms ease 1020ms both;
+}
+
+.pageLayer[data-show][data-live] .pageRibbon {
+  animation: ribbon-down 640ms cubic-bezier(0.2, 0.8, 0.2, 1) 880ms both;
+}
+
+.pageLayer[data-show][data-live] .result {
+  animation: rise 500ms cubic-bezier(0.2, 0.8, 0.2, 1) 1000ms both;
+}
+
+@keyframes unshade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ribbon-down {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Phones
+ * ------------------------------------------------------------------------------------------- */
+
+@media (max-width: 719px) {
+  /* The right margin is wider: the ribbon lies in it, clear of the guide word. */
+  .paper {
+    min-height: clamp(320px, 44vh, 400px);
+    padding: 24px 36px 20px 22px;
+  }
+
+  .runningHead {
+    font-size: 14px;
+  }
+
+  .headword {
+    font-size: clamp(48px, 15vw, 64px);
+  }
+
+  .sense {
+    font-size: 19px;
+  }
+
+  .pageRibbon {
+    right: 20px;
+    width: 8px;
+  }
+
+  .result {
+    row-gap: 10px;
+    column-gap: 12px;
+  }
+
+  .trail {
+    width: 84px;
+  }
+
+  .label {
+    letter-spacing: 0.14em;
+  }
+
+  .resultBreak {
+    display: block;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .share {
+    min-height: 44px;
+  }
+}

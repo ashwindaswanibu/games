@@ -1,14 +1,14 @@
 /*
  * Lexicon: a dark study and one book.
  *
- * The book is today's dictionary seen from its fore-edge: a page for every word the nine letters
- * spell, a thumb index cut into the top. The light on the pages is what's left: the pages today's
- * word can still be on are lit by the lamp, the rest fall into shadow as guesses close the gap.
- * Guesses are red silk ribbons (`--accent`, the rubric red of a dictionary's markers) laid in at
- * their pages, the word lettered up each. The type is the house Didone throughout, lower case as a
- * dictionary sets its headwords.
+ * The book (`book.module.css`) is today's dictionary standing on a desk, seen from its fore-edge;
+ * the light on its pages is what's left. Over it, the gap's two bounds as the guide words a
+ * dictionary sets in its running head; under it, one console in falling order of weight: the
+ * guess line, the nine letters, the keys. Red (`--accent`) is the rubric red of a dictionary's
+ * markers and its ribbons. The type is the house Didone throughout, lower case as a dictionary
+ * sets its headwords.
  *
- * Performance: only opacity and transform animate (the shades are scaled, not resized).
+ * Performance: only opacity and transform animate.
  */
 
 .screen {
@@ -17,13 +17,11 @@
   --ink-2: rgb(239 233 223 / 0.66);
   --ink-3: rgb(239 233 223 / 0.38);
   --hair: rgb(239 233 223 / 0.11);
-  --paper: 226 214 190;
   --accent: 190 48 34;
   --display: var(--cb-display), "Bodoni 72", Didot, Georgia, serif;
   --sans: var(--font-geist-sans), system-ui, sans-serif;
   --mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --close: 900ms;
 
   position: relative;
   isolation: isolate;
@@ -34,7 +32,7 @@
   color: var(--ink);
   font-family: var(--sans);
   color-scheme: dark;
-  overflow-x: clip;
+  overflow: clip; /* the desk runs off the bottom; it never scrolls */
   -webkit-font-smoothing: antialiased;
 }
 
@@ -49,7 +47,7 @@
   pointer-events: none;
 }
 
-/* A reading lamp above the book: its pool of light falls on the pages. */
+/* A reading lamp above the book: its pool of light falls on the pages. Lowered until the book is opened. */
 .lamp {
   position: absolute;
   left: 50%;
@@ -57,13 +55,35 @@
   width: 120vw;
   height: 90vh;
   transform: translateX(-50%);
-  background: radial-gradient(42% 52% at 50% 32%, rgb(var(--paper) / 0.11), transparent 74%);
+  background: radial-gradient(40% 46% at 50% 40%, rgb(230 224 212 / 0.07), transparent 74%);
+  transition: opacity 900ms ease;
+}
+
+.screen[data-arrival] .lamp {
+  opacity: 0.45;
 }
 
 .vignette {
   position: absolute;
   inset: 0;
   background: radial-gradient(125% 95% at 50% 40%, transparent 36%, rgb(5 5 6 / 0.74) 76%, var(--void) 100%);
+}
+
+/* Once the book has shut, the room darkens around the page as it turns up. */
+.dusk {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 30%, rgb(3 3 4 / 0.6) 80%);
+  opacity: 0;
+  transition: opacity 600ms ease 1500ms;
+}
+
+.screen[data-finished] .dusk {
+  opacity: 1;
+}
+
+.screen[data-finished="lost"] .dusk {
+  transition-delay: 1900ms;
 }
 
 .grain {
@@ -133,364 +153,199 @@
 }
 
 /* ---------------------------------------------------------------------------------------------
- * The book
+ * The stage: the running head and the book, the console under them. The book stands at the same
+ * height in every state, so nothing jumps; the dictionary page turns up over both (placed in the
+ * same rows, so each is placed explicitly).
  * ------------------------------------------------------------------------------------------- */
 
 .stage {
   display: grid;
+  grid-template-columns: 100%;
   justify-items: center;
-  align-content: center;
-  gap: clamp(12px, 2.6vh, 32px);
-  padding: clamp(12px, 3vh, 36px) 0 clamp(24px, 5vh, 56px);
+  align-items: start; /* the page's rows may grow taller; the book stays where it stands */
+  align-content: start;
+  padding: clamp(8px, 2vh, 22px) 0 clamp(16px, 3vh, 32px);
 }
 
 .bookArea {
-  width: min(1120px, calc(100vw - 32px));
+  grid-row: 1;
+  grid-column: 1;
+  width: min(1328px, calc(100vw - 112px));
   display: grid;
-  justify-items: center;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
 }
 
-.bookKicker {
-  margin: 0;
-  font: 500 10.5px/1.4 var(--mono);
+/* The running head: AFTER one bound on the left, BEFORE the other on the right, over the paper's edges. */
+.head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  gap: 24px;
+  min-height: clamp(64px, 8vh, 78px);
+  margin-bottom: 18px;
+  padding: 0 12px;
+  transition: opacity 400ms ease;
+}
+
+.screen[data-turned] .head {
+  opacity: 0;
+}
+
+.corner {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+}
+
+.corner[data-side="before"] {
+  justify-items: end;
+}
+
+.cornerKicker {
+  margin-bottom: 8px;
+  font: 500 10.5px/1 var(--mono);
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--ink-3);
-  text-align: center;
 }
 
-.dot {
-  margin: 0 0.45em;
-  color: var(--ink-3);
+.corner[data-side="before"] .cornerKicker {
+  margin-right: -0.22em; /* the tracking after the last letter */
 }
 
-.book {
-  position: relative;
-  width: 100%;
-  /* Room above for the bounding ribbons' words (a row of their own) and the index tabs, below for the ribbons' tails. */
-  padding: 64px 0 34px;
-  animation: fadeIn 900ms ease both;
+.cornerKicker[data-empty] {
+  visibility: hidden;
 }
 
-/* The fore-edge: the pages' edges, side by side, curving softly in and out of the lamp's light. */
-.edge {
-  position: relative;
-  height: clamp(100px, 15vh, 150px);
-  border-radius: 2px;
-  overflow: hidden;
-  background: linear-gradient(
-    to bottom,
-    rgb(var(--paper) / 0.72),
-    rgb(var(--paper) / 0.92) 14%,
-    rgb(var(--paper)) 50%,
-    rgb(var(--paper) / 0.9) 86%,
-    rgb(var(--paper) / 0.66)
-  );
-  box-shadow:
-    0 30px 60px -30px rgb(0 0 0 / 0.9),
-    0 0 0 1px rgb(var(--paper) / 0.25);
-}
-
-/* A hairline for every page: the gradient repeats once per page across the width. */
-.pages {
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(to right, rgb(70 56 40 / 0.28) 0 1px, transparent 1px calc(100% / var(--pages)));
-}
-
-/* The lamp on the lit pages. */
-.light {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(60% 120% at 50% 40%, rgb(255 244 222 / 0.22), transparent 70%);
-}
-
-/* The pages today's word can't be on, in shadow: scaled in from each side as the gap closes. */
-.shade {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 100%;
-  background: linear-gradient(to bottom, rgb(12 11 10 / 0.86), rgb(16 14 12 / 0.8) 50%, rgb(12 11 10 / 0.88));
-  transition: transform var(--close) var(--ease);
-}
-
-.shadeLeft {
-  left: 0;
-  transform-origin: 0 50%;
-  transform: scaleX(var(--left));
-}
-
-.shadeRight {
-  right: 0;
-  transform-origin: 100% 50%;
-  transform: scaleX(var(--right));
-}
-
-/* The book opening for the first time: the shadow draws back from the whole dictionary. */
-.book[data-mode="opening"] .shadeLeft {
-  animation: open-left 1400ms var(--ease) 200ms both;
-}
-
-.book[data-mode="opening"] .shadeRight {
-  animation: open-right 1400ms var(--ease) 200ms both;
-}
-
-@keyframes open-left {
-  from {
-    transform: scaleX(0.5);
-  }
-}
-
-@keyframes open-right {
-  from {
-    transform: scaleX(0.5);
-  }
-}
-
-/* Shutting on today's word takes longer, and the answer's page catches the light. */
-.book[data-over] .shade {
-  transition-duration: 1300ms;
-}
-
-.answerPage {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  margin-left: -1.5px;
-  background: rgb(244 214 150);
-  box-shadow: 0 0 22px 6px rgb(255 236 196 / 0.45);
-  animation: fadeIn 900ms ease 700ms both;
-}
-
-/* Found: the gold ribbon lies on the page; the page itself is the glow around it. */
-.answerPage[data-found] {
-  background: rgb(255 244 222 / 0.7);
-}
-
-/* The thumb index: a notch for each initial letter, where its pages begin. */
-.tabs {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 38px;
-  height: 26px;
-}
-
-.tab {
-  position: absolute;
-  top: 0;
-  min-width: 16px;
-  padding: 3px 3px 0;
-  border-radius: 8px 8px 0 0;
-  background: rgb(var(--paper) / 0.08);
-  font: 400 14px/1 var(--display);
-  color: var(--ink-2);
-  text-align: center;
-  animation: fadeIn 600ms ease calc(var(--i) * 40ms) both;
-}
-
-/* Each ribbon: red silk laid in at its page, hanging past the book with a swallowtail. */
-.ribbon {
-  position: absolute;
-  top: 30px;
-  bottom: 0;
-  width: 7px;
-  margin-left: -3.5px;
-  opacity: 0.38;
-  transition: opacity 600ms ease;
-}
-
-.silk {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to right, rgb(var(--accent) / 0.92), rgb(var(--accent)) 45%, rgb(150 34 24) 100%);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 7px), 0 100%);
-}
-
-/* The two ribbons that bound the gap (and the one that found it) stand out; the rest have been passed. */
-.ribbon[data-edge] {
-  opacity: 1;
-}
-
-.ribbon[data-fresh] {
-  animation: lay-in 700ms var(--ease) both;
-}
-
-@keyframes lay-in {
-  from {
-    transform: translateY(-36px);
-    opacity: 0;
-  }
-}
-
-.ribbon[data-side="found"] .silk {
-  background: linear-gradient(to right, rgb(232 196 120), rgb(244 214 150) 45%, rgb(196 156 80));
-}
-
-/* Once the book has shut, only the ribbon on today's word stays bright. */
-.book[data-over] .ribbon:not([data-side="found"]) {
-  opacity: 0.3;
-}
-
-/* A bounding ribbon's word, just above the book, set outward from the gap: the lower bound's to
-   the left of its ribbon, the upper bound's to the right, so the two never meet. */
-.ribbonWord {
-  position: absolute;
-  top: -28px;
-  font: italic 400 19px/1 var(--display);
+.guide,
+.initial {
+  font: 400 clamp(32px, 3.4vw, 50px)/1 var(--display);
+  font-variation-settings: "opsz" 96;
+  letter-spacing: -0.005em;
   white-space: nowrap;
   color: var(--ink);
-  animation: fadeIn 600ms ease 300ms both;
 }
 
-.ribbon[data-edge="low"] .ribbonWord {
-  right: calc(100% + 8px);
+.initial {
+  font-style: italic;
+  color: rgb(239 233 223 / 0.28);
 }
 
-.ribbon[data-edge="high"] .ribbonWord {
-  left: calc(100% + 8px);
+.guide[data-fresh] {
+  animation: guide-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.ribbon[data-edge="found"] .ribbonWord {
-  left: 50%;
-  transform: translateX(-50%);
-  font-style: normal;
-  color: rgb(244 214 150);
-}
-
-/* Once shut, only today's word is lettered. */
-.book[data-over] .ribbon:not([data-side="found"]) .ribbonWord {
-  display: none;
-}
-
-/* The count under the book: how many pages are left lit. */
-.count {
-  margin: -6px 0 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 10px;
-  font: italic 400 clamp(18px, 1.5vw, 22px)/1 var(--display);
-  color: var(--ink-2);
-}
-
-.count em {
-  display: inline-block;
-  font: 400 clamp(36px, 3.4vw, 48px)/1 var(--display);
-  font-style: normal;
-  color: var(--ink);
-  font-variant-numeric: lining-nums;
-  animation: develop 700ms ease both;
+@keyframes guide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 
 /* ---------------------------------------------------------------------------------------------
- * The console: status, letters, guess line
+ * The console: the guess line, the letters, the keys
  * ------------------------------------------------------------------------------------------- */
 
 .console {
-  width: min(720px, calc(100vw - 32px));
+  grid-row: 2;
+  grid-column: 1;
+  position: relative; /* over the desk the book stands on */
+  width: min(760px, calc(100vw - 32px));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 16px;
-}
-
-.status {
-  margin: 0;
-  font: 400 clamp(18px, 1.45vw, 22px)/1.2 var(--display);
-  color: var(--ink-2);
-}
-
-.status em {
-  font-style: normal;
-  color: var(--ink);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.worth {
-  display: inline-block;
-  animation: develop 900ms ease both;
+  margin-top: clamp(4px, 1.4vh, 16px);
 }
 
 .tray {
   width: 100%;
   display: grid;
   justify-items: center;
-  gap: 18px;
+  gap: clamp(10px, 1.8vh, 18px);
 }
 
-/* The guess line: the word set from the letters, a caret, and today's word's length beneath. */
+/* The guess line: the word set from the letters, and today's word's length as a ruler beneath. */
 .line {
   width: 100%;
   display: grid;
   justify-items: center;
   gap: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--hair);
 }
 
-.line[data-shake] {
-  animation: shake 420ms ease both;
+.shake[data-shake] {
+  animation: shake 380ms ease both;
 }
 
 @keyframes shake {
-  20%,
-  60% {
-    transform: translateX(-6px);
+  20% {
+    transform: translateX(-4px);
   }
-  40%,
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
   80% {
-    transform: translateX(6px);
+    transform: translateX(2px);
+  }
+  100% {
+    transform: translateX(0);
   }
 }
 
 .typed {
   margin: 0;
-  min-height: 1.15em;
+  min-height: 1.1em;
   display: inline-flex;
   align-items: baseline;
-  font: 400 clamp(36px, 3.6vw, 52px)/1.1 var(--display);
-  letter-spacing: 0.04em;
+  font: 400 clamp(34px, 3.6vw, 52px)/1.1 var(--display);
+  letter-spacing: 0.02em;
   color: var(--ink);
+}
+
+.typed > span[data-flip] {
+  display: inline-block;
 }
 
 .typedHint {
   font-style: italic;
-  font-size: 0.55em;
+  font-size: 0.46em;
   letter-spacing: 0.01em;
-  color: var(--ink-3);
+  color: rgb(239 233 223 / 0.38);
+  animation: fadeIn 400ms ease both;
 }
 
+/* Where the word will go: steady, not blinking. */
 .caret {
   width: 1px;
-  height: 0.9em;
-  margin-left: 4px;
-  background: rgb(var(--accent));
+  height: 0.8em;
+  margin-right: 10px;
   align-self: center;
-  animation: blink 1100ms steps(1) infinite;
+  background: #be3022;
 }
 
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-
+/* Today's word's length, filling as you type. */
 .slots {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .slots span {
-  width: 14px;
-  height: 2px;
-  background: var(--ink-3);
+  width: 16px;
+  height: 1.5px;
+  background: var(--ink);
+  opacity: 0.22;
+  transition: opacity 160ms ease;
 }
 
-/* The nine letters, large: tap one (or type it) to set it in the line; it leaves its place empty. */
+.slots span[data-on] {
+  opacity: 0.8;
+}
+
+/* The nine letters, large: tap one (or type it) to set it in the line; it leaves its cell empty. */
 .row {
   display: flex;
   justify-content: center;
@@ -498,25 +353,44 @@
 }
 
 .letter {
-  width: clamp(34px, 4.4vw, 58px);
-  height: clamp(46px, 5.6vw, 72px);
+  position: relative;
+  width: clamp(36px, 4.6vw, 62px);
+  height: clamp(52px, 5.6vw, 76px);
   padding: 0;
   border: 0;
-  border-bottom: 1px solid var(--hair);
   background: none;
   color: var(--ink);
-  font: 400 clamp(30px, 3.4vw, 48px)/1 var(--display);
   cursor: pointer;
-  transition:
-    opacity 260ms ease,
-    transform 260ms var(--ease),
-    color 200ms ease,
-    border-color 200ms ease;
 }
 
-.letter:not(:disabled):hover {
-  color: rgb(var(--paper));
-  border-bottom-color: rgb(var(--accent));
+/* The glyph: the same size as the line's, so a letter's flight between them is a pure translate. */
+.letter > span {
+  display: inline-block;
+  font: 400 clamp(34px, 3.6vw, 52px)/1.1 var(--display);
+  transition:
+    transform 200ms var(--ease),
+    color 200ms ease;
+}
+
+.letter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 22px;
+  height: 1px;
+  margin-left: -11px;
+  background: rgb(239 233 223 / 0.16);
+  transition: background-color 200ms ease;
+}
+
+.letter:not(:disabled):hover > span {
+  transform: translateY(-2px);
+  color: #f6f1e8;
+}
+
+.letter:not(:disabled):hover::after {
+  background: rgb(var(--accent));
 }
 
 .letter:focus-visible {
@@ -524,11 +398,14 @@
   outline-offset: 2px;
 }
 
-/* Set in the line: it has gone up. */
+/* Set in the line: the letter has left its cell (its twin is flying up); only the hairline stays. */
 .letter[data-set] {
-  opacity: 0.12;
-  transform: translateY(-10px);
   cursor: default;
+}
+
+.letter[data-set] > span {
+  opacity: 0;
+  transition: none;
 }
 
 .keys {
@@ -538,8 +415,32 @@
   gap: 6px;
 }
 
+.keysRule {
+  width: 1px;
+  height: 12px;
+  margin: 0 6px;
+  background: rgb(239 233 223 / 0.14);
+}
+
 .keysGap {
   flex: 1;
+}
+
+/* What the guess is worth, on the button. */
+.worthTag {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid rgb(246 236 220 / 0.38);
+  font-variant-numeric: tabular-nums;
+}
+
+.go:disabled .worthTag {
+  border-left-color: rgb(239 233 223 / 0.18);
+}
+
+/* Phones only: Give up on its own line under the keys. */
+.giveUpRow {
+  display: none;
 }
 
 .whisper {
@@ -558,10 +459,6 @@
 .whisper[data-show] {
   opacity: 1;
   transform: none;
-}
-
-.giveUp {
-  margin-top: -4px;
 }
 
 .confirm {
@@ -650,127 +547,56 @@
   color: #f0a58f;
 }
 
-/* Before the play: the rules and the way in. */
+/* Before the play: the rules as a dictionary's run-in numbered senses, and the way in. */
 .opening {
   display: grid;
   justify-items: center;
-  gap: 24px;
 }
 
-.rules {
+.senses {
+  width: min(760px, 100%);
   margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 9px;
-  counter-reset: rule;
+  font: 400 clamp(16px, 1.3vw, 19px)/1.5 var(--display);
+  color: rgb(239 233 223 / 0.74);
+  text-align: justify;
+  hyphens: auto;
 }
 
-.rules li {
-  counter-increment: rule;
-  display: grid;
-  grid-template-columns: 30px 1fr;
-  align-items: baseline;
-  font: 400 clamp(16px, 1.25vw, 19px)/1.35 var(--display);
-  color: var(--ink-2);
-}
-
-.rules li::before {
-  content: counter(rule, decimal-leading-zero);
-  font: 500 9.5px/1 var(--mono);
-  letter-spacing: 0.14em;
-  color: rgb(var(--accent) / 0.95);
+.senses b {
+  margin-right: 0.3em;
+  font-weight: 700;
+  font-variant-numeric: lining-nums;
+  color: rgb(var(--accent));
 }
 
 .roll {
+  margin-top: 28px;
   padding: 14px 30px;
   font-size: 14px;
   letter-spacing: 0.04em;
 }
 
-/* ---------------------------------------------------------------------------------------------
- * The entry: the page the book opens at
- * ------------------------------------------------------------------------------------------- */
-
-.entryWrap {
-  width: 100%;
-  opacity: 0;
-  transform: translate3d(0, 14px, 0) scaleX(0.04);
-  transform-origin: 50% 0;
-  pointer-events: none;
-  transition:
-    opacity 900ms ease,
-    transform 1100ms var(--ease);
+/* Opening: as the book riffles open, its initials come up in the corners, then the letters rise
+   into the tray one by one, then the line and the keys. */
+.screen[data-opening] .initial {
+  animation: fadeIn 400ms ease 1350ms both;
 }
 
-.entryWrap[data-show] {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
+.screen[data-opening] .letter > span {
+  animation: rise 420ms var(--ease) calc(1450ms + var(--k) * 40ms) both;
 }
 
-.entry {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  text-align: center;
+.screen[data-opening] .line,
+.screen[data-opening] .keys,
+.screen[data-opening] .giveUpRow {
+  animation: fadeIn 400ms ease 1700ms both;
 }
 
-.kicker {
-  margin: 0;
-  font: 500 10.5px/1 var(--mono);
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgb(var(--accent));
-}
-
-.headword {
-  margin: 0;
-  font: 600 clamp(56px, 6vw, 88px)/1 var(--display);
-  letter-spacing: 0.01em;
-}
-
-.definition {
-  max-width: 560px;
-  margin: 0;
-  font: 400 clamp(17px, 1.35vw, 20px)/1.4 var(--display);
-  color: var(--ink-2);
-  text-wrap: pretty;
-}
-
-.definition i {
-  margin-right: 0.4em;
-  color: var(--ink-3);
-}
-
-.entryActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  margin-top: 10px;
-}
-
-.points {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-right: 8px;
-  font: 400 40px/1 var(--display);
-  font-variant-numeric: lining-nums;
-}
-
-.points small {
-  font: italic 400 16px/1 var(--display);
-  color: var(--ink-3);
-}
-
-.credit {
-  margin: 10px 0 0;
-  font: 500 9.5px/1.5 var(--mono);
-  letter-spacing: 0.03em;
-  color: var(--ink-3);
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -872,10 +698,23 @@
   gap: 12px;
 }
 
+/* A result's guesses as ribbon bars: red for each guess, bone for the one that found it. */
 .marks {
-  font: 400 14px/1 var(--mono);
-  letter-spacing: 0.12em;
-  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.marks i {
+  width: 3px;
+  height: 14px;
+  background: #be3022;
+  opacity: 0.7;
+}
+
+.marks i[data-found] {
+  background: #efe9df;
+  opacity: 1;
 }
 
 .personScore {
@@ -913,12 +752,6 @@
   }
 }
 
-@keyframes develop {
-  from {
-    opacity: 0;
-  }
-}
-
 /* ---------------------------------------------------------------------------------------------
  * Phones
  * ------------------------------------------------------------------------------------------- */
@@ -937,41 +770,70 @@
     display: none;
   }
 
-  .stage {
-    align-content: start;
-    gap: 14px;
+  .bookArea {
+    width: calc(100vw - 32px);
   }
 
-  .book {
-    padding-top: 58px;
+  .head {
+    gap: 12px;
+    min-height: 52px;
+    margin-bottom: 12px;
+    padding: 0 8px;
   }
 
-  .tabs {
-    top: 36px;
-    height: 22px;
+  .cornerKicker {
+    font-size: 9px;
+    letter-spacing: 0.18em;
   }
 
-  .tab {
-    min-width: 10px;
-    font-size: 11px;
+  .corner[data-side="before"] .cornerKicker {
+    margin-right: -0.18em;
   }
 
-  .tab[data-small] {
-    color: transparent;
+  /* A long word shrinks to keep to its half. */
+  .guide {
+    font-size: min(28px, calc(44vw / (var(--len) * 0.56)));
   }
 
-  .ribbon {
-    top: 28px;
-    width: 5px;
-    margin-left: -2.5px;
+  .initial {
+    font-size: 28px;
   }
 
-  .ribbonWord {
-    font-size: 15px;
+  .typed,
+  .letter > span {
+    font-size: 32px;
   }
 
-  .edge {
-    height: 96px;
+  .row {
+    gap: 2px;
+  }
+
+  .letter {
+    width: 36px;
+    height: 52px;
+  }
+
+  .keys .quiet,
+  .keys .go,
+  .giveUpRow .quiet {
+    min-height: 44px;
+  }
+
+  .keysRule,
+  .giveUpInRow {
+    display: none;
+  }
+
+  .giveUpRow {
+    display: flex;
+    justify-content: center;
+    margin-top: -8px;
+  }
+
+  .senses {
+    font-size: 15.5px;
+    text-align: left;
+    hyphens: manual;
   }
 
   .panelBackdrop {

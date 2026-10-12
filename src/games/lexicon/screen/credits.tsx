@@ -2,65 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { useShare } from "@/components/share-button";
-import { APP_NAME } from "@/config";
-import type { PuzzleDate } from "@/core/day";
-import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
-import { lexicon, type LexiconReveal } from "../logic";
 import styles from "./screen.module.css";
 
 /** The sources' credit, wherever today's dictionary is shown. */
 export const WORDS_CREDIT = "Words: 12dicts by Alan Beale (AGID © Kevin Atkinson). Definitions: WordNet 3.1 © Princeton University.";
 
-/**
- * The page the book opened at: today's word as a dictionary prints it (headword, part of speech,
- * definition), then how it went, the score, sharing (spoiler-free), everyone's results and the
- * sources' credit.
- */
-export function Entry(props: {
-  reveal: LexiconReveal;
-  won: boolean;
-  guesses: number;
-  result: { score: number; label: string; shareGrid: string };
-  date: PuzzleDate;
-  onEveryone(): void;
-}) {
-  const { reveal, won, guesses, result, date, onEveryone } = props;
-  const { share, copied } = useShare(
-    shareText({ appName: APP_NAME, gameName: lexicon.name, emoji: lexicon.emoji, date, label: result.label, score: result.score, grid: result.shareGrid }),
-  );
-  return (
-    <section className={styles.entry} aria-label="Today's word">
-      <p className={styles.kicker}>{won ? `Found on guess ${guesses}` : "Today's word was"}</p>
-      <h2 className={styles.headword}>{reveal.answer}</h2>
-      <p className={styles.definition}>
-        <i>{reveal.entry.pos}</i> {reveal.entry.definition}
-      </p>
-      <div className={styles.entryActions}>
-        <span className={styles.points}>
-          {result.score}
-          <small>{result.score === 1 ? "point" : "points"}</small>
-        </span>
-        <button type="button" className={styles.go} onClick={() => void share()}>
-          {copied ? "Copied" : "Share"}
-        </button>
-        <button type="button" className={styles.quiet} onClick={onEveryone} aria-haspopup="dialog">
-          How everyone did
-        </button>
-      </div>
-      <p className={styles.credit}>{WORDS_CREDIT}</p>
-    </section>
-  );
-}
-
 const guessesDetail = z.object({ guesses: z.array(z.string()) });
 
-/** One result's marks: ▸ after, ◂ before, ◆ found, and a flag for giving up. */
+/**
+ * One result's guesses as ribbons, from its share marks: red for each guess today's word was after
+ * (▸) or before (◂), bone for the one that found it (◆). Giving up's flag draws nothing: the label
+ * beside it says so.
+ */
 function Marks({ grid }: { grid: string }) {
+  const marks = [...grid].filter((ch) => ch === "▸" || ch === "◂" || ch === "◆");
   return (
     <span className={styles.marks} aria-hidden>
-      {grid}
+      {marks.map((ch, i) => (
+        <i key={i} data-found={ch === "◆" || undefined} />
+      ))}
     </span>
   );
 }

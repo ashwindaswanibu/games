@@ -1,26 +1,34 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
+import { useLetterFlip } from "./flip";
 import styles from "./screen.module.css";
 
 /**
- * The nine letters and the guess line. A guess is set from the letters themselves: tap a letter
- * (or type it) and it moves up into the line, leaving a gap in the row; Backspace puts it back.
- * Enter (or Guess) plays the word. Shuffle reorders the row, to see new words in it. Keys work
- * anywhere on the page unless something else is being typed into or a question is open.
+ * The guess line, the nine letters and the keys. A guess is set from the letters themselves: tap a
+ * letter (or type it) and it flies up into the line, leaving its cell empty; Backspace sends it
+ * home, Escape sends them all. Enter (or Guess) plays the word, and an accepted word rises out of
+ * the line toward the book as its ribbon lays in. Space (or Shuffle) reorders the row, to see new
+ * words in it. Keys work anywhere on the page unless something else is being typed into or a
+ * question is open. The ruler under the line is today's word's length, filling as you type.
  */
 export function Tray(props: {
   letters: string;
-  /** Letters in today's word: blank slots under the line. */
+  /** Letters in today's word: the ruler's ticks. */
   length: number;
   disabled: boolean;
   /** Whether keys belong to the tray right now (no question or panel open). */
   listening: boolean;
   /** Shake the line: the last word was refused. */
   refused: number;
+  /** What the next guess scores if it finds the word. */
+  worth: number;
   onGuess(word: string): Promise<boolean>;
+  /** Asks before giving up (the screen holds the question). */
+  onGiveUp(): void;
 }) {
-  const { letters, length, disabled, listening, refused, onGuess } = props;
+  const { letters, length, disabled, listening, refused, worth, onGuess, onGiveUp } = props;
   // The row's order (indexes into `letters`), and the letters set in the line (indexes, in order).
   const [order, setOrder] = useState(() => [...letters].map((_, i) => i));
   const [set, setSet] = useState<number[]>([]);
@@ -30,6 +38,14 @@ export function Tray(props: {
   useEffect(() => {
     latest.current = { set, word, disabled, order, onGuess };
   });
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const typedRef = useRef<HTMLParagraphElement>(null);
+  // Set as a played word leaves the line, so its letters fade back into the row instead of flying.
+  const playedRef = useRef(false);
+  // A word is on its way (asked, or rising out of the line): Enter again mustn't play it twice.
+  const playingRef = useRef(false);
+  useLetterFlip(rootRef, playedRef);
 
   function add(i: number) {
     setSet((s) => (s.includes(i) || s.length >= letters.length ? s : [...s, i]));
@@ -44,8 +60,29 @@ export function Tray(props: {
 
   async function play() {
     const { word: w, disabled: off, onGuess: guess } = latest.current;
-    if (off || w.length === 0) return;
-    if (await guess(w)) setSet([]);
+    if (off || w.length === 0 || playingRef.current) return;
+    playingRef.current = true;
+    try {
+      if (!(await guess(w))) return;
+      // The word rises out of the line toward the book, then the line clears.
+      const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const rise = still
+        ? null
+        : typedRef.current?.animate(
+            [
+              { opacity: 1, transform: "none" },
+              { opacity: 0, transform: "translateY(-22px)" },
+            ],
+            { duration: 260, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" },
+          );
+      await rise?.finished.catch(() => {});
+      playedRef.current = true;
+      // Cleared in the same frame the rise lets go, so the word never flashes back.
+      flushSync(() => setSet([]));
+      rise?.cancel();
+    } finally {
+      playingRef.current = false;
+    }
   }
 
   function shuffle() {
@@ -91,22 +128,33 @@ export function Tray(props: {
   }, [listening, letters]);
 
   return (
-    <div className={styles.tray}>
-      <div className={styles.line} data-shake={refused || undefined} key={refused}>
-        <p className={styles.typed} aria-live="polite" aria-label={word ? `Your guess: ${word}` : "Type a word from today's letters"}>
-          {word}
-          <span className={styles.caret} aria-hidden />
-          {!word && <span className={styles.typedHint}>a word from the letters</span>}
-        </p>
+    <div className={styles.tray} ref={rootRef}>
+      <div className={styles.line}>
+        {/* Refused: the line shakes. Keyed, so each refusal shakes it again. */}
+        <div className={styles.shake} data-shake={refused || undefined} key={refused}>
+          <p ref={typedRef} className={styles.typed} aria-live="polite" aria-label={word ? `Your guess: ${word}` : "Type a word from today's letters"}>
+            {set.map((i) => (
+              <span key={i} data-flip={`line:${i}`}>
+                {letters[i]}
+              </span>
+            ))}
+            {!word && (
+              <>
+                <span className={styles.caret} aria-hidden />
+                <span className={styles.typedHint}>a word from the letters</span>
+              </>
+            )}
+          </p>
+        </div>
         <span className={styles.slots} aria-label={`Today's word has ${length} letters`}>
           {Array.from({ length }, (_, i) => (
-            <span key={i} />
+            <span key={i} data-on={i < word.length || undefined} />
           ))}
         </span>
       </div>
 
       <div className={styles.row} role="group" aria-label="Today's letters">
-        {order.map((i) => (
+        {order.map((i, k) => (
           <button
             key={i}
             type="button"
@@ -115,22 +163,32 @@ export function Tray(props: {
             disabled={disabled || set.includes(i)}
             onClick={() => add(i)}
             aria-label={`Add ${letters[i]!.toUpperCase()}`}
+            style={{ "--k": k } as CSSProperties}
           >
-            {letters[i]}
+            <span data-flip={`cell:${i}`}>{letters[i]}</span>
           </button>
         ))}
       </div>
 
       <div className={styles.keys}>
         <button type="button" className={styles.quiet} onClick={shuffle} disabled={disabled} aria-label="Shuffle the letters">
-          ↻ Shuffle
+          Shuffle
         </button>
         <button type="button" className={styles.quiet} onClick={() => setSet((s) => s.slice(0, -1))} disabled={disabled || set.length === 0} aria-label="Take back a letter">
-          ⌫
+          Back
+        </button>
+        <span className={styles.keysRule} aria-hidden />
+        <button type="button" className={`${styles.quiet} ${styles.giveUpInRow}`} onClick={onGiveUp} disabled={disabled}>
+          Give up
         </button>
         <span className={styles.keysGap} />
-        <button type="button" className={styles.go} onClick={() => void play()} disabled={disabled || word.length < 3}>
-          Guess
+        <button type="button" className={styles.go} onClick={() => void play()} disabled={disabled || word.length < 3} aria-label={`Guess, worth ${worth} points`}>
+          Guess<span className={styles.worthTag}>{worth}</span>
+        </button>
+      </div>
+      <div className={styles.giveUpRow}>
+        <button type="button" className={styles.quiet} onClick={onGiveUp} disabled={disabled}>
+          Give up
         </button>
       </div>
     </div>
