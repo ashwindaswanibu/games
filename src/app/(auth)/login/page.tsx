@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { publicEnv } from "@/lib/public-env";
+import styles from "../auth.module.css";
 import { Divider, GoogleButton } from "../google-button";
 import { LoginForm } from "./login-form";
 
@@ -24,9 +25,9 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </>
       )}
       <LoginForm initialError={typeof error === "string" ? ERRORS[error] : undefined} />
-      <p className="text-center text-sm text-muted">
+      <p className={styles.switch}>
         New here?{" "}
-        <Link href="/signup" className="font-medium text-fg underline underline-offset-4">
+        <Link href="/signup">
           Create an account
         </Link>
       </p>

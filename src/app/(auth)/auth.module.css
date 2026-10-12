@@ -1,0 +1,191 @@
+/* Signing in (layout.tsx): the house's dark room, the name as a title card, the form in the games' hand. */
+
+.room {
+  --ink: #ece6da;
+  --ink-2: rgb(236 230 218 / 0.62);
+  --ink-3: rgb(236 230 218 / 0.38);
+  --line: rgb(236 230 218 / 0.22);
+  --bad: #e07a5f;
+  --display: var(--cb-display), "Bodoni Moda", serif;
+  --mono: var(--font-geist-mono), ui-monospace, monospace;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: radial-gradient(ellipse 70% 55% at 50% 36%, #17181b, #0b0b0c 72%);
+  color: var(--ink);
+}
+
+/* The day's edge, as on the home: the date, and what this is. */
+.edge {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: max(env(safe-area-inset-top), 20px) 32px 18px;
+  border-bottom: 1px solid rgb(236 230 218 / 0.08);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.stage {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: clamp(28px, 5vh, 52px);
+  padding: 40px 24px max(env(safe-area-inset-bottom), 56px);
+}
+
+/* The name, as a title card. */
+.mark {
+  margin: 0;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(92px, 13vw, 176px);
+  line-height: 0.9;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+
+.panel {
+  width: min(380px, 100%);
+  display: grid;
+  gap: 28px;
+}
+
+/* The form, in the games' hand: labels in mono, fields written on a line like a guess. */
+.panel form {
+  gap: 22px;
+}
+
+.panel label {
+  gap: 8px;
+}
+
+.panel label > span:first-child {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.panel input {
+  height: 46px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font: italic 400 24px/1 var(--display);
+  color: #f6f1e8;
+  caret-color: var(--ink);
+  transition: border-color 160ms ease;
+}
+
+.panel input:focus {
+  border-bottom-color: var(--ink);
+}
+
+.panel input[aria-invalid] {
+  border-bottom-color: var(--bad);
+}
+
+/* A field's hint or error. */
+.panel label > input + span {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+.panel label > input[aria-invalid] + span {
+  color: var(--bad);
+}
+
+.panel [role="alert"] {
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--bad);
+  border-radius: 0;
+  background: none;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #f0c9bd;
+}
+
+/* Sign in: the house's ink pill. */
+.panel button[type="submit"] {
+  height: 48px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #0b0b0c;
+  font: 600 14px/1 var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.panel button[type="submit"]:hover:not(:disabled) {
+  background: #fff;
+}
+
+/* Continue with Google: the quiet pill. */
+.panel .google button[type="submit"] {
+  margin-top: 0;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+
+.panel .google button[type="submit"]:hover:not(:disabled) {
+  border-color: var(--ink-2);
+  background: rgb(236 230 218 / 0.04);
+}
+
+.or {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font: italic 400 16px/1 var(--display);
+  color: var(--ink-3);
+}
+
+.or::before,
+.or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgb(236 230 218 / 0.12);
+}
+
+/* "New here? Create an account". */
+.switch {
+  margin: 0;
+  text-align: center;
+  font: 500 10.5px/1.6 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.switch a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-color: var(--line);
+}
+
+@media (max-width: 719px) {
+  .edge {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .edgeNote {
+    display: none;
+  }
+
+  .stage {
+    align-content: start;
+    padding-top: 9vh;
+  }
+}

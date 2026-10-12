@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { publicEnv } from "@/lib/public-env";
+import styles from "../auth.module.css";
 import { Divider, GoogleButton } from "../google-button";
 import { SignupForm } from "./signup-form";
 
@@ -16,9 +17,9 @@ export default function SignupPage() {
         </>
       )}
       <SignupForm />
-      <p className="text-center text-sm text-muted">
+      <p className={styles.switch}>
         Already playing?{" "}
-        <Link href="/login" className="font-medium text-fg underline underline-offset-4">
+        <Link href="/login">
           Sign in
         </Link>
       </p>

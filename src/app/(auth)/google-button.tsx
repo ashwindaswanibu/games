@@ -1,9 +1,10 @@
 import { signInWithGoogle } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import styles from "./auth.module.css";
 
 export function GoogleButton() {
   return (
-    <form action={signInWithGoogle}>
+    <form action={signInWithGoogle} className={styles.google}>
       <SubmitButton variant="secondary" className="w-full" pendingText="Redirecting…">
         <svg viewBox="0 0 24 24" className="size-4" aria-hidden>
           <path fill="#4285F4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.3-4.8 3.3-8z" />
@@ -18,11 +19,5 @@ export function GoogleButton() {
 }
 
 export function Divider() {
-  return (
-    <div className="flex items-center gap-3 text-xs text-muted">
-      <span className="h-px flex-1 bg-border" />
-      or
-      <span className="h-px flex-1 bg-border" />
-    </div>
-  );
+  return <div className={styles.or}>or</div>;
 }
