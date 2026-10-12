@@ -8,7 +8,8 @@
   --hf-serif: var(--hf-display), "Bodoni Moda", serif;
   position: fixed;
   inset: 0;
-  overflow: hidden;
+  /* Too many rows to keep games playable makes the field taller than the screen: it scrolls. */
+  overflow: hidden auto;
   background: var(--hf-ground);
   color: var(--hf-ink);
   opacity: 0;
@@ -198,6 +199,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.9), 0 0 24px rgba(0, 0, 0, 0.7);
+}
+
+.cardTitle[data-lines="2"] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  text-wrap: balance;
 }
 
 .cardTagline {
@@ -609,7 +618,7 @@
 
 .mark {
   width: 2px;
-  height: 28px;
+  height: 12px;
   background: var(--hf-ink);
   opacity: 0.6;
 }
@@ -651,4 +660,56 @@
   .knotTied {
     animation: none;
   }
+}
+
+/* A category's plate: the ground itself, its name set large in italic, leading its games. */
+.plate {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  background: var(--hf-ground);
+  pointer-events: none;
+}
+
+.plate > * {
+  position: absolute;
+}
+
+.plateCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plateFlat {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.plateName {
+  margin: 0;
+  font-family: var(--hf-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1;
+  color: var(--hf-ink);
+  white-space: nowrap;
+}
+
+.plateTagline {
+  font: italic 400 16px/1.3 var(--hf-serif);
+  color: var(--hf-dim);
+}
+
+.plateLine {
+  font: 500 10px/1 var(--hf-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hf-dim);
+  white-space: nowrap;
 }

@@ -2,7 +2,7 @@ import type { AssetRef, SealedAssets } from "@/core/assets";
 
 /*
  * The home as a field (see field.tsx): today's games share the screen equally, cut by slanted
- * seams. A game still to play holds its share; finishing collapses it into a strip carrying the
+ * seams, each category led by a plate with its name. A game still to play holds its share; finishing collapses it into a strip carrying the
  * result while the others widen; when every game is done the strips widen again into the day's
  * print, equal and resolved. Opening a game grows its tile over the whole field.
  *
@@ -49,7 +49,7 @@ export interface FriendMark {
 
 export interface HomeTile {
   id: string;
-  /** Its category: each starts a row of the field. */
+  /** Its category's id: the category's plate leads its games (see `fieldPlan`). */
   group: string;
   name: string;
   /** The game's name as written ("Fade to Color"), for its title card. */
@@ -80,47 +80,118 @@ export interface HomeModel {
   won: number;
   max: number;
   tiles: HomeTile[];
+  /** The categories of today's games. */
+  categories: HomeCategory[];
   sealed: SealedAssets;
   user: { username: string; isAdmin: boolean };
 }
 
 /**
- * The field's measures for a screen: how many games a row holds before wrapping, the width of a
- * finished game's strip, the height of a finished row's band, and how far the seams lean (as a
- * fraction of a row's height, so every seam keeps one angle).
+ * The field's measures for a screen: the width of a finished game's strip, the height of a
+ * finished row's band, the least height a row of games keeps, how narrow and how wide a slot in a
+ * row may be (see `choosePlan`), and how far the seams lean (as a fraction of a row's height, so every seam keeps one angle).
  */
-export function fieldMetrics(width: number): { perRow: number; strip: number; band: number; lean: number; compact: boolean } {
+export function fieldMetrics(width: number): { strip: number; band: number; minRow: number; slot: { min: number; max: number }; lean: number; compact: boolean } {
   const compact = width < 720;
-  return { perRow: compact ? 2 : 4, strip: compact ? 64 : 132, band: compact ? 72 : 96, lean: 0.083, compact };
+  return { strip: compact ? 64 : 132, band: compact ? 72 : 96, minRow: compact ? 220 : 280, slot: { min: 270, max: 520 }, lean: 0.083, compact };
+}
+
+/** A category on the home: its plate carries its name. */
+export interface HomeCategory {
+  id: string;
+  name: string;
+  /** What the category is, in a line ("Letters, ladders and lists"). */
+  tagline: string;
 }
 
 /**
- * Rows of tiles (indexes into `tiles`): each group (a category) starts a row, and a row holds at
- * most `perRow` games, so a category of six becomes two rows of three, not a row of four and two.
+ * How the field is cut: rows of pieces, each piece a game's tile or a category's plate. Every row
+ * holds `perRow` game-sized slots, so every game is the same size wherever it sits. A category's
+ * plate (its name, set large) leads its games and takes the slots they leave in its row; small
+ * categories share a row. A category whose games fill their rows exactly gets its plate as a band
+ * above them instead.
+ *
+ * Pieces are numbered tiles first (their index in `tiles`), then plates (`tiles.length + c` for
+ * the c-th category in `categories`).
  */
-export function fieldRows(tiles: readonly Pick<HomeTile, "group">[], perRow: number): number[][] {
-  const groups: number[][] = [];
+export interface FieldPlan {
+  rows: number[][];
+  /** Each piece's share of its row, in slots: 1 for a game, what's left for a plate. */
+  slots: number[];
+  /** Rows that are a plate alone (a band of fixed height). */
+  bands: boolean[];
+  /** The categories in order of their first game, as group ids. */
+  categories: string[];
+}
+
+export function fieldPlan(tiles: readonly Pick<HomeTile, "group">[], perRow: number): FieldPlan {
+  const categories: string[] = [];
+  const games: number[][] = [];
   tiles.forEach((tile, i) => {
-    const last = groups.at(-1);
-    if (last && tiles[last[0]!]!.group === tile.group) last.push(i);
-    else groups.push([i]);
+    const c = categories.indexOf(tile.group);
+    if (c >= 0) games[c]!.push(i);
+    else {
+      categories.push(tile.group);
+      games.push([i]);
+    }
   });
-  return groups.flatMap((group) => {
-    const rows = Math.ceil(group.length / perRow);
-    const size = Math.ceil(group.length / rows);
-    return Array.from({ length: rows }, (_, r) => group.slice(r * size, (r + 1) * size));
+  const slots = [...tiles.map(() => 1), ...categories.map(() => 1)];
+  const rows: number[][] = [];
+  const bands: boolean[] = [];
+  // The row being filled with small categories, and the slots it has used.
+  let open: number[] = [];
+  let used = 0;
+  const close = () => {
+    if (open.length === 0) return;
+    // What the row's categories leave goes to its first plate.
+    slots[open[0]!]! += perRow - used;
+    rows.push(open);
+    bands.push(false);
+    open = [];
+    used = 0;
+  };
+  games.forEach((own, c) => {
+    const plate = tiles.length + c;
+    if (own.length + 1 <= perRow) {
+      if (used + own.length + 1 > perRow) close();
+      open.push(plate, ...own);
+      used += own.length + 1;
+      return;
+    }
+    close();
+    // A big category: full rows of games, the first short by what its plate needs.
+    const count = Math.ceil((own.length + 1) / perRow);
+    const first = own.length - (count - 1) * perRow;
+    if (first === 0) {
+      rows.push([plate]);
+      bands.push(true);
+      slots[plate] = perRow;
+    } else {
+      rows.push([plate, ...own.slice(0, first)]);
+      bands.push(false);
+      slots[plate] = perRow - first;
+    }
+    for (let r = 0; r < count - 1; r++) {
+      rows.push(own.slice(first + r * perRow, first + (r + 1) * perRow));
+      bands.push(false);
+    }
   });
+  close();
+  return { rows, slots, bands, categories };
 }
 
 /**
  * Where each piece lies along one axis, in order: `[start, end]`. `collapse[i]` is how far piece i
- * has become a strip of `strip` (0–1); the others share what's left by their open weight (1 for a
- * game, its open games for a row). `print` evens everything out; `open` grows one piece over all.
+ * has become a strip of `strip` (0–1); the others share what's left by their weight (1 by
+ * default). A `fixed` piece is always a strip. `print` evens everything else out by weight; `open`
+ * grows one piece over all.
  */
 export function spans(params: {
   length: number;
   collapse: readonly number[];
   weight?: readonly number[];
+  /** Pieces that are always a strip, whatever happens to the rest. */
+  fixed?: readonly boolean[];
   /** Extra width for a strip (a played game opened a little under the pointer). */
   extra?: readonly number[];
   print: number;
@@ -132,14 +203,22 @@ export function spans(params: {
   const n = collapse.length;
   if (n === 0) return [];
   const weight = params.weight ?? collapse.map(() => 1);
-  const strips = collapse.map((c, i) => (strip + (params.extra?.[i] ?? 0)) * c);
-  const openWeights = collapse.map((c, i) => (1 - c) * weight[i]!);
-  const openSum = openWeights.reduce((a, b) => a + b, 0);
-  const space = Math.max(0, length - strips.reduce((a, b) => a + b, 0));
+  const fixed = (i: number) => params.fixed?.[i] === true;
+  const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
+  const strips = collapse.map((c, i) => (strip + (params.extra?.[i] ?? 0)) * (fixed(i) ? 1 : c));
+  const openWeights = collapse.map((c, i) => (fixed(i) ? 0 : (1 - c) * weight[i]!));
+  const openSum = sum(openWeights);
+  const space = Math.max(0, length - sum(strips));
   let sizes = collapse.map((_, i) => strips[i]! + (openSum > 1e-6 ? (openWeights[i]! / openSum) * space : 0));
-  // Everything finished: the leftover space is shared equally until the print takes over.
-  if (openSum <= 1e-6) sizes = sizes.map((w) => w + space / n);
-  sizes = sizes.map((w) => w + (length / n - w) * print);
+  // What the fixed pieces leave, shared by weight: where everything finished rests, and the print.
+  const freeWeights = collapse.map((_, i) => (fixed(i) ? 0 : weight[i]!));
+  const freeSum = sum(freeWeights);
+  const free = length - sum(strips.filter((_, i) => fixed(i)));
+  const even = (i: number) => (free * freeWeights[i]!) / freeSum;
+  if (freeSum > 1e-6) {
+    if (openSum <= 1e-6) sizes = sizes.map((w, i) => (fixed(i) ? w : even(i)));
+    sizes = sizes.map((w, i) => (fixed(i) ? w : w + (even(i) - w) * print));
+  }
   let start = 0;
   if (open && open.amount > 0) {
     const x = open.amount;
@@ -168,14 +247,16 @@ export interface TileBox {
 }
 
 /**
- * The whole field: each tile's box. Rows share the height by how many of their games are still to
- * play (a finished row is a band); within a row, games share the width the same way (a finished
- * game is a strip). `open` grows one tile over the whole field.
+ * The whole field: each piece's box (tiles, then plates; see `FieldPlan`). Rows with a game still
+ * to play share the height equally; a row whose games are all finished is a band, and so is a
+ * plate alone. Within a row, pieces share the width by their slots and a finished game is a strip;
+ * once the row is done its plate becomes one too. `open` grows one tile over the whole field.
  */
 export function fieldLayout(params: {
   width: number;
   height: number;
-  rows: readonly (readonly number[])[];
+  plan: Pick<FieldPlan, "rows" | "slots" | "bands">;
+  /** Each tile's collapse (plates follow their rows). */
   collapse: readonly number[];
   print: number;
   open: { index: number; amount: number } | null;
@@ -183,14 +264,19 @@ export function fieldLayout(params: {
   peek?: { index: number; amount: number } | null;
   metrics: { strip: number; band: number; lean: number };
 }): TileBox[] {
-  const { width, height, rows, collapse, print, open, metrics } = params;
+  const { width, height, plan, collapse, print, open, metrics } = params;
+  const { rows, slots, bands } = plan;
   const peek = params.peek ?? null;
+  const isTile = (i: number) => i < collapse.length;
+  const rowCollapse = rows.map((row, r) => {
+    const games = row.filter(isTile);
+    return bands[r] || games.length === 0 ? 1 : Math.min(...games.map((i) => collapse[i]!));
+  });
   const openRow = open ? rows.findIndex((r) => r.includes(open.index)) : -1;
   const rowSpans = spans({
     length: height,
-    collapse: rows.map((r) => Math.min(...r.map((i) => collapse[i]!))),
-    // A row's share of the height: its games still to play.
-    weight: rows.map((r) => r.reduce((sum, i) => sum + (1 - collapse[i]!), 0)),
+    collapse: rowCollapse,
+    fixed: bands,
     print,
     open: openRow >= 0 ? { index: openRow, amount: open!.amount } : null,
     strip: metrics.band,
@@ -202,7 +288,8 @@ export function fieldLayout(params: {
     const lean = metrics.lean * (y[1] - y[0]);
     const xs = spans({
       length: width,
-      collapse: row.map((i) => collapse[i]!),
+      collapse: row.map((i) => (isTile(i) ? collapse[i]! : bands[r] ? 0 : rowCollapse[r]!)),
+      weight: row.map((i) => slots[i] ?? 1),
       extra: row.map((i) => (peek && peek.index === i ? PEEK * peek.amount : 0)),
       print,
       open: r === openRow ? { index: row.indexOf(open!.index), amount: open!.amount } : null,
@@ -214,6 +301,44 @@ export function fieldLayout(params: {
     });
   });
   return boxes;
+}
+
+/**
+ * The plan for a screen: how many slots a row holds is chosen, not fixed. On a phone it's two. On
+ * a wider screen it's anything from rows of slots no wider than `slot.max` to rows of slots no
+ * narrower than `slot.min`, and the field takes the count that leaves plates least to fill
+ * (games, not names, should fill the screen), preferring one whose rows fit the screen, then fewer
+ * rows (taller games).
+ */
+export function choosePlan(
+  tiles: readonly Pick<HomeTile, "group">[],
+  screen: { width: number; height: number },
+  metrics: { band: number; minRow: number; compact: boolean; slot: { min: number; max: number } },
+): FieldPlan {
+  const low = metrics.compact ? 2 : Math.max(2, Math.ceil(screen.width / metrics.slot.max));
+  const high = metrics.compact ? 2 : Math.max(low, Math.floor(screen.width / metrics.slot.min));
+  let best: { plan: FieldPlan; cost: [number, number, number] } | null = null;
+  for (let perRow = low; perRow <= high; perRow++) {
+    const plan = fieldPlan(tiles, perRow);
+    // A plate's slots beyond its first; a plate alone in a band counts as one.
+    const spare = plan.rows.reduce((n, row, r) => n + (plan.bands[r] ? 1 : row.filter((i) => i >= tiles.length).reduce((m, i) => m + plan.slots[i]! - 1, 0)), 0);
+    const overflows = fieldHeight(0, plan, metrics) > screen.height ? 1 : 0;
+    const cost: [number, number, number] = [overflows, spare, plan.rows.length];
+    if (!best || before(cost, best.cost)) best = { plan, cost };
+  }
+  return best!.plan;
+}
+
+/** Whether `a` comes before `b`, comparing in order. */
+function before(a: readonly number[], b: readonly number[]): boolean {
+  const i = a.findIndex((x, j) => x !== b[j]);
+  return i >= 0 && a[i]! < b[i]!;
+}
+
+/** The field's height: the screen's, or taller when its rows wouldn't keep games playable (the page then scrolls). */
+export function fieldHeight(available: number, plan: Pick<FieldPlan, "bands">, metrics: { band: number; minRow: number }): number {
+  const bands = plan.bands.filter(Boolean).length;
+  return Math.max(200, available, bands * metrics.band + (plan.bands.length - bands) * metrics.minRow);
 }
 
 /** How far a tile's seams lean at its height (one angle everywhere). */
