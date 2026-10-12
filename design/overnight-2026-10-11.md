@@ -149,3 +149,16 @@ Designer 1's 44px left spines spanning rows: a third geometry (vertical spines b
 - **Progress caption and tagline on standing plates**: The header and the tiles already say it, and at 180px wide the caption would wrap. It stays in the plate's aria-label; flat bands keep their one line.
 - **Amber #e9a31e for Degrees (Designer 1)**: Wrong value. The game's accent is rgb(236 178 92), #ecb25c (degrees/screen/screen.module.css line 20).
 - **Skewed fore-edge and thumb-index tabs on the home tile**: Objects stay upright like the barcode's bars, and only the seams lean. Tabs collide at 288px and add clutter; the page hairlines already carry the dictionary.
+
+## Round two (later the same night)
+
+### Home: a finished game shows its own object — live
+Built from the designers' "result strips as objects" proposals the judge deferred. A finished game's strip is its object resolved (the barcode at full colour with the reels it took and its title up the seam; the thread plumb and lit amber; a red ribbon from the dictionary's edge with the word on it); the day's print sets every result title on one baseline. Adapted to tonight's identities: red ribbons, not the proposals' gold; the film title in pressed bars; colour is earned (a film that got away is titled in ink).
+- Alternative: keep the generic score strip with "✓ Played" (what it was).
+- Not built: **"Share the day"** (one message with every game's share line). What it says is your call: say the word and it's an hour's work.
+
+### Movie Barcode on a phone: the editing bench — building
+An overview strip plus a viewer showing a third of the film at three times the size, scrubbed by dragging (the judge's "best phone idea", deferred from round one only for size). Laptop unchanged.
+
+### Review fixes — live
+An independent review of the four redesigns found four real defects, all fixed: Lexicon's letters dropped and rose twice after opening; the phone's all-played print ran friends' marks under the row's cut; a deep Degrees sag could hide a face under the end titles at 1280x720; Degrees' short rules said an undo costs a move.
