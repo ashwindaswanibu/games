@@ -78,7 +78,7 @@ Gameplay, moves, hints, confirmations, scoring and the a11y contracts are unchan
 
 ## Lexicon
 
-**Status:** building
+**Status:** live 2026-10-11 night. Reviewer change: the dictionary page is shorter (it hugged an empty middle).
 
 **Direction.** Make the book the whole screen, and have the frame close in as the gap closes. Lexicon becomes one physical object: today's dictionary standing on a desk, seen from its fore-edge at real size (about 1328x300 on laptop, full width on phone). It has boards standing proud of the paper, bone paper with a rounded edge, a stepped half-moon thumb index, and silk ribbons that show as a thin red thread between the leaves and hang out of the foot with a swallowtail. The one striking idea is that the book falls open at the gap. Each accepted guess plays two beats. First, the shadow falls over the pages you ruled out while every leaf stays put (the cause). Then the ruled-out pages press together and the pages still in play spread apart under the light (the consequence). The endgame gets more of the frame, not less, yet the lit window still shrinks on every guess, so the picture stays honest. The count is stamped in ink on the lit leaves. The two bounds are the page's guide words, set large in the corners above the book (AFTER ‹word› / BEFORE ‹word›), the same composition as Degrees' FROM/TO. The win completes the metaphor: the book shuts on one lit leaf, and that leaf turns to face you as a printed dictionary page. The page is bone paper with the headword in Bodoni, your two closest guesses as its guide words, the source credit as its imprint, and your red ribbon lying in it (no ribbon if you gave up). A Degrees-style result row sits beneath it. On arrival the book is shut and uncut, and it riffles into today's dictionary when you open it. Everything else gets quieter, with one hierarchy: book, then bounds, then guess line, then letters, then keys. The kicker row, the count row, the 'Guess 5 · worth 60' line, the gold, the glow and the blinking caret all go. Laptop must fit without scrolling at 1440x900 and 1440x790. Phone (390x844) must fit without a sticky console. Gameplay, rules, logic.ts, the share text and the stored data are untouched. The items below are in order of impact. If the evening runs short, defer item 6 first, then item 5. (Access note for the owner: this review only read the taste memory file, the three Lexicon screenshots plus deg-won.png for the family pattern, and the Lexicon, Degrees and Fade to Color source. Nothing was edited.)
 
@@ -108,7 +108,7 @@ Gameplay, moves, hints, confirmations, scoring and the a11y contracts are unchan
 
 ## Home
 
-**Status:** building
+**Status:** live 2026-10-11 night. Reviewer change: the Movies spine is pressed in hard bars like the game's wordmark (the builder's soft film light read as a pastel rainbow); the colour maths moved to src/lib/film-palette.ts so the home never loads the game.
 
 **Direction.** 
 
