@@ -633,14 +633,20 @@ function TitleCard({ tile, box, lean, pad, footer, opacity }: { tile: HomeTile; 
   const top = box.y[1] - footer + 8;
   const x = seamAt(box, lean, top + footer / 2) + pad;
   const narrow = w < 300;
-  // The game's name leads the card: the first thing read on a tile still to play.
-  const size = Math.max(26, Math.min(72, w * 0.13, footer * 0.34));
-  const tagline = !narrow && footer > 150;
-  // A long name takes a second line rather than lose its end, when the card has the room.
-  const lines = footer - 8 >= size * 2.1 + (tagline ? 50 : 0) + 50 ? 2 : 1;
+  const width = Math.max(140, w - (lean * (box.y[1] - box.y[0])) / 2 - 2 * pad);
+  // The game's name leads the card: as large as the card allows, on one line or on two when
+  // that sets it larger. The line about the game gives way before the name shrinks for it.
+  const fit = (extra: number) => {
+    const size = (lines: number) => Math.min(88, width / (longestLine(tile.title, lines) * TITLE_EM), (footer - CARD_REST - extra) / (lines * 1.04));
+    return tile.title.includes(" ") && size(2) > size(1) ? { size: size(2), lines: 2 } : { size: size(1), lines: 1 };
+  };
+  const bare = fit(0);
+  const withTagline = !narrow && tile.tagline ? fit(8 + Math.ceil((tile.tagline.length * 16 * 0.45) / width) * 21) : null;
+  const tagline = withTagline !== null && withTagline.size >= Math.max(40, bare.size * 0.85);
+  const name = tagline ? withTagline : bare;
   return (
-    <span className={styles.card} style={{ left: x, top, width: Math.max(140, w - (lean * (box.y[1] - box.y[0])) / 2 - 2 * pad), opacity }}>
-      <span className={styles.cardTitle} data-lines={lines} style={{ fontSize: size }}>
+    <span className={styles.card} style={{ left: x, top, width, opacity }}>
+      <span className={styles.cardTitle} data-lines={name.lines} style={{ fontSize: Math.max(24, name.size) }}>
         {tile.title}
       </span>
       {tagline && <span className={styles.cardTagline}>{tile.tagline}</span>}
@@ -652,6 +658,19 @@ function TitleCard({ tile, box, lean, pad, footer, opacity }: { tile: HomeTile; 
       </span>
     </span>
   );
+}
+
+/** A title card's name runs about this many ems a letter (Bodoni, upright, a little over). */
+const TITLE_EM = 0.56;
+/** A title card's height besides the name: its margins, the gap and the button's row. */
+const CARD_REST = 16 + 45;
+
+/** The longest line of `text` set on `lines` lines (two: split at the space that balances them best). */
+function longestLine(text: string, lines: number): number {
+  if (lines < 2) return text.length;
+  let best = text.length;
+  for (let i = text.indexOf(" "); i >= 0; i = text.indexOf(" ", i + 1)) best = Math.min(best, Math.max(i, text.length - i - 1));
+  return best;
 }
 
 /** The day's print: a finished game, resolved, filling its share. */

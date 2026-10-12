@@ -49,7 +49,6 @@ export function Entry(props: {
           How everyone did
         </button>
       </div>
-      <p className={styles.perfect}>Halving perfectly, today&rsquo;s dictionary takes at most {reveal.perfect} guesses.</p>
       <p className={styles.credit}>{WORDS_CREDIT}</p>
     </section>
   );

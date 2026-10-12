@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineGame } from "@/core/game";
-import { canSpell, compareWords, indexOfWord, isLetters, JUMBLE_SIZE, MIN_WORD, normalizeWord, perfectGuesses } from "./letters";
+import { canSpell, compareWords, indexOfWord, isLetters, JUMBLE_SIZE, MIN_WORD, normalizeWord } from "./letters";
 import { lexiconPuzzleSchema, lexiconSolutionSchema, type LexiconEntry, type LexiconPuzzle, type LexiconSolution } from "./schema";
 
 /**
@@ -51,8 +51,6 @@ export interface LexiconReveal {
   /** Its page in today's dictionary. */
   page: number;
   entry: LexiconEntry;
-  /** Guesses a perfect player would need at most for a dictionary this size. */
-  perfect: number;
 }
 
 /**
@@ -157,11 +155,10 @@ export const lexicon = defineGame<LexiconPuzzle, LexiconSolution, LexiconState, 
   /** Friends see each other's guesses once they've finished too. */
   friendDetail: (state) => ({ guesses: state.guesses.map((g) => g.word) }),
 
-  reveal: ({ puzzle, solution }) => ({
+  reveal: ({ solution }) => ({
     answer: solution.answer,
     page: indexOfWord(solution.words, solution.answer),
     entry: solution.entry,
-    perfect: perfectGuesses(puzzle.total),
   }),
 });
 

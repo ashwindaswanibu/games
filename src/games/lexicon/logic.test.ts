@@ -103,8 +103,8 @@ describe("score, share and reveal", () => {
     expect(lexicon.shareGrid({ puzzle, state: play("rate", "tar", "stare"), outcome: "won" })).toBe("▸◂◆");
   });
 
-  it("reveals the word, its entry and perfect play; friends see the guesses", () => {
-    expect(lexicon.reveal?.({ puzzle, solution })).toEqual({ answer: "stare", page: words.indexOf("stare"), entry: solution.entry, perfect: perfectGuesses(words.length) });
+  it("reveals the word and its entry; friends see the guesses", () => {
+    expect(lexicon.reveal?.({ puzzle, solution })).toEqual({ answer: "stare", page: words.indexOf("stare"), entry: solution.entry });
     expect(lexicon.friendDetail?.(play("rate", "stare"))).toEqual({ guesses: ["rate", "stare"] });
   });
 

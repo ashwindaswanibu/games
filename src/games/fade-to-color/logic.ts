@@ -221,7 +221,7 @@ const SHARE = { solved: "🟩", missed: "🟥", skipped: "⬛", pickedRight: "�
 
 export const fadeToColor = defineGame<Puzzle, Solution, State, Move, Reveal, ResolvedMove>({
   id: "fade-to-color",
-  name: "Fade to Color",
+  name: "Movie Barcode",
   tagline: "Name the film from its whole run, start to finish",
   rules: [
     "A whole film, every frame pressed into one strip of color.",
