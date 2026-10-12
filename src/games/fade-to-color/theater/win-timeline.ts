@@ -15,8 +15,8 @@ import { DOWN, exitBeats, HOLD_MS, LETTER_MS, openingBeats, PRINT_RUN_STEP_MS, R
  * swapping to the end card, the reel taking its last picture) are cues on the same clock. The
  * beats, in ms from the server's answer (named on reel 3; spec: recommendation §2):
  *
- *   0–680       Heard: the actions step back, your words take the film's light, a line of it runs under them.
- *   600–1500    House down: the room, the header, the strip and the guess line go; "Color" stays lit.
+ *   0–680       Heard: the actions step back, your words take the film's bars, a line of them runs under them.
+ *   600–1500    House down: the room, the header, the strip and the guess line go; "Barcode" stays lit.
  *   700–2100    Fade to black, except the name: the title, cut out of the picture, is all that's left.
  *   2100–2800   MAIN TITLE prints on the rail.  2100–2400: the beat, nothing moves.
  *   2400–≤3900  Color: the letters fade from picture to the film's colours, left to right.
@@ -146,7 +146,7 @@ export function useWinTimeline(props: {
   setWin: Dispatch<SetStateAction<WinCelebration | null>>;
   root: RefObject<HTMLElement | null>;
   ready: boolean;
-  /** Today's barcode as light, graded (a data URL): the title's colours, for its light. */
+  /** Today's barcode as light, graded (a data URL): the title's colours, for its soft light (bloom and halo). */
   fill: string | null;
   /** The last reel's accent ("r g b"), for the light that sweeps it in. */
   lastAccent: string | null;
@@ -178,14 +178,13 @@ export function useWinTimeline(props: {
     let waitTimer: ReturnType<typeof setTimeout> | undefined;
 
     // The room and the header, as the house goes down and comes back up.
-    const house = [cls(styles.back), cls(styles.dateline), cls(styles.wmFade), q('[data-edge="start"]'), q('[data-edge="end"]'), cls(styles.contact), cls(styles.status)];
+    const house = [cls(styles.back), cls(styles.wmMovie), q('[data-edge="start"]'), q('[data-edge="end"]'), cls(styles.contact)];
     const room: [HTMLElement | null, number, number][] = [
       // element, its light at rest, its light with the house down
-      [cls(styles.washLight), 0.15, 0.02],
+      [cls(styles.washLight), 0.07, 0.02],
       [cls(styles.beam), 1, 0.08],
       [cls(styles.spillLight), 0.3, 0],
       [cls(styles.glow), 1, 0],
-      [cls(styles.reflection), 0.28, 0],
     ];
 
     function hold() {
@@ -215,8 +214,8 @@ export function useWinTimeline(props: {
       tl.track(part("heard-lit"), "opacity", [[0, 0, RISE], [520, 1]]);
       tl.track(part("heard-line"), "transform", [[60, "scaleX(0)", UNREEL_EASE], [680, "scaleX(1)"]]);
 
-      // 1 · The house goes down: the guess line drops away, the header, edge print, strip and status
-      //     go almost to black, and the room's light leaves with them. The wordmark's "Color" stays lit.
+      // 1 · The house goes down: the guess line drops away, the header, edge print and strip go
+      //     almost to black, and the room's light leaves with them. The wordmark's "Barcode" stays lit.
       tl.track(part("heard"), "opacity", [[beats.house, 1, DOWN], [1200, 0]]);
       tl.track(part("heard"), "transform", [[beats.house, "translate3d(0,0,0)", DOWN], [1200, "translate3d(0,6px,0)"]]);
       for (const item of house) tl.track(item, "opacity", [[beats.house, 1, DOWN], [1400, 0.06]]);
@@ -303,7 +302,7 @@ export function useWinTimeline(props: {
         tl.track(credits, "transform", [[E + x.creditsFrom, "none"]]);
         return;
       }
-      for (const item of [cls(styles.back), cls(styles.dateline), cls(styles.wmFade), q('[data-edge="start"]')]) tl.track(item, "opacity", [[L, 0.06, "ease"], [L + 1000, 1]]);
+      for (const item of [cls(styles.back), cls(styles.wmMovie), q('[data-edge="start"]')]) tl.track(item, "opacity", [[L, 0.06, "ease"], [L + 1000, 1]]);
       // The reel's own label takes the rail back from "Main title": one out, then the other in.
       tl.track(q('[data-edge="title"]'), "opacity", [[L, 1, DOWN], [L + 300, 0]]);
       tl.track(q('[data-edge="end"]'), "opacity", [[L + 250, 0.06, RISE], [L + 700, 1]]);

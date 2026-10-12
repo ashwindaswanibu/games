@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import { filmSearchResponseSchema, type FilmSearchHit } from "@/games/_movies/schemas";
 import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
+import type { Rgb } from "../palette";
+import { barsFill } from "./bars";
 import { Letters } from "./letters";
 import styles from "./theater.module.css";
 
@@ -280,12 +282,14 @@ export function FadingSlate(props: { reel: number; worth: number; lastReel: bool
  * The guess line at the moment the film is named, kept on screen for the win (laid out exactly as
  * the slate was when Guess was pressed, its actions mid-move): the name you typed, the film's
  * byline, the actions. For looking at only; the win's timeline plays it (`data-win` names the
- * parts): the actions and byline step back, the name takes the film's light, a line of that light
- * runs along under it, then the whole line goes.
+ * parts): the actions and byline step back, the name is pressed in the film's bars (three to a
+ * letter, from the first reel's `columns`), and a line of the same bars runs out under it, a tiny
+ * barcode that says yes; then the whole line goes.
  */
-export function HeardSlate(props: { title: string; byline: string; stake: number; lastReel: boolean; fill: string | null }) {
-  const { title, byline, stake, lastReel, fill } = props;
-  const lit = fill ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined;
+export function HeardSlate(props: { title: string; byline: string; stake: number; lastReel: boolean; columns: readonly Rgb[] | null }) {
+  const { title, byline, stake, lastReel, columns } = props;
+  const fill = barsFill(columns, title, 3);
+  const lit = fill ? ({ "--fill": fill } as CSSProperties) : undefined;
   return (
     <div className={`${styles.slate} ${styles.heardSlate}`} aria-hidden data-win="heard">
       <div className={styles.field}>

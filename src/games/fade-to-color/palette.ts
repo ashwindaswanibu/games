@@ -1,12 +1,13 @@
 /**
- * The colours the Fade to Color screen takes from each level image, so every film lights the room
+ * The colours the Movie Barcode screen takes from each level image, so every film lights the room
  * in its own colours. Pure functions over RGBA pixel data (what a canvas returns), so they run in
  * the browser on a small downsample of the level and are tested here without one.
  *
  * Films are often dark and muted: their raw average colour is a muddy brown. So colours are
  * reworked in OKLCH, a perceptual space: hue is kept, lightness is set to a luminous level and
  * chroma is held within a band. A dim, desaturated film still glows in its own hue; a vivid one
- * never turns neon.
+ * never turns neon. Where the film's colour touches type it is pressed into hard bars
+ * (`pressBars`, `barGradient`): flat colour in film order, never a gradient or a glow.
  */
 
 export type Rgb = readonly [r: number, g: number, b: number];
@@ -105,7 +106,7 @@ export function accentOf(pixels: Uint8ClampedArray): Rgb {
 /**
  * The barcode as light: each column's average colour, relit to a luminous level while keeping a
  * little of its original lightness, so the film's rhythm (dark stretches, bright ones) survives.
- * Fills the wordmark and the end title, and spills up and down from the reel into the room.
+ * Spills up and down from the reel into the room and washes across it; the soft light, never type.
  */
 export function litBands(pixels: Uint8ClampedArray, width: number, height: number): Rgb[] {
   const columns: Oklch[] = [];
@@ -131,7 +132,77 @@ export function litBands(pixels: Uint8ClampedArray, width: number, height: numbe
   );
 }
 
-/** The grade the lit titles take (the wordmark's "Color", the title matte): a touch more contrast and colour. */
+/** Each column's mean colour (sRGB, as stored), left to right: the barcode before any relighting. */
+export function columnMeans(pixels: Uint8ClampedArray, width: number, height: number): Rgb[] {
+  const columns: Rgb[] = [];
+  for (let x = 0; x < width; x++) {
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let y = 0; y < height; y++) {
+      const i = (y * width + x) * 4;
+      r += pixels[i];
+      g += pixels[i + 1];
+      b += pixels[i + 2];
+    }
+    columns.push([r / height, g / height, b / height]);
+  }
+  return columns;
+}
+
+/** Lightness and chroma targets for the pressed bars. */
+const PRESS = { l: 0.74, rhythm: 0.85, lMin: 0.56, lMax: 0.93, grey: 0.02, boost: 1.6, cMin: 0.03, cMax: 0.15 };
+
+/**
+ * The film pressed into `n` bars: the columns split into `n` equal runs in film order, each run's
+ * mean colour (sRGB), relit around one luminous level. Unlike `litBands` it keeps most of the
+ * film's dark/bright rhythm (85% against 35%), so a dark stretch reads as a dark bar; a grey bar
+ * stays grey, so a black-and-white film presses in greys. Hue is always the film's own.
+ */
+export function pressBars(columns: readonly Rgb[], n: number): Rgb[] {
+  const W = columns.length;
+  if (W === 0 || n < 1) return [];
+  const bars: Oklch[] = [];
+  for (let i = 0; i < n; i++) {
+    const from = Math.floor((i * W) / n);
+    const to = Math.max(from + 1, Math.floor(((i + 1) * W) / n));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let x = from; x < to; x++) {
+      r += columns[x][0];
+      g += columns[x][1];
+      b += columns[x][2];
+    }
+    const k = to - from;
+    bars.push(rgbToOklch([r / k, g / k, b / k]));
+  }
+  const meanL = bars.reduce((sum, bar) => sum + bar.l, 0) / n;
+  return bars.map(({ l, c, h }) =>
+    oklchToRgb({
+      l: clamp(PRESS.l + (l - meanL) * PRESS.rhythm, PRESS.lMin, PRESS.lMax),
+      c: c < PRESS.grey ? c : clamp(c * PRESS.boost, PRESS.cMin, PRESS.cMax),
+      h,
+    }),
+  );
+}
+
+/**
+ * Bars as a CSS gradient of hard, flat stripes: each colour held between two stops, so every edge
+ * is sharp at any size, with no image smoothing (and WebKit draws it the same).
+ */
+export function barGradient(bars: readonly Rgb[]): string {
+  const n = bars.length;
+  const at = (i: number) => (i === 0 ? "0%" : i === n ? "100%" : `${((100 * i) / n).toFixed(3)}%`);
+  return `linear-gradient(90deg, ${bars.map(([r, g, b], i) => `rgb(${r} ${g} ${b}) ${at(i)} ${at(i + 1)}`).join(", ")})`;
+}
+
+/** How many bars a title of `letters` letters is pressed into: `perLetter` each, within 12–120. */
+export function barCount(letters: number, perLetter: number): number {
+  return clamp(Math.round(letters * perLetter), 12, 120);
+}
+
+/** The grade the title's light takes (the win's bloom, halo and aura): a touch more contrast and colour. */
 export const TITLE_GRADE = { contrast: 1.15, saturate: 1.4 } as const;
 
 /**

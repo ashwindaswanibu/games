@@ -9,7 +9,8 @@ const GLIDE_EASE = "cubic-bezier(.2,.8,.2,1)";
  * When the page's layout changes (`layout`: the four come up, the end card takes the console), the
  * reel and the console glide from where they were into their new places: FLIP, by transform only,
  * so nothing is laid out frame by frame. `scaled` (the reel) also eases its size; `moved` (the
- * console) only its position. Where they were is noted after every render (and on resize), so a
+ * console) only its position, by its centre (its content is centred, and it widens for the end
+ * card, so the strip in it stays put). Where they were is noted after every render (and on resize), so a
  * change animates from the last place the player saw. Reduced motion, or `instant`, snaps.
  */
 export function useGlide(layout: string, scaled: RefObject<HTMLElement | null>, moved: RefObject<HTMLElement | null>, instant: RefObject<boolean>): void {
@@ -24,9 +25,10 @@ export function useGlide(layout: string, scaled: RefObject<HTMLElement | null>, 
         if (!el || !first) return;
         for (const anim of el.getAnimations()) if (anim.id === "glide") anim.cancel();
         const now = el.getBoundingClientRect();
-        const dx = first.left - now.left;
+        const scaling = i === 0;
+        const dx = scaling ? first.left - now.left : first.left + first.width / 2 - (now.left + now.width / 2);
         const dy = first.top - now.top;
-        const scale = i === 0 && now.width > 0 ? first.width / now.width : 1;
+        const scale = scaling && now.width > 0 ? first.width / now.width : 1;
         if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(scale - 1) < 0.001) return;
         const glide = el.animate([{ transform: `translate3d(${dx}px, ${dy}px, 0) scale(${scale})` }, { transform: "none" }], { duration: GLIDE_MS, easing: GLIDE_EASE });
         glide.id = "glide";

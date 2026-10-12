@@ -1,10 +1,13 @@
 /*
- * Fade to Color: a dark projection room lit only by today's film.
+ * Movie Barcode: a dark projection room lit only by today's film.
  *
  * One idea runs through every layer: the barcode is light. The reel throws the film's colours up
- * and down into the room (`.spill`) and across it (`.wash`), tints its own edge print and glow, and
- * fills the wordmark and the end title. `--accent` ("r g b") is the current reel's colour, set by
- * the component; everything that uses it transitions, so the room changes with each reel.
+ * and down into the room (`.spill`) and, very low, across it (`.wash`), and tints its own edge print
+ * and glow; the strip is the brightest thing in the room. Wherever the film's colour touches type
+ * (the wordmark's "Barcode", every lit title) it is pressed: hard vertical bars of flat colour in
+ * film order (`--fill`, see `bars.ts`), never a gradient, a halo or a glow. `--accent` ("r g b") is
+ * the current reel's colour, set by the component; everything that uses it transitions, so the room
+ * changes with each reel.
  *
  * Performance: no live blur, no blend modes, no animated filters or shadows on large layers. Only
  * opacity and transform animate; the soft images are tiny canvases scaled up (see `useLevelArt`).
@@ -22,7 +25,7 @@
   --mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
   --sprocket: clamp(12px, 1.45vw, 22px);
   /* Everything on screen that isn't the picture: the picture takes the rest of the height. */
-  --chrome: 432px;
+  --chrome: 340px;
   --reel-w: max(300px, min(94vw, 1560px, calc((100dvh - var(--chrome)) * 3)));
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
@@ -41,17 +44,17 @@
 }
 
 .theater[data-finished] {
-  --chrome: 482px;
+  --chrome: 486px;
 }
 
 /* A title long enough to take two lines on the end card: room for the second. */
 .theater[data-finished][data-long-title] {
-  --chrome: 548px;
+  --chrome: 534px;
 }
 
 /* The four take the guess line's place; they need only a little more room than it. */
 .theater[data-four] {
-  --chrome: 452px;
+  --chrome: 360px;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -73,7 +76,7 @@
 .washLight {
   position: absolute;
   inset: 0;
-  opacity: 0.15;
+  opacity: 0.07;
   transition: opacity 1400ms ease;
 }
 
@@ -88,7 +91,7 @@
  * nothing over 600ms and holds there in the dark; it comes back up as the film rolls on.
  */
 .theater[data-dip] .washLight {
-  opacity: 0.05;
+  opacity: 0.03;
   transition: opacity 600ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
@@ -122,7 +125,7 @@
 .vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(125% 95% at 50% 46%, transparent 34%, rgb(5 5 6 / 0.74) 74%, var(--void) 100%);
+  background: radial-gradient(120% 90% at 50% 45%, transparent 30%, rgb(5 5 6 / 0.82) 70%, var(--void) 96%);
 }
 
 .grain {
@@ -143,12 +146,12 @@
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Header: the way back, the wordmark, the date
+ * Header: the way back, the wordmark (the date is printed on the film's edge)
  * ------------------------------------------------------------------------------------------- */
 
 .top {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: clamp(12px, 1.4vw, 20px);
   padding: clamp(14px, 2.6vh, 28px) clamp(16px, 3.4vw, 52px) 0;
@@ -188,108 +191,122 @@
   stroke-width: 1.5;
 }
 
-.dateline {
-  font: 500 10.5px/1 var(--mono);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
 /*
- * The wordmark: a dip to black. Layers stack in place; only opacity changes. Before the film rolls,
- * "Fade to" is full ink and "Color" a ghost. Lit, "Fade to" steps down letter by letter and "Color"
- * rises filled with the film. `data-intro` slows it into the moment the film is rolled.
+ * The wordmark: "Movie" in ink, "Barcode" pressed. One roman size for both; "Barcode" is filled with
+ * the film's hard bars (`--fill`, a gradient of flat stripes) once the film is in, and plain ink
+ * before. The lit word sits in its own clip (`.wmPress`) over the ink one, so the press can lay it
+ * down left to right by transforms alone: the clip slides in, the word inside slides against it.
  */
 .wordmark {
-  --wm-out: 600ms;
-  --wm-out-delay: 0ms;
-  --wm-up: 700ms;
-  --wm-up-delay: 0ms;
-  --wm-halo: 900ms;
-  --wm-halo-delay: 0ms;
   justify-self: start;
-  isolation: isolate;
   margin: 0;
   font: 400 clamp(30px, 2.9vw, 44px)/1 var(--display);
   letter-spacing: -0.012em;
   white-space: nowrap;
 }
 
-.wordmark[data-intro] {
-  --wm-out: 1800ms;
-  --wm-out-delay: 300ms;
-  --wm-up: 2400ms;
-  --wm-up-delay: 1500ms;
-  --wm-halo: 3000ms;
-  --wm-halo-delay: 2000ms;
+/* In ink always; during the win it goes down with the house while "Barcode" stays lit. */
+.wmMovie {
+  color: var(--ink);
 }
 
-.wmFade,
-.wmColor {
+.wmBar {
   display: inline-grid;
   vertical-align: baseline;
 }
 
-.wmFade > span,
-.wmColor > span {
+.wmBar > * {
   grid-area: 1 / 1;
 }
 
-.wmFull {
-  transition: opacity var(--wm-out) cubic-bezier(0.45, 0, 0.55, 1) var(--wm-out-delay);
+/* Padded past the word so no stroke is ever clipped; the padding is given back by the margin. */
+.wmPress {
+  position: relative;
+  overflow: hidden;
+  margin: -0.12em -0.1em;
 }
 
-.wordmark[data-lit] .wmFull {
-  opacity: 0;
-}
-
-.wmColor {
-  margin-left: 0.24em;
-  font-size: 1.18em;
-  font-style: italic;
-}
-
-.wmGhost {
-  padding: 0.06em 0.12em 0.12em 0.02em;
-  color: rgb(239 233 223 / 0.16);
-  transition: opacity 800ms ease;
-}
-
-.wordmark[data-lit] .wmGhost {
-  opacity: 0;
-}
-
-.wmLit,
-.wmHalo {
-  padding: 0.06em 0.12em 0.12em 0.02em;
+/*
+ * The bars run across the word's own advance box (its content box), so the first bar starts at the
+ * B's stem and the last ends at the e; repeated down, since a vertical bar is the same at any height.
+ */
+.wmLit {
+  display: block;
+  padding: 0.12em 0.1em;
   color: transparent;
-  background: var(--fill) 0 0 / 100% 100% no-repeat;
+  background: var(--fill) 0 0 / 100% 100% repeat-y content-box;
   -webkit-background-clip: text;
   background-clip: text;
+}
+
+.wordmark[data-lit]:not([data-press]) .wmInk {
   opacity: 0;
 }
 
-.wmLit {
-  filter: contrast(1.15) saturate(1.4);
-  transition: opacity var(--wm-up) cubic-bezier(0.3, 0, 0.2, 1) var(--wm-up-delay);
+/*
+ * The press, as the film is rolled: the bars are laid down left to right in 48 jumps over 2s, a
+ * frame at 24fps, in step with the reel's own press (2000ms and 48 mirror `PRESS_MS` and
+ * `PRESS_FRAMES` in timing.ts), behind a hairline of projector white. The ink goes as it lands.
+ */
+.wordmark[data-press] .wmPress {
+  animation: wmWipe 2000ms steps(48, jump-end) both;
 }
 
-/* A soft halo of the film's own colours: one small static blur, pulled well back. */
-.wmHalo {
-  z-index: -1;
-  margin: -28px;
-  padding: calc(0.06em + 28px) calc(0.12em + 28px) calc(0.12em + 28px) calc(0.02em + 28px);
-  background-origin: content-box;
-  filter: blur(12px) saturate(1.4);
-  transition: opacity var(--wm-halo) cubic-bezier(0.3, 0, 0.2, 1) var(--wm-halo-delay);
+.wordmark[data-press] .wmLit {
+  animation: wmCounter 2000ms steps(48, jump-end) both;
 }
 
-.wordmark[data-lit] .wmLit {
-  opacity: 1;
+.wmPress::after {
+  content: "";
+  position: absolute;
+  top: 0.24em;
+  bottom: 0.2em;
+  right: 0;
+  width: 1px;
+  background: #fffaf0;
+  opacity: 0;
 }
 
-.wordmark[data-lit] .wmHalo {
-  opacity: 0.3;
+.wordmark[data-press] .wmPress::after {
+  animation: wmHead 2000ms linear both;
+}
+
+.wordmark[data-press] .wmInk {
+  animation: wmInkOut 240ms ease 1960ms both;
+}
+
+@keyframes wmWipe {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes wmCounter {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes wmHead {
+  0%,
+  97% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes wmInkOut {
+  to {
+    opacity: 0;
+  }
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -352,6 +369,11 @@
   transition:
     background 1400ms ease,
     opacity 1400ms ease;
+}
+
+/* No pool of light under a dark screen: the glow rises with the film's light (it transitions). */
+.reelBox:not([data-picture]) .glow {
+  opacity: 0.3;
 }
 
 .reel {
@@ -493,35 +515,53 @@
   will-change: transform;
 }
 
-.lightbar {
+/*
+ * The gate's light: a 2px line of projector white, and behind it (on its left only) the light
+ * falling on the picture it has just uncovered, in that picture's colour. No neon halo.
+ */
+.lightbar,
+.cardBar {
   position: absolute;
   top: -2%;
   bottom: -2%;
   left: 0;
-  width: 3px;
-  opacity: 0;
+  width: 2px;
   background: #fffaf0;
-  box-shadow:
-    0 0 18px 6px rgb(var(--incoming, var(--accent)) / 0.85),
-    0 0 64px 20px rgb(var(--incoming, var(--accent)) / 0.45);
+  box-shadow: none;
+}
+
+.lightbar {
+  opacity: 0;
+}
+
+.lightbar::before,
+.cardBar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 2px;
+  width: 120px;
+  background: linear-gradient(90deg, rgb(var(--incoming, var(--accent)) / 0), rgb(var(--incoming, var(--accent)) / 0.26));
 }
 
 .screen[data-unreeling] .lightbar {
   opacity: 1;
 }
 
-/* The next reel is on its way: the light waits at the gate. */
-.screen[data-waiting]:not([data-unreeling]) .lightbar {
-  animation: gate 1.3s ease-in-out infinite alternate;
+/* The press (the film rolled): a crisp 1px head riding the edge, no light behind it. */
+.screen[data-pressing] .lightbar {
+  width: 1px;
+  opacity: 0.92;
 }
 
-@keyframes gate {
-  from {
-    opacity: 0.15;
-  }
-  to {
-    opacity: 0.85;
-  }
+.screen[data-pressing] .lightbar::before {
+  display: none;
+}
+
+/* The next reel is on its way: the light holds still at the gate. */
+.screen[data-waiting]:not([data-unreeling]) .lightbar {
+  opacity: 0.4;
 }
 
 .flare {
@@ -637,18 +677,6 @@
   will-change: transform;
 }
 
-.cardBar {
-  position: absolute;
-  top: -2%;
-  bottom: -2%;
-  left: 0;
-  width: 3px;
-  background: #fffaf0;
-  box-shadow:
-    0 0 18px 6px rgb(var(--incoming, var(--accent)) / 0.85),
-    0 0 64px 20px rgb(var(--incoming, var(--accent)) / 0.45);
-}
-
 /* Reduced motion: no card; the last reel simply fades up over the picture. */
 .titleCard[data-reduced] .cardWipe,
 .titleCard[data-reduced] .cardWipe .frame {
@@ -715,31 +743,17 @@
   aspect-ratio: 1;
   border-radius: 50%;
   background: conic-gradient(rgb(239 233 223 / 0.07) 0deg, rgb(239 233 223 / 0.07) 70deg, transparent 70deg);
-  animation: sweep 2.4s linear infinite;
+}
+
+/* Rolled: the sweep turns once, one second of real academy leader. At rest it holds still. */
+.leader[data-threading]::before {
+  animation: sweep 1000ms linear both;
 }
 
 @keyframes sweep {
   to {
     transform: rotate(1turn);
   }
-}
-
-/* Its reflection on the floor. */
-.reflection {
-  position: relative;
-  height: clamp(26px, 5.5vh, 64px);
-  margin-top: 5px;
-  overflow: hidden;
-  opacity: 0.28;
-  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.85), transparent);
-  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.85), transparent);
-}
-
-.reflectionImage {
-  position: absolute;
-  inset: 0 0 auto;
-  aspect-ratio: 3 / 1;
-  background-size: 100% 100%;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -910,35 +924,16 @@
   border-radius: 3px;
 }
 
-.status {
+/* The strip, and beside it (looking back at an earlier reel) the way back to the newest. */
+.contactRow {
   position: relative;
-  margin: 2px 0 0;
-  font: 400 clamp(18px, 1.45vw, 22px)/1.2 var(--display);
-  color: var(--ink-2);
-}
-
-/* After a pick, it goes with the four as the film rolls on. */
-.status[data-leaving] {
-  opacity: 0;
-  transition: opacity 450ms cubic-bezier(0.45, 0, 0.55, 1);
-}
-
-.status em {
-  font-style: normal;
-  color: var(--ink);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.dot {
-  margin: 0 0.3em;
-  color: var(--ink-3);
+  width: 100%;
 }
 
 .toLatest {
   position: absolute;
   left: calc(100% + 18px);
-  top: 50%;
-  transform: translateY(-50%);
+  top: 4px;
   padding: 6px 0;
   border: 0;
   background: none;
@@ -1609,7 +1604,6 @@
 .tileLit {
   display: block;
   position: relative;
-  filter: contrast(1.15) saturate(1.4);
 }
 
 .litLetters .letter {
@@ -1631,31 +1625,6 @@
   from {
     opacity: 0;
   }
-}
-
-/* A small halo of the film's light: one static blur, only its opacity moves. */
-.tileHalo {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  color: transparent;
-  background: var(--fill) 0 0 / 100% 100% no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  filter: blur(7px);
-  opacity: 0.25;
-  animation: haloIn 1200ms var(--rise) 300ms both;
-}
-
-@keyframes haloIn {
-  from {
-    opacity: 0;
-  }
-}
-
-/* The status line's new word, as the film stops. */
-.statusFresh {
-  animation: fadeIn 700ms ease 600ms both;
 }
 
 /* Before the film: three lines and the button. */
@@ -1722,11 +1691,23 @@
   transition: none;
 }
 
+/*
+ * The end card is a title card: the film's name, large, pressed in its own bars; everything under
+ * it quiet. It gets the room's full width for the title; the strip above stays at its own.
+ */
 .credits {
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 12px;
   text-align: center;
+}
+
+.theater[data-finished] .console {
+  width: min(1200px, calc(100vw - 32px));
+}
+
+.theater[data-finished] .contactRow {
+  width: min(780px, 100%);
 }
 
 .kicker {
@@ -1738,13 +1719,24 @@
   transition: color 1400ms ease;
 }
 
+/* The kicker in quiet ink: the lit title is the one colour on the card. */
+.credits .kicker {
+  color: var(--ink-2);
+}
+
 .endTitle {
+  max-width: min(92vw, 1200px);
   margin: 0;
-  padding: 0 0.06em 0.04em;
-  font: 400 clamp(36px, 4.2vw, 68px)/1 var(--display);
-  letter-spacing: -0.02em;
+  padding: 0 0.06em 0.06em;
+  font: 400 clamp(48px, 6.2vw, 104px)/0.98 var(--display);
+  letter-spacing: -0.022em;
   text-wrap: balance;
   color: var(--ink);
+}
+
+.theater[data-long-title] .endTitle {
+  font-size: clamp(40px, 4.6vw, 72px);
+  line-height: 1.02;
 }
 
 .endTitle[data-lit] {
@@ -1763,15 +1755,8 @@
 
 .byline {
   margin: -2px 0 0;
-  font: italic 400 clamp(17px, 1.35vw, 21px)/1.25 var(--display);
+  font: italic 400 clamp(18px, 1.5vw, 22px)/1.25 var(--display);
   color: var(--ink-2);
-}
-
-.result {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  margin-right: 10px;
 }
 
 .frames {
@@ -1843,12 +1828,32 @@
   content: none;
 }
 
+/* The points, in the title's face, then a hairline before the actions. */
 .score {
-  font: 500 10.5px/1 var(--mono);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.score b {
+  font: 400 40px/1 var(--display);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ink);
+}
+
+.score i {
+  font: italic 400 18px/1 var(--display);
+  color: var(--ink-3);
+}
+
+.score::after {
+  content: "";
+  align-self: center;
+  width: 1px;
+  height: 28px;
+  margin-left: 10px;
+  background: var(--hair);
 }
 
 .creditActions {
@@ -1856,8 +1861,15 @@
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 10px;
-  margin-top: 4px;
+  gap: 18px;
+  margin-top: 10px;
+}
+
+/* Share in cream, as the house light: the reel's colour stays on the reel. */
+.credits .go {
+  background: var(--ink);
+  color: #0b0b0b;
+  padding: 12px 24px;
 }
 
 /* Everyone's results. */
@@ -2034,12 +2046,13 @@
   color: var(--ink);
 }
 
+/* Its box hugs the title, so the bars run across the letters, not the card. */
 .everyTitle[data-lit] {
+  justify-self: start;
   background: var(--fill) center / 100% 100% no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: contrast(1.15) saturate(1.4);
 }
 
 /* The year, as edge print. */
@@ -2098,18 +2111,7 @@
   }
 
   .wordmark {
-    font-size: 22px;
-  }
-
-  .wmHalo {
-    margin: -16px;
-    padding: calc(0.06em + 16px) calc(0.12em + 16px) calc(0.12em + 16px) calc(0.02em + 16px);
-    filter: blur(7px) saturate(1.4);
-  }
-
-  .dateline {
-    font-size: 9.5px;
-    letter-spacing: 0.16em;
+    font-size: 24px;
   }
 
   .stage {
@@ -2127,8 +2129,8 @@
   }
 
   .edge {
-    font-size: 6.5px;
-    letter-spacing: 0.2em;
+    font-size: 8px;
+    letter-spacing: 0.18em;
     padding: 0 6px;
   }
 
@@ -2189,17 +2191,38 @@
     max-width: 90%;
   }
 
-
-
-  .status {
-    font-size: 18px;
+  .endTitle,
+  .theater[data-long-title] .endTitle {
+    font-size: clamp(36px, 10.5vw, 48px);
   }
+
+  /* The score on its own line; Share (a full 44px) beside How everyone did under it. */
+  .creditActions {
+    gap: 10px 14px;
+  }
+
+  .score {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+
+  .score b {
+    font-size: 32px;
+  }
+
+  .score::after {
+    content: none;
+  }
+
+  .credits .go {
+    min-height: 44px;
+  }
+
 
   .toLatest {
     position: static;
     display: block;
     margin: 8px auto 0;
-    transform: none;
   }
 
   .panelBackdrop {
@@ -2238,20 +2261,26 @@
   .contact[data-closing] .print[data-state="closed"] .printImage,
   .contact[data-closing] .print[data-state="closed"] .printNumber,
   .edge[data-fresh],
-  .statusFresh,
   .stakeOut,
   .stakeIn,
-  .tileHalo,
   .litLetters .letter,
   .fadingSlate,
   .heardSlate,
   .fadingSlate .letter,
   .fadingSlate .slateActions,
-  .leader::before,
-  .screen[data-waiting]:not([data-unreeling]) .lightbar,
+  .leader[data-threading]::before,
+  .wordmark[data-press] .wmPress,
+  .wordmark[data-press] .wmLit,
+  .wordmark[data-press] .wmPress::after,
+  .wordmark[data-press] .wmInk,
   .panel,
   .panelBackdrop {
     animation: none;
+  }
+
+  /* The press: the lit word simply appears. */
+  .wordmark[data-press] .wmInk {
+    opacity: 0;
   }
 
   .reelBox,
@@ -2261,15 +2290,10 @@
   .kicker,
   .go,
   .roll,
-  .wmFull,
-  .wmGhost,
-  .wmLit,
-  .wmHalo,
   .creditsWrap,
   .whisper,
   .washLight,
   .spillLight,
-  .status,
   .fourControl,
   .stake,
   .four,

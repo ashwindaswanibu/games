@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref 
 import { flushSync } from "react-dom";
 import { Crossfade } from "./crossfade";
 import styles from "./theater.module.css";
-import { LIGHT_AT, UNREEL_EASE, UNREEL_MS } from "./timing";
+import { LIGHT_AT, PRESS_EASE, PRESS_MS, UNREEL_EASE, UNREEL_MS } from "./timing";
 
 /** One picture on the reel. `key` identifies it; a new key is a new picture. */
 export interface ReelFrame {
@@ -15,18 +15,22 @@ export interface ReelFrame {
   accent: string;
 }
 
-/** How the reel reaches a new frame: unreeled by a sweep of light, a quick cut, or at once. */
-export type ReelMove = "unreel" | "cut" | "none";
-
+/**
+ * How the reel reaches a new frame: unreeled by a sweep of light, pressed in (the first reel, as the
+ * film is rolled: stepped at 24 frames a second behind a hairline head), a quick cut, or at once.
+ */
+export type ReelMove = "unreel" | "press" | "cut" | "none";
 
 /**
  * The film strip: sprocket rails with edge print around a 3:1 screen, plus the light it throws
- * (a glow behind it and colour spilling up and down into the room) and its reflection on the floor.
+ * (a glow behind it and colour spilling up and down into the room).
  *
  * Changing `frame` plays `move`. The unreel is transforms only, so it stays smooth on any GPU: a
  * wrapper slides in from the left while the image inside it slides the other way, so the new frame
- * appears to be uncovered in place behind a moving bar of light. `onLight` fires when the room
- * should take the new frame's colours, `onSettled` when the move has finished.
+ * appears to be uncovered in place behind a moving bar of light. The press is the same move in 48
+ * jumps, with no light behind its head, and the room takes the film's light only once it's done.
+ * `onPress` fires as a press starts, `onLight` when the room should take the new frame's colours,
+ * `onSettled` when the move has finished.
  */
 export function Reel(props: {
   frame: ReelFrame | null;
@@ -44,9 +48,9 @@ export function Reel(props: {
   edgeBottom?: ReactNode;
   /** The barcode as light (a data URL), spilling into the room around the reel. */
   spill: string | null;
-  reflection: string | null;
   /** True while the next frame is still on its way: the light waits at the gate. */
   waiting: boolean;
+  onPress?(key: string): void;
   onLight(key: string): void;
   onSettled(key: string): void;
   /** Drawn on the screen before the first frame: the leader. */
@@ -57,10 +61,10 @@ export function Reel(props: {
   aura?: ReactNode;
   /** A second label stacked on `edgeEnd`, for the win to print in ("Main title"); hidden until then. */
   edgeTitle?: string | null;
-  /** The reel's outer box (the light, the strip and its reflection), for gliding it between layouts. */
+  /** The reel's outer box (the light and the strip), for gliding it between layouts. */
   boxRef?: Ref<HTMLDivElement>;
 }) {
-  const { frame, move, waiting, edgeVariant = "count", boxRef, overlay, aura, edgeTitle, edgeStart, edgeEnd, edgeBottom, spill, reflection, leader } = props;
+  const { frame, move, waiting, edgeVariant = "count", boxRef, overlay, aura, edgeTitle, edgeStart, edgeEnd, edgeBottom, spill, leader } = props;
   // The label the page opened with is simply there; a later one prints in.
   const [firstVariant] = useState(edgeVariant);
   const screen = useRef<HTMLDivElement>(null);
@@ -75,9 +79,9 @@ export function Reel(props: {
   const running = useRef<Animation[]>([]);
   // The effect below runs once per new frame; it reads the latest props through this ref, so a
   // re-render mid-move (the room relighting, art arriving) never restarts or cancels it.
-  const latest = useRef({ frame, move, onLight: props.onLight, onSettled: props.onSettled });
+  const latest = useRef({ frame, move, onPress: props.onPress, onLight: props.onLight, onSettled: props.onSettled });
   useLayoutEffect(() => {
-    latest.current = { frame, move, onLight: props.onLight, onSettled: props.onSettled };
+    latest.current = { frame, move, onPress: props.onPress, onLight: props.onLight, onSettled: props.onSettled };
   });
   const frameKey = frame?.key ?? null;
 
@@ -110,8 +114,9 @@ export function Reel(props: {
     };
 
     async function run() {
-      if (move === "none" || (reduce && move === "unreel" && from === null)) {
+      if (move === "none" || (reduce && (move === "unreel" || move === "press") && from === null)) {
         await place();
+        if (move === "press") latest.current.onPress?.(target.key);
         latest.current.onLight(target.key);
         settle();
         return;
@@ -141,7 +146,9 @@ export function Reel(props: {
         return;
       }
 
-      // Unreel.
+      // Unreel, or press: the same move, the press stepped and without the flare, and the room
+      // taking the film's light only once it's done.
+      const pressing = move === "press";
       const nxt = next.current!;
       nxt.src = target.src;
       nxt.dataset.asset = target.key;
@@ -149,17 +156,21 @@ export function Reel(props: {
       if (cancelled) return;
       screen.current!.style.setProperty("--incoming", target.accent);
       screen.current!.dataset.unreeling = "";
-      const timing = { duration: UNREEL_MS, easing: UNREEL_EASE, fill: "forwards" as const };
+      if (pressing) screen.current!.dataset.pressing = "";
+      const timing = pressing
+        ? { duration: PRESS_MS, easing: PRESS_EASE, fill: "forwards" as const }
+        : { duration: UNREEL_MS, easing: UNREEL_EASE, fill: "forwards" as const };
       const animations = [
         wipe.current!.animate([{ transform: "translate3d(-100%,0,0)" }, { transform: "translate3d(0,0,0)" }], timing),
         nxt.animate([{ transform: "translate3d(100%,0,0)" }, { transform: "translate3d(0,0,0)" }], timing),
         // The bar's track spans the screen, so the bar crosses it in step with the wipe even if the
         // screen changes size mid-unreel (the four giving way to the end card).
         barTrack.current!.animate([{ transform: "translate3d(0,0,0)" }, { transform: "translate3d(100%,0,0)" }], timing),
-        flare.current!.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 560, easing: "ease-out" }),
       ];
+      if (!pressing) animations.push(flare.current!.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], { duration: 560, easing: "ease-out" }));
       running.current.push(...animations);
-      lightTimer = setTimeout(() => latest.current.onLight(target.key), UNREEL_MS * LIGHT_AT);
+      if (pressing) latest.current.onPress?.(target.key);
+      else lightTimer = setTimeout(() => latest.current.onLight(target.key), UNREEL_MS * LIGHT_AT);
       await animations[0].finished.catch(() => {});
       clearTimeout(lightTimer);
       if (cancelled) return;
@@ -169,6 +180,7 @@ export function Reel(props: {
       // Show the picture (and take the leader down) before the wipe goes, or the leader can flash for a frame.
       flushSync(() => setHasPicture(true));
       delete screen.current!.dataset.unreeling;
+      delete screen.current!.dataset.pressing;
       animations.forEach((a) => a.cancel());
       settle();
     }
@@ -178,12 +190,15 @@ export function Reel(props: {
     return () => {
       cancelled = true;
       clearTimeout(lightTimer);
-      if (el) delete el.dataset.unreeling;
+      if (el) {
+        delete el.dataset.unreeling;
+        delete el.dataset.pressing;
+      }
     };
   }, [frameKey]);
 
   return (
-    <div ref={boxRef} className={styles.reelBox}>
+    <div ref={boxRef} className={styles.reelBox} data-picture={hasPicture || undefined}>
       <div className={styles.spillLight} aria-hidden>
         <Crossfade src={spill} className={styles.spill} />
       </div>
@@ -206,9 +221,6 @@ export function Reel(props: {
           </div>
         </div>
         <Rail>{edgeBottom}</Rail>
-      </div>
-      <div className={styles.reflection} aria-hidden>
-        <Crossfade src={reflection} className={styles.reflectionImage} />
       </div>
     </div>
   );

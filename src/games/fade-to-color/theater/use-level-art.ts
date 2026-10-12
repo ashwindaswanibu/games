@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { assetUrl, type AssetRef } from "@/core/assets";
 import { assetBlob, assetObjectUrl } from "@/lib/sealed-assets";
-import { accentOf, cssTriplet, gradeRgb, litBands, type Rgb } from "../palette";
+import { accentOf, columnMeans, cssTriplet, gradeRgb, litBands, type Rgb } from "../palette";
 
 /** Everything the screen draws from one level, derived once in the browser from the image. */
 export interface LevelArt {
@@ -13,20 +13,25 @@ export interface LevelArt {
   accent: string;
   /** A one-pixel-tall strip of the barcode as light (see `litBands`), as a data URL. */
   bands: string;
-  /** The same strip through the lit titles' grade (`gradeRgb`), baked in so no layer is filtered live. */
+  /** The same strip through the title light's grade (`gradeRgb`), baked in so no layer is filtered live. */
   graded: string;
-  /** The level flipped and softened, for the reflection on the floor below the reel. */
-  reflection: string;
+  /** The barcode's light at its lowest frequency, a 12-pixel strip (see `ROOM`): the wash across the room. */
+  room: string;
+  /** The level's columns, each one's mean colour (`columnMeans`): what the titles are pressed from (`bars.ts`). */
+  columns: readonly Rgb[];
   /** A small copy for the contact strip. */
   thumb: string;
 }
 
-/** What the room is lit with before the first level arrives: warm projector light. */
-export const HOUSE_ACCENT = "236 214 178";
+/** What the room is lit with before the first level arrives: plain projector white. */
+export const HOUSE_ACCENT = "230 229 225";
 
 const SAMPLE = { w: 64, h: 22 };
 const BANDS = { w: 160, h: 24 };
-const REFLECTION = { w: 600, h: 200 };
+/** One column per band of the first reel. */
+const COLUMNS = { w: 480, h: 24 };
+/** The wash is the bands averaged into this many bins: scaled up smoothly, it reads as light, with no seams. */
+const ROOM = 12;
 const THUMB = { w: 192, h: 64 };
 
 function canvas(w: number, h: number) {
@@ -47,8 +52,18 @@ function stripUrl(colors: readonly Rgb[]): string {
   return line.c.toDataURL("image/png");
 }
 
-/** Every pass below draws from the level at this size (the largest of them), never the full image. */
-const SOURCE = REFLECTION;
+/** Every pass below draws from the level decoded at this size, never the full image. */
+const SOURCE = { w: 600, h: 200 };
+
+/** `colors` averaged into `n` equal bins, in order. */
+function binned(colors: readonly Rgb[], n: number): Rgb[] {
+  return Array.from({ length: n }, (_, i) => {
+    const from = Math.floor((i * colors.length) / n);
+    const to = Math.max(from + 1, Math.floor(((i + 1) * colors.length) / n));
+    const run = colors.slice(from, to);
+    return [0, 1, 2].map((c) => Math.round(run.reduce((sum, rgb) => sum + rgb[c], 0) / run.length)) as unknown as Rgb;
+  });
+}
 
 function derive(img: ImageBitmap, src: string): LevelArt {
   const sample = canvas(SAMPLE.w, SAMPLE.h);
@@ -59,11 +74,9 @@ function derive(img: ImageBitmap, src: string): LevelArt {
   strip.ctx.drawImage(img, 0, 0, BANDS.w, BANDS.h);
   const lit = litBands(strip.ctx.getImageData(0, 0, BANDS.w, BANDS.h).data, BANDS.w, BANDS.h);
 
-  const floor = canvas(REFLECTION.w, REFLECTION.h);
-  floor.ctx.filter = "blur(1.5px)"; // one static pass; ignored where unsupported
-  floor.ctx.translate(0, REFLECTION.h);
-  floor.ctx.scale(1, -1);
-  floor.ctx.drawImage(img, 0, 0, REFLECTION.w, REFLECTION.h);
+  const cols = canvas(COLUMNS.w, COLUMNS.h);
+  cols.ctx.drawImage(img, 0, 0, COLUMNS.w, COLUMNS.h);
+  const columns = columnMeans(cols.ctx.getImageData(0, 0, COLUMNS.w, COLUMNS.h).data, COLUMNS.w, COLUMNS.h);
 
   const thumb = canvas(THUMB.w, THUMB.h);
   thumb.ctx.drawImage(img, 0, 0, THUMB.w, THUMB.h);
@@ -73,7 +86,8 @@ function derive(img: ImageBitmap, src: string): LevelArt {
     accent,
     bands: stripUrl(lit),
     graded: stripUrl(lit.map((rgb) => gradeRgb(rgb))),
-    reflection: floor.c.toDataURL("image/jpeg", 0.72),
+    room: stripUrl(binned(lit, ROOM)),
+    columns,
     thumb: thumb.c.toDataURL("image/jpeg", 0.8),
   };
 }
@@ -164,7 +178,7 @@ export function useLevelArt(levels: readonly AssetRef[]): ReadonlyMap<string, Le
       if (started.current.has(ref.id)) return;
       started.current.add(ref.id);
       load(ref, index)
-        .catch((): LevelArt => ({ src: assetUrl(ref.id), accent: HOUSE_ACCENT, bands: "", graded: "", reflection: "", thumb: "" }))
+        .catch((): LevelArt => ({ src: assetUrl(ref.id), accent: HOUSE_ACCENT, bands: "", graded: "", room: "", columns: [], thumb: "" }))
         .then((done) => {
           if (mounted.current) setArt((prev) => new Map(prev).set(ref.id, done));
         });

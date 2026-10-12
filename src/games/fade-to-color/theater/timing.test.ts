@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { exitBeats, letterStep, openingBeats } from "./timing";
+import { exitBeats, letterStep, openingBeats, PRESS_EASE, PRESS_MS } from "./timing";
+
+describe("the press", () => {
+  it("is 48 frames of film at 24 frames a second: two seconds, in 48 jumps", () => {
+    expect(PRESS_MS).toBe(2000);
+    expect(PRESS_EASE).toBe("steps(48, jump-end)");
+  });
+});
 
 describe("letterStep", () => {
   it("is the step while the wave fits, then shares the cap", () => {

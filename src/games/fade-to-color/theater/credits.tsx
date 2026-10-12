@@ -11,6 +11,8 @@ import type { FriendResult } from "@/core/view";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import type { FilmDetails, FilmRef } from "@/games/_movies/schemas";
 import { fadeToColor, LEVEL_COUNT, type State } from "../logic";
+import type { Rgb } from "../palette";
+import { barsFill } from "./bars";
 import { everyonesPicks, tallyLine, tallyOf, type FourCard } from "./everyone";
 import { describeGrid, endKicker, parseGrid } from "./grid";
 import styles from "./theater.module.css";
@@ -36,9 +38,11 @@ export function ResultFrames({ grid, label }: { grid: string; label?: string }) 
 }
 
 /**
- * The end card under the reel: the film's title cut out of its own barcode, who made it, the
- * result, sharing (spoiler-free), everyone else's results and the catalog's data credit (IMDb).
- * (The frames' source is credited on the reel's edge.)
+ * The end card under the reel, a title card: the film's title pressed in its own bars (seven to a
+ * letter, from the first reel's `columns`), who made it, the score, sharing (spoiler-free),
+ * everyone else's results and the catalog's data credit (IMDb). Everything but the title is quiet;
+ * the kicker already says how it went, so the score row is just the points. (The frames' source is
+ * credited on the reel's edge.)
  *
  * Everyone's results open in `panelHost` (the theater), outside the console: the console and the
  * end card are moved by transforms as they rise and glide into place, and a transformed ancestor
@@ -51,13 +55,14 @@ export function Credits(props: {
   state: State;
   status: Outcome;
   result: { score: number; label: string; shareGrid: string };
-  fill: string | null;
+  /** The first reel's columns, what the title is pressed from. */
+  columns: readonly Rgb[] | null;
   date: PuzzleDate;
   friends: readonly FriendResult[] | null;
   viewerId: string;
   panelHost: HTMLElement | null;
 }) {
-  const { film, options, state, status, result, fill, date, friends, viewerId, panelHost } = props;
+  const { film, options, state, status, result, columns, date, friends, viewerId, panelHost } = props;
   const { share, copied } = useShare(
     shareText({
       appName: APP_NAME,
@@ -70,22 +75,20 @@ export function Credits(props: {
     }),
   );
   const [showFriends, setShowFriends] = useState(false);
-  const panel = showFriends && <FriendsPanel friends={friends} viewerId={viewerId} options={options} answerId={film.id} fill={fill} onClose={() => setShowFriends(false)} />;
+  const panel = showFriends && <FriendsPanel friends={friends} viewerId={viewerId} options={options} answerId={film.id} columns={columns} onClose={() => setShowFriends(false)} />;
   const byline = [film.directors.slice(0, 2).join(" & "), film.year].filter(Boolean).join(" · ");
 
   return (
     <section className={styles.credits} aria-label="Today's film">
       <p className={styles.kicker}>{endKicker(state, status)}</p>
       {/* Colour is what you earn: a film that got away is titled in plain ink. */}
-      <BarcodeTitle text={film.title} fill={status === "won" ? fill : null} />
+      <BarcodeTitle text={film.title} columns={status === "won" ? columns : null} />
       {byline && <p className={styles.byline}>{byline}</p>}
       <div className={styles.creditActions}>
-        <span className={styles.result}>
-          <ResultFrames grid={result.shareGrid} />
-          <span className={styles.score}>
-            {result.label} · {result.score} pts
-          </span>
-        </span>
+        <p className={styles.score}>
+          <b>{result.score}</b> <i>points</i>
+          <span className={styles.srOnly}>. {describeGrid(parseGrid(result.shareGrid))}</span>
+        </p>
         <button type="button" className={styles.go} onClick={() => void share()}>
           {copied ? "Copied" : "Share"}
         </button>
@@ -108,10 +111,10 @@ function FriendsPanel(props: {
   viewerId: string;
   options: readonly FilmRef[];
   answerId: number;
-  fill: string | null;
+  columns: readonly Rgb[] | null;
   onClose(): void;
 }) {
-  const { friends, viewerId, options, answerId, fill, onClose } = props;
+  const { friends, viewerId, options, answerId, columns, onClose } = props;
   const four = friends && everyonesPicks(options, answerId, friends, viewerId);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -135,7 +138,7 @@ function FriendsPanel(props: {
         ) : (
           <>
             <p className={styles.tally}>{tallyLine(tallyOf(friends))}</p>
-            {four && <EveryonesPicks cards={four} fill={fill} />}
+            {four && <EveryonesPicks cards={four} columns={columns} />}
             <ol className={styles.people} aria-label="Players">
               {friends.map((f) => {
                 const done = f.status === "won" || f.status === "lost";
@@ -165,10 +168,10 @@ function FriendsPanel(props: {
 }
 
 /**
- * The four as everyone saw them, in their shared order: the film lit with its own barcode, and
- * under each card the initials of whoever picked it.
+ * The four as everyone saw them, in their shared order: the film pressed in its own bars (three to
+ * a letter), and under each card the initials of whoever picked it.
  */
-function EveryonesPicks({ cards, fill }: { cards: readonly FourCard[]; fill: string | null }) {
+function EveryonesPicks({ cards, columns }: { cards: readonly FourCard[]; columns: readonly Rgb[] | null }) {
   return (
     <section className={styles.everyFour} aria-labelledby="everyone-four">
       <h4 className={styles.everyFourLabel} id="everyone-four">
@@ -176,12 +179,13 @@ function EveryonesPicks({ cards, fill }: { cards: readonly FourCard[]; fill: str
       </h4>
       <ol className={styles.everyFourGrid}>
         {cards.map(({ film, answer, pickers }) => {
-          const lit = answer && fill !== null;
+          const fill = answer ? barsFill(columns, film.title, 3) : null;
+          const lit = fill !== null;
           const names = pickers.map((p) => (p.you ? "you" : p.name));
           return (
             <li key={film.id} data-answer={answer || undefined}>
               <span className={styles.everyCard}>
-                <span className={styles.everyTitle} data-lit={lit || undefined} style={lit ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined}>
+                <span className={styles.everyTitle} data-lit={lit || undefined} style={lit ? ({ "--fill": fill } as CSSProperties) : undefined}>
                   {film.title}
                 </span>
                 <span className={styles.everyYear}>{film.year ?? ""}</span>

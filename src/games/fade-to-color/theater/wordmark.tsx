@@ -1,63 +1,52 @@
 import type { CSSProperties } from "react";
+import type { Rgb } from "../palette";
+import { barsFill } from "./bars";
 import styles from "./theater.module.css";
 
-/** How dim the last letter of "Fade to" ends up: the first is full ink, each after it a step darker. */
-const DARKEST = 0.5;
-
 /**
- * The wordmark, as a dip to black (owner's pick, 2026-10-06): the name happens once in front of the
- * player. Before the film rolls, "Fade to" is in full ink and "Color" waits as a ghost in the dark.
- * When the first reel lights up (`fill`, today's barcode as light), "Fade to" fades down a step per
- * letter, a beat of black, and "Color" rises out of the dark filled with the film, with a soft halo.
- * `intro` plays that slowly, for the moment the player rolls the film; otherwise (opening the page
- * mid-play) it simply comes up. The visible layers are hidden from screen readers; the heading
- * reads its label once.
+ * The wordmark: "Movie" in ink, "Barcode" pressed (owner's brief, 2026-10-11: the name of the
+ * object, and the object's one rule is the identity). Both words are the same roman Bodoni, whose
+ * thick stems and hairlines already read as a barcode, so no barcode is drawn. Before the film is in,
+ * "Barcode" is plain ink. Once it is (`bars`, the first reel's columns), the last word is filled with
+ * the film pressed into hard bars, five to a letter. `press` lays them down the way the film is
+ * pressed into the strip as it's rolled: left to right, in the same 48 jumps at 24 frames a second,
+ * behind a hairline head (see `.wordmark[data-press]`). Otherwise (opening the page mid-play) it is
+ * simply lit. The visible words are hidden from screen readers; the heading reads its label once.
  */
-export function Wordmark({ text, fill, intro }: { text: string; fill: string | null; intro: boolean }) {
+export function Wordmark({ text, bars, press }: { text: string; bars: readonly Rgb[] | null; press: boolean }) {
   const cut = text.lastIndexOf(" ");
   const head = cut > 0 ? text.slice(0, cut) : "";
   const tail = cut > 0 ? text.slice(cut + 1) : text;
-  const letters = [...head];
-  const inked = letters.filter((ch) => ch.trim()).length;
-  let n = 0;
+  const fill = barsFill(bars, tail, 5);
 
   return (
-    <h1
-      className={styles.wordmark}
-      aria-label={text}
-      data-lit={fill ? "" : undefined}
-      data-intro={intro || undefined}
-      style={fill ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined}
-    >
+    <h1 className={styles.wordmark} aria-label={text} data-lit={fill ? "" : undefined} data-press={press && fill ? "" : undefined}>
       {head && (
-        <span className={styles.wmFade} aria-hidden>
-          <span className={styles.wmSteps}>
-            {letters.map((ch, i) => {
-              if (!ch.trim()) return <span key={i}>{ch}</span>;
-              const k = 1 - (1 - DARKEST) * (inked > 1 ? n++ / (inked - 1) : 0);
-              return (
-                <span key={i} style={{ opacity: k }}>
-                  {ch}
-                </span>
-              );
-            })}
-          </span>
-          <span className={styles.wmFull}>{head}</span>
-        </span>
+        <>
+          <span className={styles.wmMovie} aria-hidden>
+            {head}
+          </span>{" "}
+        </>
       )}
-      <span className={styles.wmColor} aria-hidden>
-        <span className={styles.wmGhost}>{tail}</span>
-        <span className={styles.wmHalo}>{tail}</span>
-        <span className={styles.wmLit}>{tail}</span>
+      <span className={styles.wmBar} aria-hidden>
+        <span className={styles.wmInk}>{tail}</span>
+        {fill && (
+          <span className={styles.wmPress}>
+            <span className={styles.wmLit} style={{ "--fill": fill } as CSSProperties}>
+              {tail}
+            </span>
+          </span>
+        )}
       </span>
     </h1>
   );
 }
 
-/** A whole title filled with the barcode (the end card's film title). */
-export function BarcodeTitle({ text, fill }: { text: string; fill: string | null }) {
+/** A whole title pressed into the film's bars, seven to a letter (the end card's film title); in ink with no `columns`. */
+export function BarcodeTitle({ text, columns }: { text: string; columns: readonly Rgb[] | null }) {
+  const fill = barsFill(columns, text, 7);
   return (
-    <h2 className={styles.endTitle} data-lit={fill ? "" : undefined} style={fill ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined}>
+    <h2 className={styles.endTitle} data-lit={fill ? "" : undefined} style={fill ? ({ "--fill": fill } as CSSProperties) : undefined}>
       {text}
     </h2>
   );

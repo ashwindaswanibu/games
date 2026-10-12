@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accentOf, gradeRgb, litBands, luminance, oklchToRgb, rgbToOklch, type Rgb } from "./palette";
+import { accentOf, barCount, barGradient, columnMeans, gradeRgb, litBands, luminance, oklchToRgb, pressBars, rgbToOklch, type Rgb } from "./palette";
 
 /** RGBA pixels, one per colour, in order. */
 function pixels(...colors: Rgb[]): Uint8ClampedArray {
@@ -80,6 +80,66 @@ describe("litBands", () => {
     const [a, b] = litBands(pixels(dark, bright), 2, 1);
     expect(rgbToOklch(a).l).toBeGreaterThan(0.6);
     expect(rgbToOklch(b).l).toBeGreaterThan(rgbToOklch(a).l);
+  });
+});
+
+describe("columnMeans", () => {
+  it("gives each column's mean colour, left to right", () => {
+    // Two columns, two rows: black over white, then red over blue.
+    const means = columnMeans(pixels([0, 0, 0], [200, 0, 0], [255, 255, 255], [0, 0, 100]), 2, 2);
+    expect(means).toEqual([
+      [127.5, 127.5, 127.5],
+      [100, 0, 50],
+    ]);
+  });
+});
+
+describe("pressBars", () => {
+  it("presses an even film into even bars at the luminous level", () => {
+    const columns = Array.from({ length: 480 }, (): Rgb => [90, 70, 50]);
+    const bars = pressBars(columns, 32);
+    expect(bars).toHaveLength(32);
+    for (const bar of bars) {
+      expect(bar).toEqual(bars[0]);
+      expect(Math.abs(rgbToOklch(bar).l - 0.74)).toBeLessThan(0.005);
+    }
+  });
+
+  it("keeps the film's order and most of its rhythm: a dark run is a dark bar", () => {
+    const dark: Rgb = [20, 25, 40];
+    const bright: Rgb = [200, 170, 120];
+    const columns = [...Array<Rgb>(10).fill(dark), ...Array<Rgb>(10).fill(bright)];
+    const [a, b] = pressBars(columns, 2);
+    expect(rgbToOklch(b).l - rgbToOklch(a).l).toBeGreaterThan(0.25);
+    expect(hueDistance(rgbToOklch(a).h, rgbToOklch(dark).h)).toBeLessThan(0.15);
+  });
+
+  it("keeps a black-and-white film grey", () => {
+    const columns: Rgb[] = [[30, 30, 30], [120, 120, 120], [220, 220, 220]];
+    for (const bar of pressBars(columns, 3)) expect(rgbToOklch(bar).c).toBeLessThan(0.02);
+  });
+
+  it("gives every bar at least one column when there are more bars than columns", () => {
+    expect(pressBars([[10, 20, 30], [200, 100, 50]], 5)).toHaveLength(5);
+    expect(pressBars([], 5)).toEqual([]);
+  });
+});
+
+describe("barGradient", () => {
+  it("holds each bar between two stops, for hard edges", () => {
+    const css = barGradient([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
+    expect(css.startsWith("linear-gradient(90deg, ")).toBe(true);
+    expect(css).toContain("rgb(1 2 3) 0% 33.333%");
+    expect(css).toContain("rgb(4 5 6) 33.333% 66.667%");
+    expect(css).toContain("rgb(7 8 9) 66.667% 100%");
+  });
+});
+
+describe("barCount", () => {
+  it("is so many per letter, within 12–120", () => {
+    expect(barCount(1, 5)).toBe(12);
+    expect(barCount(7, 5)).toBe(35);
+    expect(barCount(30, 7)).toBe(120);
   });
 });
 

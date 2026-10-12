@@ -8,8 +8,9 @@ import styles from "./theater.module.css";
  * the picture sit a black card (`dip`) and, above it, the title cut out of the picture itself
  * (`matte`: the same picture, registered pixel for pixel to the screen, seen through the letters),
  * so as the black comes down the name emerges out of the film. Then the letters fade to colour,
- * left to right (`lit`: the film's barcode as light, one slice per letter), with one swell of
- * light (`bloom`) that settles into a close halo (`halo`). Then the film rolls on: its last reel
+ * left to right (`lit`: the film pressed into hard bars across the whole title, one slice per
+ * letter, the same bars as the end card's title), with one swell of soft light (`bloom`) that
+ * settles into a close halo (`halo`). Then the film rolls on: its last reel
  * unreels over the card (`wipe`), with the reel's own sweep of light.
  *
  * Nothing here moves by itself: the win's timeline (`win-timeline.ts`) plays every part, found by
@@ -19,15 +20,15 @@ export function TitleCard(props: {
   title: string;
   /** The picture on screen (its URL), which the letters are cut from. */
   picture: string;
-  /** The film's barcode as light, graded (a data URL): what the letters fill with. */
-  fill: string | null;
+  /** The film pressed into bars for this title (a CSS gradient, see `bars.ts`): what the letters fill with. */
+  bars: string | null;
   /** The last reel's picture, when the card leaves by unreeling onto it. */
   next: string | null;
   reduced: boolean;
   /** The last reel's picture is decoded (true) or failed to load (false). */
   onNextReady(ok: boolean): void;
 }) {
-  const { title, picture, fill, next, reduced, onNextReady } = props;
+  const { title, picture, bars, next, reduced, onNextReady } = props;
   // Letter by letter, or word by word on WebKit and for long titles (fewer layers to composite).
   const [byWord] = useState(() => title.length > 20 || isWebKit());
   const nextImg = useRef<HTMLImageElement>(null);
@@ -63,7 +64,7 @@ export function TitleCard(props: {
           <TitleText
             units={units}
             className={`${styles.cardTitle} ${styles.cardLit}`}
-            style={fill ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined}
+            style={bars ? ({ "--fill": bars } as CSSProperties) : undefined}
             lit
           />
         </div>

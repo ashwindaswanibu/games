@@ -3,9 +3,22 @@
  * reel's unreel and of the win. Pure (no React, no DOM), so the beats can be tested.
  */
 
-export const DOWN = "cubic-bezier(.45,0,.55,1)"; // the wordmark's "Fade to"
-export const RISE = "cubic-bezier(.3,0,.2,1)"; // the wordmark's "Color"
+export const DOWN = "cubic-bezier(.45,0,.55,1)"; // light going down
+export const RISE = "cubic-bezier(.3,0,.2,1)"; // light coming up
 export const SETTLE = "cubic-bezier(.2,.8,.2,1)"; // --ease
+
+/**
+ * The press, as the film is rolled: the whole film is pressed into the strip (and the wordmark's
+ * "Barcode" with it) in 48 jumps at 24 frames a second, one frame of film per jump. Stepped, not
+ * eased: the one motion in the game that is literally film running through a gate. The
+ * stylesheet's `.wordmark[data-press]` mirrors these numbers.
+ */
+export const FILM_FPS = 24;
+export const PRESS_FRAMES = 48;
+export const PRESS_MS = (PRESS_FRAMES / FILM_FPS) * 1000;
+export const PRESS_EASE = `steps(${PRESS_FRAMES}, jump-end)`;
+/** Before the press, the leader's sweep turns once: one second of academy leader (`.leader[data-threading]`). */
+export const LEADER_MS = 1000;
 
 /** A reel unreels over this long, on this ease. */
 export const UNREEL_MS = 1250;

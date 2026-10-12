@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { FilmRef } from "@/games/_movies/schemas";
+import type { Rgb } from "../palette";
+import { barsFill } from "./bars";
 import { Letters } from "./letters";
 import styles from "./theater.module.css";
 import { letterStep } from "./timing";
@@ -40,7 +42,7 @@ const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("
  * lands on the tile that takes Tab (unless the player has put it somewhere since), so the arrow
  * keys choose among them. Pressing Pick moves focus to the chosen tile, where the result plays.
  * `resolve` plays the pick: the other three titles fade letter by letter while the room dips; when
- * the result lands, a right pick's title fills with the film's barcode letter by letter, and a wrong
+ * the result lands, a right pick's title fills with the film's bars letter by letter, and a wrong
  * one dims to black while the answer comes back up in ink. `onDone` fires when the result has been
  * held long enough to read, for the film to roll on.
  */
@@ -51,13 +53,13 @@ export function FourPick(props: {
   worth: number;
   disabled: boolean;
   live: boolean;
-  /** Today's barcode as light (a data URL): what a right pick's title fills with. */
-  fill: string | null;
+  /** The first reel's columns: what a right pick's title is pressed from. */
+  columns: readonly Rgb[] | null;
   resolve: PickResolve | null;
   onPick(film: FilmRef): void;
   onDone(): void;
 }) {
-  const { options, guessed, worth, disabled, live, fill, resolve, onPick, onDone } = props;
+  const { options, guessed, worth, disabled, live, columns, resolve, onPick, onDone } = props;
   const [choice, setChoice] = useState<number | null>(null);
   const tiles = useRef(new Map<number, HTMLButtonElement>());
   const locked = resolve !== null;
@@ -179,7 +181,7 @@ export function FourPick(props: {
               >
                 <span className={styles.tileTitle}>
                   <Letters text={option.title} className={styles.tileInk} />
-                  {fate === "lit" && <LitTitle text={option.title} fill={fill} />}
+                  {fate === "lit" && <LitTitle text={option.title} columns={columns} />}
                 </span>
                 <span className={styles.optionTileMeta}>{reel !== undefined ? `Guessed · reel ${reel}` : (option.year ?? "")}</span>
               </button>
@@ -205,10 +207,10 @@ export function FourPick(props: {
 }
 
 /**
- * A right pick's title in the film's light: the barcode, spread across the whole title as on the
- * end card, cut into letters so it can rise one letter at a time. Laid out once, when it lands.
+ * A right pick's title in the film's bars (three to a letter), spread across the whole title as on
+ * the end card, cut into letters so it can rise one letter at a time. Laid out once, when it lands.
  */
-function LitTitle({ text, fill }: { text: string; fill: string | null }) {
+function LitTitle({ text, columns }: { text: string; columns: readonly Rgb[] | null }) {
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const root = ref.current;
@@ -220,10 +222,10 @@ function LitTitle({ text, fill }: { text: string; fill: string | null }) {
       letter.style.backgroundPosition = `${box.left - r.left}px ${box.top - r.top}px`;
     }
   }, []);
-  const style = fill ? ({ "--fill": `url(${fill})` } as CSSProperties) : undefined;
+  const fill = barsFill(columns, text, 3);
+  const style = fill ? ({ "--fill": fill } as CSSProperties) : undefined;
   return (
     <span ref={ref} className={styles.tileLit} style={style} aria-hidden data-fill={fill ? "" : undefined}>
-      <span className={styles.tileHalo}>{text}</span>
       <Letters text={text} className={styles.litLetters} />
     </span>
   );

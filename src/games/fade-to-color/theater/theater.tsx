@@ -9,6 +9,7 @@ import type { Outcome } from "@/core/game";
 import type { ImmersiveGameUiProps } from "@/core/view";
 import type { FilmRef, FilmSearchHit } from "@/games/_movies/schemas";
 import { fadeToColor, guessedFilmIds, isGuess, isSkip, LEVEL_COUNT, levelsInView, MAX_GUESSES, OPTION_COUNT, pickWorth, reelOf, stoppedEarly, type State } from "../logic";
+import { barsFill } from "./bars";
 import { ContactStrip } from "./contact-strip";
 import { Credits } from "./credits";
 import { Crossfade } from "./crossfade";
@@ -19,6 +20,7 @@ import { endKicker } from "./grid";
 import { Reel, type ReelMove } from "./reel";
 import { FadingSlate, HeardSlate, Slate } from "./slate";
 import styles from "./theater.module.css";
+import { LEADER_MS } from "./timing";
 import { TitleAura, TitleCard } from "./title-matte";
 import { HOUSE_ACCENT, useLevelArt } from "./use-level-art";
 import { useWinTimeline, type WinCelebration } from "./win-timeline";
@@ -73,9 +75,13 @@ function endWords(state: State, status: Outcome, title: string): string {
 }
 
 /**
- * Fade to Color, full screen: a dark projection room lit only by today's film. The film's whole run
+ * Movie Barcode, full screen: a dark projection room lit only by today's film. The film's whole run
  * is on the reel as a barcode; each miss or skip unreels a level with more of the real picture.
  * Nothing else is on screen but the attempts: no clues of any kind.
+ *
+ * Rolling the film plays the arrival, once a day: the leader's sweep turns once, then the whole film
+ * is pressed into the strip at 24 frames a second, and the wordmark's "Barcode" with it; only then
+ * does the room take the film's light.
  *
  * On any reel the player may stop the film instead: the unseen reels stay in the can and the four
  * come up (`FourPick`) for one pick, worth half of naming it on that reel. A wrong guess on the
@@ -132,25 +138,37 @@ export function FadeToColorTheater(props: Props) {
   const lookAt = (index: number) => setPicked({ index, latest, over });
 
   // What the reel shows moves to the target once its art is in; how it gets there depends on why.
+  // Rolled in front of the player, the first reel is pressed in, once the leader has turned once.
   const [rolled, setRolled] = useState(false);
+  const [threaded, setThreaded] = useState(false);
+  useEffect(() => {
+    if (!rolled) return;
+    const timer = setTimeout(() => setThreaded(true), window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : LEADER_MS);
+    return () => clearTimeout(timer);
+  }, [rolled]);
   const [display, setDisplay] = useState<{ index: number; latest: number; move: ReelMove } | null>(null);
   const targetRef = levels[target];
-  if (targetRef && art.has(targetRef.id) && (display === null || display.index !== target || display.latest !== latest)) {
+  const threading = display === null && rolled && !threaded;
+  if (targetRef && art.has(targetRef.id) && !threading && (display === null || display.index !== target || display.latest !== latest)) {
     const earned = display !== null && target === latest && latest > display.latest;
     // The win unreels the last reel over its title card itself; the reel takes the picture underneath.
     const unreel: ReelMove = win?.exit === "roll" ? "none" : "unreel";
-    const move: ReelMove = display === null ? (rolled ? "unreel" : "cut") : earned ? unreel : display.index === target ? display.move : "cut";
+    const move: ReelMove = display === null ? (rolled ? "press" : "cut") : earned ? unreel : display.index === target ? display.move : "cut";
     setDisplay({ index: target, latest, move });
   }
   const shownRef = display ? levels[display.index] : undefined;
   const shownArt = shownRef ? art.get(shownRef.id) : undefined;
-  const waiting = view !== null && (!targetRef || !art.has(targetRef.id));
+  const waiting = view !== null && (!targetRef || !art.has(targetRef.id) || threading);
+  // The press has begun: the wordmark's "Barcode" is pressed with the strip.
+  const [pressed, setPressed] = useState(false);
 
   // The room takes a reel's colours partway through its unreel (see `Reel`).
   const [litKey, setLitKey] = useState<string | null>(null);
   const [settledKey, setSettledKey] = useState<string | null>(null);
   const litArt = litKey ? art.get(litKey) : undefined;
   const firstArt = levels[0] ? art.get(levels[0].id) : undefined;
+  // What every lit title is pressed from: the first reel's columns (the barcode itself, never a clue).
+  const columns = firstArt?.columns.length ? firstArt.columns : null;
 
   // The win plays once, and only when the film is named in front of the player (never on a reload).
   const [seenStatus, setSeenStatus] = useState(status);
@@ -355,7 +373,7 @@ export function FadeToColorTheater(props: Props) {
     >
       <div className={styles.room} aria-hidden>
         <div className={styles.washLight}>
-          <Crossfade src={litArt?.bands || null} className={styles.wash} />
+          <Crossfade src={litArt?.room || null} className={styles.wash} />
         </div>
         <div className={styles.beam} />
         <div className={styles.vignette} />
@@ -369,8 +387,8 @@ export function FadeToColorTheater(props: Props) {
           </svg>
           <span>Today</span>
         </Link>
-        <Wordmark text={fadeToColor.name} fill={firstArt?.bands || null} intro={rolled} />
-        <span className={styles.dateline}>{today}</span>
+        {/* Rolled in front of the player, "Barcode" is lit only as the film is pressed. */}
+        <Wordmark text={fadeToColor.name} bars={!rolled || pressed ? columns : null} press={pressed} />
       </header>
 
       <main className={styles.stage}>
@@ -389,12 +407,12 @@ export function FadeToColorTheater(props: Props) {
               : null
           }
           move={display?.move ?? "none"}
-          edgeStart={`▸ ${fadeToColor.name} · ${today}`}
+          edgeStart={`▸ ${today}`}
           edgeEnd={edgeEnd}
           edgeVariant={edgeVariant}
           spill={litArt?.bands || null}
-          reflection={litArt?.reflection || null}
           waiting={waiting && (rolled || playing || finished)}
+          onPress={() => setPressed(true)}
           onLight={setLitKey}
           onSettled={setSettledKey}
           edgeBottom={
@@ -405,7 +423,7 @@ export function FadeToColorTheater(props: Props) {
               </a>
             )
           }
-          leader={<Leader />}
+          leader={<Leader threading={rolled} />}
           boxRef={reelBox}
           edgeTitle={win && !win.reduced && win.stage !== "done" ? "Main title" : null}
           aura={win && !win.reduced && win.stage !== "done" ? <TitleAura fill={firstArt?.graded || null} /> : null}
@@ -415,7 +433,7 @@ export function FadeToColorTheater(props: Props) {
               <TitleCard
                 title={win.title}
                 picture={win.picture}
-                fill={firstArt?.graded || null}
+                bars={barsFill(columns, win.title, 7)}
                 next={win.shown !== LEVEL_COUNT - 1 && lastLevel ? (lastSrc ?? assetUrl(lastLevel.id)) : null}
                 reduced={win.reduced}
                 onNextReady={setLastDecoded}
@@ -448,48 +466,34 @@ export function FadeToColorTheater(props: Props) {
           )}
 
           {view && (
-            <ContactStrip
-              thumbs={stripLevels.map((l) => art.get(l.id)?.thumb)}
-              showing={showing}
-              current={over ? namedIndex : latest}
-              closed={fourUp && !over}
-              closing={stopLive}
-              run={printRun}
-              onPick={lookAt}
-            />
+            // The count is on the reel's edge print and the strip's ringed print, not said again here.
+            <div className={styles.contactRow}>
+              <ContactStrip
+                thumbs={stripLevels.map((l) => art.get(l.id)?.thumb)}
+                showing={showing}
+                current={over ? namedIndex : latest}
+                closed={fourUp && !over}
+                closing={stopLive}
+                run={printRun}
+                onPick={lookAt}
+              />
+              {target !== latest && (
+                <button type="button" className={styles.toLatest} onClick={() => setPicked(null)}>
+                  Back to reel {latest + 1} ▸
+                </button>
+              )}
+            </div>
           )}
 
           {view && !ending && (
             <>
-              <p className={styles.status} data-leaving={resolve?.stage === "leaving" || undefined}>
-                {/* Named: the line holds what it said as Guess was pressed. */}
-                Reel <em>{win ? win.reel : fourUp ? reel : attempt}</em> of {MAX_GUESSES}{" "}
-                {win ? (
-                  <>
-                    <span className={styles.dot}>·</span> <em>{MAX_GUESSES + 1 - win.reel}</em> left
-                  </>
-                ) : fourUp ? (
-                  <span key="four" className={stopLive ? styles.statusFresh : undefined}>
-                    <span className={styles.dot}>·</span> {runOut ? "run-out" : "stopped"}
-                  </span>
-                ) : (
-                  <>
-                    <span className={styles.dot}>·</span> <em>{left}</em> left
-                  </>
-                )}
-                {target !== latest && (
-                  <button type="button" className={styles.toLatest} onClick={() => setPicked(null)}>
-                    Back to reel {latest + 1} ▸
-                  </button>
-                )}
-              </p>
               {win && reveal ? (
                 <HeardSlate
                   title={win.title}
                   byline={bylineOf(reveal.film)}
                   stake={pickWorth(win.reel)}
                   lastReel={win.reel === LEVEL_COUNT}
-                  fill={firstArt?.graded || null}
+                  columns={columns}
                 />
               ) : fourUp && state ? (
                 <div className={styles.fourSlot}>
@@ -500,7 +504,7 @@ export function FadeToColorTheater(props: Props) {
                     worth={worth}
                     disabled={pending}
                     live={stopLive}
-                    fill={firstArt?.bands || null}
+                    columns={columns}
                     resolve={resolve && { filmId: resolve.filmId, result: resolve.result, leaving: resolve.stage === "leaving" }}
                     onPick={(film) => void pick(film)}
                     onDone={() => setResolve((r) => (r && r.stage === "landed" ? { ...r, stage: "held" } : r))}
@@ -539,7 +543,7 @@ export function FadeToColorTheater(props: Props) {
                 state={state}
                 status={status}
                 result={view.result}
-                fill={firstArt?.bands || null}
+                columns={columns}
                 date={date}
                 friends={friends}
                 viewerId={viewerId}
@@ -563,10 +567,10 @@ export function FadeToColorTheater(props: Props) {
   );
 }
 
-/** The screen before the film: academy leader, waiting for the projector. */
-function Leader() {
+/** The screen before the film: academy leader, waiting for the projector; `threading` turns its sweep once. */
+function Leader({ threading }: { threading: boolean }) {
   return (
-    <div className={styles.leader} aria-hidden>
+    <div className={styles.leader} aria-hidden data-threading={threading || undefined}>
       <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid meet">
         <line x1="0" y1="50" x2="300" y2="50" />
         <line x1="150" y1="0" x2="150" y2="100" />
