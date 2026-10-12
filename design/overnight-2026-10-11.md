@@ -170,3 +170,8 @@ The starter template's pages now stand in the games' room: the day along the top
 
 ### Safari check — fixed
 Every screen was checked in WebKit 18.4 (iPhone 15 and laptop). One defect: the all-played home's film title drew twice (its ink and bars layers wrapped differently); fixed.
+
+### Scores, Me and the app frame — live
+The signed-in pages left the starter template: the home's own edge (‹ TODAY, the date, SCORES · ME · ADMIN) replaces the coloured-squares header and the bottom tab bar; Scores is a credits list in Bodoni with mono toggles; Me sets the name and figures in Bodoni and its form matches sign in. Emoji, avatars and bucket swatches are gone from Scores and Me (Admin keeps them). The older classic game pages (Number Hunt, Frame by Frame) now render in the dark frame too.
+- Alternative: keep the bottom tab bar on phones. Dropped because the home has none and every one of these pages is one step from it.
+- **Your call:** Scores and Me count only games open to everyone. Movie Barcode, Degrees and Lexicon are still testing (admins only), so for now Scores shows almost nothing of your real play. Opening them, or counting testing games for admins, is a product decision.
