@@ -28,6 +28,8 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 - [x] **Category plates** (2026-10-11): each category's name leads its games and takes the slots they leave; every game the same size; Frame by Frame off the home until its frames are worked on.
 - [ ] **Overnight visual pass 2026-10-11** (owner: "radically improve the aesthetic, gameplay unchanged"): two designers + a judge per screen (specs in the session scratchpad), built screen by screen. Deferred by the judges for a later session: result strips as objects, the day's end card with friends' credits and "Share the day", View Transitions into games, the Lexicon radial fan, Movie Barcode "unsqueeze" reels.
 
+- [ ] **Faces for the rest** (2026-10-12): 59 of the 60 upcoming Degrees endpoints have a portrait; Wikimedia's image server refused almost every download overnight (HTTP 429 even at 1.5 s apart). Retry in the day, slower: `content:movies:portraits -- --allow-remote --concurrency 1 --pace 5000`.
+
 ## Lexicon
 - [x] Live for admins (2026-10-10). Decisions and alternatives: `design/lexicon-decisions.md`.
 - [ ] End-to-end test flow (blocked: Docker Desktop hangs on start and needs a manual restart).
