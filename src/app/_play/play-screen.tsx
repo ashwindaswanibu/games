@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
-import { formatPuzzleDate, today } from "@/core/day";
+import { today } from "@/core/day";
 import { canPlay, getGame } from "@/games/registry";
 import { requireProfile } from "@/server/auth";
 import { getFriendsResults, getPlayView, preloadAssets } from "@/server/plays";
@@ -44,19 +43,12 @@ export async function PlayScreen({ gameId, children }: { gameId: string; childre
 
   return (
     <div className="grid gap-6" style={{ "--accent": game.accent } as CSSProperties}>
+      {/* The app frame above has the way back to today and the date. */}
       <header className="flex items-center gap-3">
-        <Link href="/" prefetch={true} aria-label="Back to today" className="-ml-2 rounded-full p-2 text-muted hover:text-fg">
-          <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </Link>
         <span className="flex size-10 items-center justify-center rounded-xl bg-accent/15 text-xl" aria-hidden>
           {game.emoji}
         </span>
-        <div>
-          <h1 className="text-lg leading-tight font-bold">{game.name}</h1>
-          <p className="text-xs text-muted">{formatPuzzleDate(date)}</p>
-        </div>
+        <h1 className="text-lg leading-tight font-bold">{game.name}</h1>
       </header>
 
       {/* Keyed so client state resets when switching games or when the day rolls over. */}

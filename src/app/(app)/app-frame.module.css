@@ -1,0 +1,148 @@
+/*
+ * The signed-in app's pages (app-frame.tsx): the house's dark room under the home's edge, the page
+ * in a centred column. The type every page here shares (the title, a section's label) is at the end.
+ */
+
+.room {
+  --ink: #ece6da;
+  --ink-2: rgb(236 230 218 / 0.62);
+  --ink-3: rgb(236 230 218 / 0.38);
+  --hair: rgb(236 230 218 / 0.1);
+  --line: rgb(236 230 218 / 0.22);
+  --display: var(--cb-display), "Bodoni Moda", serif;
+  --mono: var(--font-geist-mono), ui-monospace, monospace;
+  /*
+   * The app's semantic colours (globals.css) as the room's, whatever the system's scheme: what's
+   * still built from the shared primitives (Admin, the older play screens) sits in the dark too.
+   */
+  --bg: #0b0b0c;
+  --surface: #131315;
+  --surface-2: #1b1b1e;
+  --border: rgb(236 230 218 / 0.1);
+  --fg: var(--ink);
+  --muted: var(--ink-2);
+  --good: #8fc49b;
+  --bad: #e07a5f;
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  color-scheme: dark;
+}
+
+/* The lamp: a soft light over the top of the room that stays put while the page scrolls under it. */
+.room::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse 70% 60% at 50% 22%, #17181b, #0b0b0c 72%);
+  pointer-events: none;
+}
+
+/* Past the page's ends (overscroll, a short page) the window is the room too. */
+:global(html):has(.room) {
+  background: #0b0b0c;
+  color-scheme: dark;
+}
+
+/* The day's edge, as on the home: the way back to today, the date, and where else to go. */
+.edge {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-height: calc(56px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 32px 0;
+  border-bottom: 1px solid var(--hair);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+
+.edge a {
+  /* A finger-sized target around a line of 11px type. */
+  padding: 12px 0;
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.edge a:hover,
+.edge a:focus-visible,
+.edge a[aria-current] {
+  color: var(--ink);
+}
+
+.edge .back {
+  color: var(--ink-2);
+}
+
+.dateShort {
+  display: none;
+}
+
+.nav {
+  display: flex;
+  gap: 22px;
+  margin-left: auto;
+}
+
+.column {
+  width: min(720px, 100% - 64px);
+  margin: 0 auto;
+  padding: 72px 0 calc(120px + env(safe-area-inset-bottom));
+}
+
+/* ---- The pages' shared type ---- */
+
+/* A page's name, set as a title card. */
+.title {
+  margin: 0;
+  font: italic 400 72px/0.95 var(--display);
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* A section's name, in the edge's hand. */
+.label {
+  margin: 0;
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+@media (max-width: 719px) {
+  .edge {
+    gap: 14px;
+    padding-left: 16px;
+    padding-right: 16px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  .dateLong {
+    display: none;
+  }
+
+  .dateShort {
+    display: inline;
+  }
+
+  .nav {
+    gap: 14px;
+  }
+
+  .column {
+    width: calc(100% - 32px);
+    padding-top: 40px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .title {
+    font-size: 40px;
+  }
+}

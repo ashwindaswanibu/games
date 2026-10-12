@@ -1,0 +1,124 @@
+/*
+ * Editing a profile (edit-profile-form.tsx) in the sign-in page's hand (rules copied from
+ * src/app/(auth)/auth.module.css): mono labels, fields written on a line like a guess, the ink pill
+ * to save. Overrides the shared primitives' look (ui.tsx) inside the panel only.
+ */
+
+/* Closed, the panel is one quiet line: its name and a cross that turns as it opens. */
+.panel summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  list-style: none;
+  cursor: pointer;
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  transition: color 0.2s;
+}
+
+.panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel summary::after {
+  content: "+";
+  font: 300 16px/1 var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: 0;
+  transition: transform 0.25s ease;
+}
+
+.panel[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.panel summary:hover,
+.panel summary:focus-visible,
+.panel[open] summary {
+  color: var(--ink);
+}
+
+.panel form {
+  display: grid;
+  gap: 22px;
+  width: min(400px, 100%);
+  padding: 22px 0 8px;
+}
+
+.panel label {
+  display: grid;
+  gap: 8px;
+}
+
+.panel label > span:first-child {
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.panel input {
+  height: 46px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font: italic 400 24px/1 var(--display);
+  color: #f6f1e8;
+  caret-color: var(--ink);
+  transition: border-color 160ms ease;
+}
+
+.panel input:focus {
+  border-bottom-color: var(--ink);
+}
+
+.panel input[aria-invalid] {
+  border-bottom-color: var(--bad);
+}
+
+/* A field's hint or error. */
+.panel label > input + span {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+.panel label > input[aria-invalid] + span {
+  color: var(--bad);
+}
+
+.panel [role="alert"] {
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--bad);
+  border-radius: 0;
+  background: none;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #f0c9bd;
+}
+
+/* Save: the house's ink pill. */
+.panel button[type="submit"] {
+  height: 48px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #0b0b0c;
+  font: 600 14px/1 var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.panel button[type="submit"]:hover:not(:disabled) {
+  background: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel summary::after {
+    transition: none;
+  }
+}

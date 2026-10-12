@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Avatar, buttonClass, Card, SectionTitle } from "@/components/ui";
-import { formatPuzzleDate, parsePuzzleDate, today } from "@/core/day";
-import { getGame, liveGameIds, liveGames } from "@/games/registry";
+import { today } from "@/core/day";
+import { liveGameIds, liveGames } from "@/games/registry";
 import { getSessionUser, isPasswordAccountEmail, requireProfile } from "@/server/auth";
 import { getPlayerHistory, getStreaks } from "@/server/leaderboards";
 import { db } from "@/server/supabase/admin";
-import { signOut } from "../../../(auth)/actions";
 import type { SavedNotice } from "./actions";
-import { EditProfileForm } from "./edit-profile-form";
+import { ProfileView } from "./profile-view";
 
 export async function generateMetadata({ params }: PageProps<"/u/[username]">): Promise<Metadata> {
   const { username } = await params;
@@ -21,15 +19,6 @@ const SAVED_NOTICES: Record<SavedNotice, string> = {
   profile: "Profile saved.",
   username: "Username changed. Sign in with your new username next time.",
 };
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="grid gap-0.5 text-center">
-      <span className="text-2xl font-bold tabular-nums">{value}</span>
-      <span className="text-xs text-muted">{label}</span>
-    </div>
-  );
-}
 
 export default async function ProfilePage({ params, searchParams }: PageProps<"/u/[username]">) {
   const viewer = await requireProfile();
@@ -57,82 +46,14 @@ export default async function ProfilePage({ params, searchParams }: PageProps<"/
   });
 
   return (
-    <div className="grid gap-8">
-      <section className="flex items-center gap-4 pt-2">
-        <Avatar name={player.display_name} size={64} />
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold tracking-tight">{player.display_name}</h1>
-          <p className="text-sm text-muted">
-            @{player.username} · joined {formatPuzzleDate(parsePuzzleDate(player.created_at.slice(0, 10)), { month: "short", year: "numeric" })}
-          </p>
-        </div>
-      </section>
-
-      {isMe && (
-        <div className="-mt-4 grid gap-3">
-          {savedNotice && (
-            <p role="status" className="rounded-xl bg-good/10 px-3.5 py-2.5 text-sm text-good">
-              {savedNotice}
-            </p>
-          )}
-          <EditProfileForm username={player.username} displayName={player.display_name} passwordAccount={passwordAccount} />
-        </div>
-      )}
-
-      <Card className="grid grid-cols-4 gap-2 px-2 py-5">
-        <Stat label="Points" value={total} />
-        <Stat label="Played" value={history.length} />
-        <Stat label="Streak" value={streak.current} />
-        <Stat label="Best" value={streak.best} />
-      </Card>
-
-      <section>
-        <SectionTitle>By game</SectionTitle>
-        <Card className="divide-y divide-border overflow-hidden">
-          {perGame.map(({ game, played, winRate, avg }) => (
-            <div key={game.id} className="flex items-center gap-3 px-4 py-3">
-              <span className="text-xl" aria-hidden>
-                {game.emoji}
-              </span>
-              <span className="flex-1 font-medium">{game.name}</span>
-              <span className="text-sm text-muted tabular-nums">
-                {played} played{winRate !== null && ` · ${winRate}% won · avg ${avg}`}
-              </span>
-            </div>
-          ))}
-        </Card>
-      </section>
-
-      <section>
-        <SectionTitle>Recent</SectionTitle>
-        {history.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-muted">No finished games yet.</Card>
-        ) : (
-          <Card className="divide-y divide-border overflow-hidden">
-            {history.slice(0, HISTORY_LIMIT).map((p) => {
-              const game = getGame(p.game_id);
-              return (
-                <div key={`${p.game_id}:${p.puzzle_date}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                  <span className="w-20 text-muted">{formatPuzzleDate(parsePuzzleDate(p.puzzle_date), { month: "short", day: "numeric" })}</span>
-                  <span className="flex-1">
-                    {game?.emoji} {game?.name ?? p.game_id}
-                  </span>
-                  <span className="text-muted tabular-nums">{p.result_label}</span>
-                  <span className="w-10 text-right font-semibold tabular-nums">{p.score}</span>
-                </div>
-              );
-            })}
-          </Card>
-        )}
-      </section>
-
-      {isMe && (
-        <form action={signOut}>
-          <button type="submit" className={buttonClass("secondary", "w-full")}>
-            Sign out
-          </button>
-        </form>
-      )}
-    </div>
+    <ProfileView
+      player={{ username: player.username, displayName: player.display_name, createdAt: player.created_at }}
+      isMe={isMe}
+      passwordAccount={passwordAccount}
+      savedNotice={savedNotice}
+      stats={{ points: total, played: history.length, streak: streak.current, best: streak.best }}
+      perGame={perGame}
+      history={history.slice(0, HISTORY_LIMIT)}
+    />
   );
 }

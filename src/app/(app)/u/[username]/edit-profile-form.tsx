@@ -5,6 +5,7 @@ import { Field, FormMessage } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import type { FormState } from "@/lib/form-state";
 import { editProfile } from "./actions";
+import styles from "./form.module.css";
 
 export function EditProfileForm({
   username,
@@ -21,14 +22,9 @@ export function EditProfileForm({
   // A failed save opens the panel, so its errors are visible.
   const open = Boolean(state.error || state.fieldErrors);
   return (
-    <details open={open || undefined} className="group rounded-2xl border border-border bg-surface">
-      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
-        Edit profile
-        <span aria-hidden className="text-muted transition group-open:rotate-180">
-          ▾
-        </span>
-      </summary>
-      <form action={action} className="grid gap-4 border-t border-border px-4 pt-4 pb-4">
+    <details open={open || undefined} className={styles.panel}>
+      <summary>Edit profile</summary>
+      <form action={action}>
         <FormMessage>{state.error}</FormMessage>
         <Field
           label="Display name"

@@ -24,7 +24,7 @@ import { randomBytes } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import type { Browser, BrowserContext, Page } from "puppeteer-core";
 import type { Database } from "@/server/database.types";
-import { clickButton, collectPageErrors, cookieHeader, launchChrome, newPhonePage, pageSays, signIn, WAIT_MS } from "./lib/browser.mjs";
+import { clickButton, collectPageErrors, cookieHeader, hasText, launchChrome, newPhonePage, pageSays, signIn, WAIT_MS } from "./lib/browser.mjs";
 import { e2eDb, type E2eDb } from "./lib/db.mjs";
 import { e2eAccountsEnv, type E2eAccountsEnv } from "./lib/env.mjs";
 import { Report } from "./lib/report.mjs";
@@ -284,7 +284,8 @@ async function renamePasswordAccount(ctx: Ctx, account: PasswordAccount): Promis
   await signIn(page, env.E2E_BASE_URL, account.username, account.password);
 
   await page.goto(`${env.E2E_BASE_URL}/u/${account.username}`, { waitUntil: "networkidle0" });
-  report.check("the owner sees Edit profile", await pageSays(page, "Edit profile"));
+  // Its name is uppercased by CSS, which `innerText` (pageSays) reads: match the control's own text.
+  report.check("the owner sees Edit profile", await hasText(page, "details summary", "Edit profile"));
 
   await submitProfileEdit(page, { username: "ab" });
   await page.waitForSelector('details input[name="username"][aria-invalid="true"]');
@@ -295,8 +296,8 @@ async function renamePasswordAccount(ctx: Ctx, account: PasswordAccount): Promis
   report.equal("saving goes to the new profile URL", new URL(page.url()).searchParams.get("saved"), "username");
   report.check("the page says to sign in with the new username", await pageSays(page, "Sign in with your new username next time"));
   report.check("the page shows the new handle", await pageSays(page, `@${newUsername}`));
-  const navHref = await page.$eval('nav[data-app-chrome="bottom-nav"] a[href^="/u/"]', (a) => a.getAttribute("href"));
-  report.equal("the bottom nav links to the new profile", navHref, `/u/${newUsername}`);
+  const navHref = await page.$eval('nav[data-app-chrome="app-nav"] a[href^="/u/"]', (a) => a.getAttribute("href"));
+  report.equal("the app nav links to the new profile", navHref, `/u/${newUsername}`);
 
   const profile = await profileById(db, account.id);
   report.equal("the profile has the new username and display name", [profile?.username, profile?.display_name], [newUsername, `Renamed ${tag}`]);
@@ -360,7 +361,7 @@ async function otherProfileHasNoEdit(ctx: Ctx, viewer: GoogleLikeAccount, otherU
   const { context, page } = await freshPage(ctx);
   await signInWithEmail(ctx, context, viewer.email, viewer.password);
   await page.goto(`${ctx.env.E2E_BASE_URL}/u/${otherUsername}`, { waitUntil: "networkidle0" });
-  ctx.report.check("someone else's profile has no Edit profile control", !(await pageSays(page, "Edit profile")));
+  ctx.report.check("someone else's profile has no Edit profile control", !(await hasText(page, "details summary", "Edit profile")));
   ctx.report.check("…and no edit form", (await page.$('input[name="username"]')) === null);
   await page.close();
 }

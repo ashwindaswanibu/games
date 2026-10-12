@@ -52,16 +52,6 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-/*
- * The signed-in app has a sticky header (50px) and a fixed bottom nav (66px, plus the safe area).
- * Whatever the browser scrolls into view (a focused field, an opened search list, find-in-page)
- * lands clear of both instead of underneath them.
- */
-html:has([data-app-chrome="bottom-nav"]) {
-  scroll-padding-top: calc(max(env(safe-area-inset-top), 0.75rem) + 3rem);
-  scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
-}
-
 body {
   background: var(--bg);
   color: var(--fg);
