@@ -1,14 +1,17 @@
 /*
  * Degrees of Separation: a dark room and a thread.
  *
- * The thread is the board's one idea. Its two ends are today's actors, set large; each link ties a
- * film (italic, riding the stretch) and a co-star (a knot, named under it). At par the thread is
- * taut; links over par are slack, and the knots hang lower with each. The warm light (`--accent`)
- * is what's being made: the stretch you're on, a hint, and, once the end is reached, the whole
- * thread, lit from end to end.
+ * The thread is the board's one idea, and the page is framed as a two-shot around it. Its two
+ * ends are today's actors, set as title cards above the line with their faces large and dim behind
+ * them; each link ties a film (italic, riding the stretch) and a co-star (a knot, their face and
+ * name hanging under it). At par the thread is taut; links over par are slack, and the knots hang
+ * lower with each. The warm light (`--accent`) means only light being made: the stretch you're on,
+ * the link being written, a hint, and, once the end is reached, the one light that runs the thread
+ * from end to end. Everything else is silver.
  *
- * Performance: only opacity, transform (and the individual `scale`) animate; no live blur or
- * blend modes. Positions glide by transition once the board has been measured (`data-settled`).
+ * Performance: only opacity, transform (and the individual `scale` and `translate`) animate; no
+ * live blur, filter or blend modes. Positions glide by transition once the board has been measured
+ * (`data-settled`). Nothing loops: each thing moves once, when it means something.
  */
 
 .screen {
@@ -48,7 +51,7 @@
   pointer-events: none;
 }
 
-/* A lamp above the table. */
+/* A lamp above the table: plain light, no warmth (the warm light is kept for what's being made). */
 .lamp {
   position: absolute;
   left: 50%;
@@ -56,7 +59,7 @@
   width: 140vw;
   height: 90vh;
   transform: translateX(-50%);
-  background: radial-gradient(48% 56% at 50% 0%, rgb(var(--accent) / 0.1), transparent 72%);
+  background: radial-gradient(48% 56% at 50% 0%, rgb(239 233 223 / 0.06), transparent 72%);
 }
 
 /* The light along the thread: it gathers as links are tied. */
@@ -66,7 +69,7 @@
   right: 0;
   top: 18vh;
   height: 46vh;
-  background: radial-gradient(56% 42% at 50% 50%, rgb(var(--accent) / 0.085), transparent 72%);
+  background: radial-gradient(56% 42% at 50% 50%, rgb(239 233 223 / 0.05), transparent 72%);
   transition: opacity 1400ms ease;
 }
 
@@ -78,6 +81,27 @@
   position: absolute;
   inset: 0;
   background: radial-gradient(125% 95% at 50% 46%, transparent 36%, rgb(5 5 6 / 0.72) 76%, var(--void) 100%);
+}
+
+/* The house lights, which come up once the day is done (after the light has run the thread). */
+.houseLights {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(70% 55% at 50% 42%, rgb(239 233 223 / 0.07), transparent 72%);
+}
+
+.vignette,
+.houseLights {
+  transition: opacity 1800ms cubic-bezier(0.4, 0, 0.2, 1) 1400ms;
+}
+
+.screen[data-finished] .houseLights {
+  opacity: 1;
+}
+
+.screen[data-finished] .vignette {
+  opacity: 0.8;
 }
 
 .grain {
@@ -92,6 +116,9 @@
  * ------------------------------------------------------------------------------------------- */
 
 .top {
+  /* Over the ends' faces, which reach up toward it. */
+  position: relative;
+  z-index: 3;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -154,21 +181,34 @@
  * The board: the thread
  * ------------------------------------------------------------------------------------------- */
 
+/* The board fills the room; the console sits at its foot. */
 .stage {
   display: grid;
+  grid-template-rows: auto 1fr;
   justify-items: center;
-  align-content: center;
-  gap: clamp(6px, 2vh, 22px);
-  padding: clamp(10px, 3vh, 40px) 0 clamp(28px, 6vh, 64px);
+  gap: 0;
+  padding: clamp(4px, 1.2vh, 12px) 0 clamp(16px, 3vh, 28px);
 }
 
 .board {
+  /* A co-star's face: as large as the room between their neighbours allows. */
+  --cd: min(clamp(120px, 12vw, 184px), calc(var(--spacing, 1000px) * 0.8));
   position: relative;
   /* The ends' faces sit behind everything on the board, but in front of the room. */
   isolation: isolate;
   width: min(1320px, calc(100vw - 32px));
-  height: clamp(280px, 44vh, 440px);
+  height: clamp(440px, calc(100dvh - 270px), 660px);
   animation: fadeIn 900ms ease both;
+}
+
+/* While the link is written on the thread, its hits hang over the console below. */
+.board[data-writing] {
+  z-index: 2;
+}
+
+/* The day done, the thread lifts to make room for the end titles (the knots glide up). */
+.screen[data-credits] .board:not([data-vertical]) {
+  height: clamp(400px, calc(100dvh - 370px), 580px);
 }
 
 .lines,
@@ -209,14 +249,12 @@
   height: 1.5px;
   background: var(--ink);
   transform-origin: 0 50%;
-  transition: background-color 700ms ease calc(var(--i) * 170ms);
 }
 
-/* The stretch being made: warm, marching toward the next knot. */
+/* The stretch being made: dashed, in the warm light. It draws in once, as it opens. */
 .segment[data-kind="open"] .segmentLine {
-  background: repeating-linear-gradient(90deg, rgb(var(--accent)) 0 9px, transparent 9px 15px);
-  background-size: 15px 100%;
-  animation: march 900ms linear infinite;
+  background: repeating-linear-gradient(90deg, rgb(var(--accent) / 0.9) 0 7px, transparent 7px 13px);
+  animation: draw 480ms var(--ease) 240ms both;
 }
 
 /* Stretches still to make: a faint stitch. */
@@ -227,12 +265,6 @@
 /* A hint's stretch: the stitch in the warm light. */
 .segment[data-ghost][data-kind="ahead"] .segmentLine {
   background: repeating-linear-gradient(90deg, rgb(var(--accent) / 0.7) 0 2px, transparent 2px 8px);
-}
-
-@keyframes march {
-  to {
-    background-position: 15px 0;
-  }
 }
 
 /* A tie made just now draws along its stretch. */
@@ -246,7 +278,7 @@
   }
 }
 
-/* The knots: a point placed on the thread; the dot itself (`::before`) is what pulses and ties. */
+/* The knots: a point placed on the thread; the dot itself (`::before`) is what ties, and its light (`::after`) what the win fills. */
 .knot {
   position: absolute;
   left: 0;
@@ -260,7 +292,8 @@
   transition: transform var(--glide) var(--ease);
 }
 
-.knot::before {
+.knot::before,
+.knot::after {
   content: "";
   position: absolute;
   left: -5px;
@@ -269,26 +302,30 @@
   height: 10px;
   border-radius: 50%;
   background: var(--ink);
-  transition:
-    background-color 700ms ease calc(var(--i) * 170ms),
-    box-shadow 700ms ease calc(var(--i) * 170ms);
 }
 
 .knot[data-kind="start"]::before,
-.knot[data-kind="end"]::before {
+.knot[data-kind="end"]::before,
+.knot[data-kind="start"]::after,
+.knot[data-kind="end"]::after {
   left: -8px;
   top: -8px;
   width: 16px;
   height: 16px;
 }
 
-/* The end, until it's reached: a ring to tie into. */
-.board:not([data-reached]) .knot[data-kind="end"]::before {
+/* The end: a ring to tie into (the light closes it). */
+.knot[data-kind="end"]::before {
   background: var(--void);
   box-shadow: inset 0 0 0 1.5px var(--ink);
 }
 
-/* The next knot to tie: a warm ring, breathing. */
+/* On the last move, the ring the move has to reach is in the warm light. */
+.board[data-last-move] .knot[data-kind="end"]::before {
+  box-shadow: inset 0 0 0 1.5px rgb(var(--accent));
+}
+
+/* The next knot to tie: a warm ring. It rings in once, as it becomes the next. */
 .knot[data-kind="open"]::before {
   left: -7px;
   top: -7px;
@@ -296,7 +333,7 @@
   height: 14px;
   background: var(--void);
   box-shadow: inset 0 0 0 1.5px rgb(var(--accent));
-  animation: breathe 2400ms ease-in-out infinite;
+  animation: ring 520ms var(--ease) both;
 }
 
 .knot[data-kind="ahead"]::before {
@@ -308,13 +345,17 @@
   box-shadow: inset 0 0 0 1.25px var(--ink-3);
 }
 
-@keyframes breathe {
-  0%,
-  100% {
-    scale: 1;
+@keyframes ring {
+  from {
+    scale: 0.3;
+    opacity: 0;
   }
-  50% {
-    scale: 1.3;
+  60% {
+    scale: 1.18;
+    opacity: 1;
+  }
+  to {
+    scale: 1;
   }
 }
 
@@ -339,7 +380,7 @@
   top: 0;
   width: var(--w);
   transform: translate(calc(var(--x) - 50%), calc(var(--y) + 17px));
-  font: 400 clamp(16px, 1.4vw, 22px)/1.06 var(--display);
+  font: 400 clamp(18px, 1.6vw, 24px)/1.05 var(--display);
   text-align: center;
   text-wrap: balance;
   color: var(--ink);
@@ -351,39 +392,47 @@
   color: rgb(var(--accent) / 0.85);
 }
 
-/* The two ends, large, above their knots: the start reading in from the left, the end out to the right. */
+/* The two ends: title cards above their knots, the start reading in from the left, the end out to the right. */
 .endName {
   position: absolute;
   left: 0;
   top: 0;
   width: max-content;
-  max-width: 42%;
-  font: 400 clamp(32px, 4.3vw, 66px)/0.98 var(--display);
-  letter-spacing: -0.005em;
-  text-wrap: balance;
+  max-width: none;
+  font: 400 var(--end-size, 66px) / 0.9 var(--display);
+  letter-spacing: -0.012em;
   color: var(--ink);
 }
 
-/* Clear of the films riding the thread under them. */
+.endLine {
+  display: block;
+}
+
+/* Clear of the films riding the thread under them, a long title's two lines included. */
 .endName[data-side="start"] {
-  transform: translate(calc(var(--x) - 8px), calc(var(--y) - 100% - 50px));
+  transform: translate(calc(var(--x) - 6px), calc(var(--y) - 100% - 64px));
 }
 
 .endName[data-side="end"] {
-  transform: translate(calc(var(--x) - 100% + 8px), calc(var(--y) - 100% - 50px));
+  transform: translate(calc(var(--x) - 100% + 6px), calc(var(--y) - 100% - 64px));
   text-align: right;
 }
 
 .endLabel {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   font: 500 10px/1 var(--mono);
-  letter-spacing: 0.26em;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
 
-/* The film a stretch passes through, riding just above it (and above any face beside it). */
+/* Flush right: the tracking after the last letter would push it in. */
+.endName[data-side="end"] .endLabel {
+  margin-right: -0.32em;
+}
+
+/* The film a stretch passes through, riding just above it (and above any face beside it): the loudest supporting type. */
 .film {
   position: absolute;
   z-index: 1;
@@ -392,10 +441,11 @@
   width: var(--w);
   transform: translate(calc(var(--x) - 50%), calc(var(--y) - 100% - 11px)) rotate(var(--angle));
   transform-origin: 50% 100%;
-  font: italic 400 clamp(14px, 1.08vw, 17px)/1.12 var(--display);
+  font: italic 400 clamp(16px, 1.3vw, 20px)/1.12 var(--display);
   text-align: center;
   text-wrap: balance;
-  color: var(--ink-2);
+  color: var(--ink);
+  opacity: 0.8;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -404,7 +454,7 @@
 }
 
 .filmYear {
-  font: 500 9px/1 var(--mono);
+  font: 500 9.5px/1 var(--mono);
   font-style: normal;
   letter-spacing: 0.1em;
   color: var(--ink-3);
@@ -414,6 +464,7 @@
 .film[data-draft],
 .film[data-ghost] {
   color: rgb(var(--accent));
+  opacity: 1;
 }
 
 .film[data-ghost] .filmTitle::before {
@@ -422,11 +473,58 @@
   vertical-align: 0.2em;
 }
 
+/* The film chosen, on the thread: clicking it puts it back. */
+.filmButton {
+  all: unset;
+  cursor: pointer;
+}
+
+/* (On the label: the label clips what overflows it.) */
+.film:has(.filmButton:focus-visible) {
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.filmClear {
+  margin-left: 6px;
+  font: 400 13px/1 var(--sans);
+  color: var(--ink-3);
+  transition: color 200ms ease;
+}
+
+.film:hover .filmClear {
+  color: var(--ink);
+}
+
+/* Before the play: what will stand and ride here, faintly, in italic. */
+:is(.film, .name, .endName)[data-note] {
+  font-style: italic;
+  color: var(--ink);
+  opacity: 0.32;
+}
+
+.endName[data-note] {
+  --end-size: clamp(34px, 4.6vw, 66px);
+}
+
+.endName[data-note] .endLabel {
+  font-style: normal;
+}
+
+.name[data-note] {
+  font-size: clamp(17px, 1.4vw, 21px);
+}
+
 .board[data-settled] :is(.name, .endName, .film) {
   transition:
     transform var(--glide) var(--ease),
     color 700ms ease,
     opacity 500ms ease;
+}
+
+/* Start pressed: the notes make way for today's pair. */
+.board[data-starting] :is(.film, .name, .endName)[data-note] {
+  opacity: 0;
 }
 
 /* What was tied just now develops after its stretch has drawn. */
@@ -440,15 +538,173 @@
   }
 }
 
+/* ----- The link, written on the thread (wide screens) ----- */
+
+/* Where the board leaves room for the field: on the open stretch (its film), or under the knot it ties (its co-star). */
+.slot {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: 0;
+  width: clamp(240px, var(--w), 340px);
+  animation: develop 320ms ease 120ms both;
+}
+
+.slot[data-step="film"] {
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) - 100% - 9px));
+}
+
+.slot[data-step="cast"] {
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) + 16px));
+}
+
+.slot[data-edge="end"] {
+  transform: translate(calc(var(--x) - 100% + 8px), calc(var(--y) + 16px));
+}
+
+.slotLine .field {
+  display: block;
+  position: relative;
+}
+
+.slotLine .input {
+  width: 100%;
+  padding: 2px 0 4px;
+  text-align: center;
+  font: italic 400 clamp(18px, 1.45vw, 22px)/1.15 var(--display);
+  color: rgb(var(--accent));
+  caret-color: rgb(var(--accent));
+}
+
+.slotLine .input::placeholder {
+  color: rgb(var(--accent) / 0.5);
+}
+
+/* A co-star is a name, not a title: upright, in ink. */
+.slot[data-step="cast"] .input {
+  font-style: normal;
+  color: var(--ink);
+}
+
+.slot[data-step="cast"] .input::placeholder {
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+.slot[data-edge="end"] .input {
+  text-align: right;
+}
+
+/* Where the field can fit its text, it does: the caret then starts where the words do, not mid-placeholder. */
+@supports (field-sizing: content) {
+  .slotLine .field {
+    display: flex;
+    justify-content: center;
+  }
+
+  .slot[data-edge="end"] .field {
+    justify-content: flex-end;
+  }
+
+  /* (It may run wider than the room between knots: a name in the placeholder shouldn't be cut.) */
+  .slotLine .input {
+    flex: none;
+    field-sizing: content;
+    width: auto;
+    min-width: 1ch;
+    max-width: 420px;
+    text-align: left;
+  }
+}
+
+/* The hits hang from the line, under the field. */
+.slotLine .hits {
+  top: calc(100% + 14px);
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  width: 380px;
+  transform: translateX(calc(-50% + var(--shift, 0px)));
+  max-height: min(340px, 44dvh);
+  padding: 8px 0 6px;
+  border: 0;
+  border-top: 1px solid rgb(var(--accent) / 0.35);
+  border-radius: 0;
+  box-shadow: none;
+  background: rgb(7 7 8 / 0.95);
+  animation: drop 220ms ease-out both;
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+.slot[data-edge="end"] .hits {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.slotLine .option {
+  position: relative;
+  padding: 8px 18px 8px 32px;
+  border-radius: 0;
+}
+
+.slotLine .option[aria-selected="true"] {
+  background: none;
+}
+
+.slotLine .option[aria-selected="true"] .optionTitle {
+  color: rgb(var(--accent));
+}
+
+/* The active hit: a short tick in the warm light. */
+.slotLine .option[aria-selected="true"]::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 10px;
+  height: 1px;
+  background: rgb(var(--accent));
+}
+
+.slotLine .listNote {
+  padding: 10px 18px 10px 32px;
+}
+
+.slotLine .listCredit {
+  padding: 8px 18px 4px 32px;
+}
+
+/* A hint's film on the stretch the field is written on is written in the field instead (its placeholder). */
+.film[data-ghost][data-hosting] {
+  visibility: hidden;
+}
+
+/* A hint's co-star under the knot the field is written under drops below the field. */
+.name[data-ghost][data-hosting]:not([data-face]) {
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) + 60px));
+}
+
 /* ----- Live moments ----- */
 
-/* The first draw: the ends come up, then the thread runs out between them, knot by knot. */
+/* The first draw: the ends come up where their notes stood, then the thread runs out between them, knot by knot. */
 .board[data-mode="intro"] .segmentLine {
   animation: draw 620ms var(--ease) calc(320ms + var(--i) * 150ms) both;
 }
 
 .board[data-mode="intro"] .knot::before {
   animation: tie 480ms var(--ease) calc(240ms + var(--i) * 150ms) both;
+}
+
+/* (The open knot rings in with the rest, and so doesn't ring again as the intro ends.) */
+.board[data-mode="intro"] .knot[data-kind="open"]::before {
+  animation-name: ring;
 }
 
 .board[data-mode="intro"] .endName {
@@ -459,37 +715,120 @@
   animation-delay: 380ms;
 }
 
-/* Reached: the light runs the thread from end to end, and stays. */
-.board[data-reached] .segment[data-kind="tied"] .segmentLine,
-.board[data-reached] .knot::before {
-  background-color: rgb(var(--accent));
+.board[data-mode="intro"] .slot {
+  animation-delay: 1500ms;
 }
 
-.board[data-reached] .knot[data-kind="end"]::before {
-  box-shadow: 0 0 0 6px rgb(var(--accent) / 0.16);
+/*
+ * Reached: one light runs the thread, from the start pin to the end ring, at one speed (each part's
+ * `--lit-at` and `--lit-for` come from `lightTimes`). A bead leads it; each knot takes the light as
+ * it passes, each face its colour, and the end ring closes last. Live, it plays as animations (a
+ * stretch tied just now is new, so it has nothing to transition from); on a reload it's simply lit.
+ */
+.segmentLit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 2px;
+  background: rgb(var(--accent));
+  transform: scaleX(0);
+  transform-origin: 0 50%;
 }
 
-.board[data-mode="win"] .knot::before {
-  animation: flash 900ms ease calc(var(--i) * 170ms) both;
+.board[data-reached]:not([data-variant="ours"]) .segment[data-kind="tied"] .segmentLit {
+  transform: scaleX(1);
 }
 
-@keyframes flash {
-  0% {
-    scale: 1;
+.board[data-mode="win"]:not([data-variant="ours"]) .segment[data-kind="tied"] .segmentLit {
+  animation: lit var(--lit-for) linear var(--lit-at) both;
+}
+
+@keyframes lit {
+  from {
+    transform: scaleX(0);
   }
-  35% {
-    scale: 1.7;
-  }
-  100% {
-    scale: 1;
+  to {
+    transform: scaleX(1);
   }
 }
 
-.board[data-mode="win"] .endName[data-side="end"] {
-  animation: develop 900ms ease both;
+.segmentBead {
+  position: absolute;
+  left: 0;
+  top: -1.5px;
+  width: 72px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgb(255 240 214));
+  opacity: 0;
+  pointer-events: none;
 }
 
-/* Our route (after giving up, or asked for): drawn in, in plain ink, quieter than yours. */
+/* No fill: the bead is gone once it has run its stretch. */
+.board[data-mode="win"]:not([data-variant="ours"]) .segment[data-kind="tied"] .segmentBead {
+  animation: bead var(--lit-for) linear var(--lit-at);
+}
+
+@keyframes bead {
+  from {
+    opacity: 1;
+    transform: translateX(-72px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(calc(var(--len) - 72px));
+  }
+}
+
+.knot::after {
+  background: rgb(var(--accent));
+  opacity: 0;
+}
+
+.knot[data-kind="end"]::after {
+  scale: 0;
+}
+
+.board[data-reached]:not([data-variant="ours"]) .knot::after {
+  opacity: 1;
+}
+
+.board[data-reached]:not([data-variant="ours"]) .knot[data-kind="end"]::after {
+  scale: 1;
+}
+
+.board[data-mode="win"]:not([data-variant="ours"]) .knot::after {
+  animation: develop 240ms ease var(--lit-at) both;
+}
+
+/* The ring closes from its centre. */
+.board[data-mode="win"]:not([data-variant="ours"]) .knot[data-kind="end"]::after {
+  animation: close 360ms var(--ease) var(--lit-at) both;
+}
+
+@keyframes close {
+  from {
+    scale: 0;
+  }
+}
+
+/* The end ring was there all along: it doesn't tie in again as it's reached. */
+.board[data-mode="win"] .knotItem[data-fresh] .knot[data-kind="end"]::before {
+  animation: none;
+}
+
+.board[data-reached]:not([data-variant="ours"]) .film {
+  opacity: 1;
+}
+
+.board[data-mode="win"] .film {
+  transition:
+    transform var(--glide) var(--ease),
+    color 700ms ease,
+    opacity 400ms ease var(--lit-at);
+}
+
+/* Our route (after giving up, or asked for): drawn in, in plain ink, quieter than yours; no light. */
 .board[data-variant="ours"] :is(.name, .endName) {
   color: var(--ink-2);
 }
@@ -511,23 +850,25 @@
 /* ----- Faces ----- */
 
 /*
- * A face is lit out of the dark: a soft round mask, no edge, toned to the room while playing (the
- * photos come from every decade and camera; toned, they belong to one room). A co-star's face is
- * their knot. The two ends' faces are large and dim behind their names, like a title card's.
+ * A face is lit out of the dark: a soft round mask, no edge, a silver print while playing (the
+ * photos come from every decade and camera; in silver, they belong to one room). The colour print
+ * over it is what the light develops on a win. A co-star's face hangs under their knot, their name
+ * across its chin; the two ends' are large and dim behind their title cards.
  */
 .face {
-  --d: 74px;
+  --d: var(--cd);
   position: absolute;
   left: 0;
   top: 0;
   width: var(--d);
   height: var(--d);
   margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
-  transform: translate(var(--x), var(--y));
+  /* Its top edge 12px under the knot. */
+  transform: translate(var(--x), calc(var(--y) + var(--d) * 0.5 + 12px));
   opacity: 0;
   pointer-events: none;
-  -webkit-mask-image: radial-gradient(circle at 50% 44%, #000 34%, transparent 66%);
-  mask-image: radial-gradient(circle at 50% 44%, #000 34%, transparent 66%);
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 30%, transparent 66%);
+  mask-image: radial-gradient(circle at 50% 40%, #000 30%, transparent 66%);
   transition: opacity 900ms ease;
 }
 
@@ -538,55 +879,78 @@
 }
 
 .face[data-loaded] {
-  opacity: 1;
+  opacity: 0.62;
 }
 
 /* A hint's co-star: there, faintly, until tied. */
 .face[data-ghost][data-loaded] {
-  opacity: 0.4;
+  opacity: 0.3;
 }
 
 .face img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: grayscale(0.9) sepia(0.3) contrast(1.3) brightness(0.82);
-  transition: filter 1200ms ease calc(var(--i) * 170ms);
+}
+
+.faceBase {
+  filter: grayscale(1) contrast(1.12) brightness(0.86);
+}
+
+.faceColour {
+  opacity: 0;
 }
 
 .face[data-side] {
-  --d: clamp(210px, 21vw, 320px);
+  --d: clamp(260px, 25vw, 384px);
   z-index: -1;
-  -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 22%, transparent 64%);
-  mask-image: radial-gradient(circle at 50% 42%, #000 22%, transparent 64%);
+  /* Faded out before the square's top edge, so it never shows. */
+  -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 22%, transparent 55%);
+  mask-image: radial-gradient(circle at 50% 42%, #000 22%, transparent 55%);
 }
 
 .face[data-side][data-loaded] {
-  opacity: 0.5;
+  opacity: 0.42;
 }
 
-/* Set in from the room's edge, behind the name, the face's chin near the thread. */
+/* Set in from the room's edge, behind the title card, the face's chin on the thread. */
 .face[data-side="start"] {
-  transform: translate(calc(var(--x) + var(--d) * 0.24), calc(var(--y) - var(--d) * 0.37));
+  transform: translate(calc(var(--x) + var(--d) * 0.26), calc(var(--y) - var(--d) * 0.5));
 }
 
 .face[data-side="end"] {
-  transform: translate(calc(var(--x) - var(--d) * 0.24), calc(var(--y) - var(--d) * 0.37));
+  transform: translate(calc(var(--x) - var(--d) * 0.26), calc(var(--y) - var(--d) * 0.5));
 }
 
-/* A co-star's name clears their face. */
+/* A co-star's name across their face's lower third. */
 .name[data-face] {
-  transform: translate(calc(var(--x) - 50%), calc(var(--y) + 40px));
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) + 12px + var(--cd) * 0.7));
 }
 
-/* Reached: as the light runs the thread, every face takes its colour, in order. */
-.board[data-reached]:not([data-variant="ours"]) .face img {
-  filter: none;
+/* Reached: as the light passes, every face takes its colour and comes up a little. */
+.board[data-reached]:not([data-variant="ours"]) .faceColour {
+  opacity: 1;
+}
+
+.board[data-mode="win"]:not([data-variant="ours"]) .faceColour {
+  animation: develop 600ms ease var(--lit-at) both;
+}
+
+.board[data-reached]:not([data-variant="ours"]) .face[data-loaded] {
+  opacity: 0.92;
 }
 
 .board[data-reached]:not([data-variant="ours"]) .face[data-side][data-loaded] {
-  opacity: 0.7;
+  opacity: 0.62;
+}
+
+.board[data-mode="win"] .face {
+  transition:
+    transform var(--glide) var(--ease),
+    opacity 900ms ease var(--lit-at);
 }
 
 /* ----- Down a phone ----- */
@@ -595,60 +959,81 @@
   width: calc(100vw - 32px);
 }
 
-.board[data-vertical] .name,
-.board[data-vertical] .endName {
+.board[data-vertical] .name {
   width: auto;
   max-width: calc(100% - 64px);
   transform: translate(calc(var(--x) + 22px), calc(var(--y) - 50%));
+  font-size: 19px;
   text-align: left;
 }
 
-.board[data-vertical] .name {
-  font-size: 18px;
+.board[data-vertical] .name[data-face] {
+  transform: translate(calc(var(--x) + 38px), calc(var(--y) - 50%));
 }
 
+/* The ends' title bands: the start above the first pin, the end under the last, both reading from the left. */
 .board[data-vertical] .endName {
-  font-size: clamp(24px, 7.4vw, 32px);
+  max-width: calc(100% - 24px);
+  font-size: clamp(30px, 9.4vw, 40px);
+  line-height: 0.92;
+  text-align: left;
+}
+
+.board[data-vertical] .endName[data-side="start"] {
+  transform: translate(calc(var(--x) - 12px), calc(var(--y) - 100% - 24px));
+}
+
+.board[data-vertical] .endName[data-side="end"] {
+  transform: translate(calc(var(--x) - 12px), calc(var(--y) + 24px));
 }
 
 .board[data-vertical] .endLabel {
-  display: inline;
-  margin: 0 10px 0 0;
-  vertical-align: 0.35em;
+  margin: 0 0 10px;
 }
 
 .board[data-vertical] .film {
   width: auto;
-  max-width: calc(100% - 72px);
+  max-width: calc(100% - 64px);
   transform: translate(calc(var(--x) + 24px), calc(var(--y) - 50%));
-  font-size: 14px;
+  font-size: 15px;
   text-align: left;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
 }
 
-/* Down a phone the ends' faces sit on their knots too, larger, and every name clears its face. */
+/* Down a phone a co-star's face sits on their knot, and the ends' bleed off the right edge beside their bands. */
 .board[data-vertical] .face {
-  --d: 56px;
-}
-
-.board[data-vertical] .face[data-side] {
-  --d: 92px;
-  z-index: 0;
+  --d: 52px;
   transform: translate(var(--x), var(--y));
 }
 
-.board[data-vertical] .face[data-side][data-loaded],
-.board[data-vertical][data-reached] .face[data-side][data-loaded] {
-  opacity: 1;
+.board[data-vertical] .face[data-loaded] {
+  opacity: 0.9;
 }
 
-.board[data-vertical] .name[data-face] {
-  transform: translate(calc(var(--x) + 32px), calc(var(--y) - 50%));
+.board[data-vertical] .face[data-ghost][data-loaded] {
+  opacity: 0.3;
 }
 
-.board[data-vertical] .endName[data-face] {
-  transform: translate(calc(var(--x) + 44px), calc(var(--y) - 50%));
+.board[data-vertical] .face[data-side] {
+  --d: 220px;
+  left: auto;
+  right: calc(var(--d) * -0.22);
+  margin: 0;
+}
+
+.board[data-vertical] .face[data-side][data-loaded] {
+  opacity: 0.42;
+}
+
+.board[data-vertical] .face[data-side="start"] {
+  transform: translateY(calc(var(--y) - var(--d) * 0.72));
+}
+
+.board[data-vertical] .face[data-side="end"] {
+  transform: translateY(calc(var(--y) - var(--d) * 0.08));
+}
+
+.board[data-vertical][data-reached]:not([data-variant="ours"]) .face[data-side][data-loaded] {
+  opacity: 0.62;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -656,24 +1041,14 @@
  * ------------------------------------------------------------------------------------------- */
 
 .console {
-  width: min(780px, calc(100vw - 32px));
+  position: relative;
+  z-index: 1;
+  align-self: end;
+  width: min(1150px, calc(100vw - 32px));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 14px;
-}
-
-.status {
-  margin: 0;
-  font: 400 clamp(18px, 1.45vw, 22px)/1.2 var(--display);
-  color: var(--ink-2);
-  text-align: center;
-}
-
-.status em {
-  font-style: normal;
-  color: var(--ink);
-  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .dot {
@@ -741,8 +1116,10 @@
   gap: 8px;
 }
 
+/* The line docked in the console (narrower screens), and the questions the moves ask. */
 .slate {
-  width: 100%;
+  justify-self: center;
+  width: min(780px, 100%);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -756,7 +1133,17 @@
   border-color: rgb(var(--accent) / 0.75);
 }
 
-/* The film chosen for this link, in front of the cast search. */
+/* Until the board has measured, the line may yet be written on the thread: it waits unseen. */
+.board:not([data-settled]) ~ .console [data-placement="dock"] {
+  visibility: hidden;
+}
+
+/* While its hits are open over the board, the docked line is above it. */
+.console:has([data-placement="dock"] .hits:not([hidden])) {
+  z-index: 3;
+}
+
+/* The film chosen for this link, in front of the cast search (docked). */
 .via {
   flex: none;
   max-width: 46%;
@@ -829,7 +1216,7 @@
   color: var(--ink-3);
 }
 
-/* Hits open upward, over the board: the line sits low on the screen. */
+/* Docked, hits open upward, over the board: the line sits low on the screen. */
 .hits {
   position: absolute;
   left: -14px;
@@ -924,7 +1311,7 @@
   text-wrap: pretty;
 }
 
-/* The play's other moves, under the line: undo at the left, the hints and giving up at the right. */
+/* The foot row, as wide as the thread: undo at the left, the meter in the middle, the hints and giving up at the right. */
 .moves {
   display: flex;
   flex-wrap: wrap;
@@ -933,8 +1320,25 @@
   min-height: 34px;
 }
 
-.movesGap {
+/* The play's reading: moves, par, worth (or the last move's warning, in the warm light). */
+.meter {
   flex: 1;
+  min-width: 0;
+  font: 500 10.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+.meter em {
+  font-style: normal;
+  color: var(--ink);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.meter[data-last] {
+  color: rgb(var(--accent));
 }
 
 .go,
@@ -1018,42 +1422,37 @@
   color: #f0a58f;
 }
 
-/* Before the play: the rules and the way in. */
+/* Before the play: the rules in two lines, and the way in. (The thread above carries how a link is made.) */
 .opening {
   display: grid;
   justify-items: center;
-  gap: 24px;
+  gap: 8px;
   padding-top: 4px;
 }
 
-.rules {
+.openingLine {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 9px;
-  counter-reset: rule;
-}
-
-.rules li {
-  counter-increment: rule;
-  display: grid;
-  grid-template-columns: 30px 1fr;
-  align-items: baseline;
-  font: 400 clamp(16px, 1.25vw, 19px)/1.35 var(--display);
+  max-width: 680px;
+  font: 400 clamp(15px, 1.15vw, 17px)/1.5 var(--display);
   color: var(--ink-2);
+  text-align: center;
+  text-wrap: balance;
+  transition: opacity 420ms ease;
 }
 
-.rules li::before {
-  content: counter(rule, decimal-leading-zero);
-  font: 500 9.5px/1 var(--mono);
-  letter-spacing: 0.14em;
-  color: rgb(var(--accent) / 0.85);
+.openingLine em {
+  font-style: normal;
+  color: var(--ink);
+}
+
+.opening[data-starting] .openingLine {
+  opacity: 0;
 }
 
 .roll {
-  padding: 14px 30px;
-  font-size: 14px;
+  margin-top: 18px;
+  padding: 15px 34px;
+  font-size: 15px;
   letter-spacing: 0.04em;
 }
 
@@ -1064,45 +1463,70 @@
 .creditsWrap {
   width: 100%;
   opacity: 0;
-  transform: translate3d(0, 10px, 0);
   pointer-events: none;
-  transition:
-    opacity 1100ms ease,
-    transform 1100ms var(--ease);
+  transition: opacity 300ms ease;
 }
 
 .creditsWrap[data-show] {
   opacity: 1;
-  transform: none;
   pointer-events: auto;
+}
+
+/* Up live, the end titles rise line by line (`--n`); on a reload they're simply there. */
+.creditsWrap[data-live] .credits > * {
+  animation: rise 700ms ease both;
+  animation-delay: calc(var(--n) * 110ms);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
 }
 
 .credits {
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 0;
   text-align: center;
 }
 
 .kicker {
-  margin: 4px 0 0;
+  margin: 0 0 12px;
   font: 500 10.5px/1 var(--mono);
   letter-spacing: 0.3em;
   text-transform: uppercase;
   color: rgb(var(--accent));
 }
 
-.points {
+/* The score, with what it's for stacked beside it. */
+.lockup {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin: 2px 0 0;
-  font: 400 clamp(48px, 5vw, 72px)/1 var(--display);
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+}
+
+.points {
+  margin: 0;
+  font: 400 clamp(72px, 7.2vw, 104px)/0.78 var(--display);
   font-variant-numeric: lining-nums;
 }
 
-.points small {
-  font: italic 400 clamp(17px, 1.4vw, 21px)/1 var(--display);
+.credits[data-lost] .points {
+  color: var(--ink-3);
+}
+
+.lockupSide {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  padding-bottom: 4px;
+}
+
+.pointsWord {
+  font: italic 400 22px/1 var(--display);
   color: var(--ink-3);
 }
 
@@ -1112,14 +1536,7 @@
   justify-content: center;
   align-items: center;
   gap: 10px;
-  margin-top: 4px;
-}
-
-.result {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  margin-right: 6px;
+  margin-top: 26px;
 }
 
 .score {
@@ -1135,11 +1552,39 @@
   color: var(--ink);
 }
 
-.dataCredit {
-  margin: 14px 0 0;
-  font: 500 9.5px/1.4 var(--mono);
-  letter-spacing: 0.03em;
+.tomorrow {
+  margin: 18px 0 0;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The credits, as a film's are: fine print. */
+.finePrint {
+  margin: 10px 0 0;
+  font: 500 9px/1.5 var(--mono);
+  letter-spacing: 0.04em;
+  color: rgb(239 233 223 / 0.3);
+}
+
+.finePrint button {
+  all: unset;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgb(239 233 223 / 0.2);
+}
+
+.finePrint button:hover,
+.finePrint button:focus-visible {
+  color: var(--ink-2);
+}
+
+.finePrint button:focus-visible {
+  outline: 1px solid var(--ink-3);
+  outline-offset: 2px;
 }
 
 /* A result as a little thread. */
@@ -1365,10 +1810,6 @@
     display: none;
   }
 
-  .stage {
-    align-content: start;
-  }
-
   .slate {
     flex-wrap: wrap;
   }
@@ -1382,22 +1823,24 @@
     justify-content: flex-end;
   }
 
+  /* The meter on a row of its own, the four moves centred under it. */
   .moves {
     justify-content: center;
   }
 
-  .movesGap {
+  .meter {
+    order: -1;
     flex-basis: 100%;
-    height: 0;
-    order: 1;
+    padding-bottom: 6px;
   }
 
-  .moves > :first-child {
-    order: 2;
+  .points {
+    font-size: 72px;
   }
 
-  .moves > :nth-child(n + 3) {
-    order: 0;
+  .creditActions .go {
+    flex-basis: 100%;
+    height: 48px;
   }
 
   .panelBackdrop {
@@ -1457,15 +1900,15 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: grayscale(0.9) sepia(0.3) contrast(1.2) brightness(0.9);
+  filter: grayscale(1) contrast(1.12) brightness(0.86);
 }
 
 .photoCreditsLink {
-  margin-top: 6px;
-  padding: 6px 0;
+  margin-top: -4px;
+  padding: 4px 0;
   border: 0;
   background: none;
-  font: 500 9.5px/1.4 var(--mono);
+  font: 500 9px/1.4 var(--mono);
   letter-spacing: 0.08em;
   color: var(--ink-3);
   cursor: pointer;

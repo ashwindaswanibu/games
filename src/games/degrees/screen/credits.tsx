@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { z } from "zod";
+import { Countdown } from "@/components/countdown";
 import { useShare } from "@/components/share-button";
 import { APP_NAME } from "@/config";
-import type { PuzzleDate } from "@/core/day";
+import { addDays, startOfDay, type PuzzleDate } from "@/core/day";
 import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
@@ -36,9 +37,11 @@ export function ChainMarks({ grid, label }: { grid: string; label?: string }) {
 }
 
 /**
- * The end card under the board (which shows the chain): how it went, the score, sharing
- * (spoiler-free), everyone's results, and the catalog's data credit (IMDb). When the player's chain
- * isn't the one the puzzle was made with, the board can show ours instead.
+ * The end titles under the board (which shows the chain): how it went; the score in one lockup with
+ * the moves and the little thread; sharing (spoiler-free), everyone's results; when the next pair
+ * comes; and the credits as fine print (the catalog's data, IMDb; the portraits, Commons). When the
+ * player's chain isn't the one the puzzle was made with, the board can show ours instead. Each line
+ * is numbered (`--n`) so the titles can rise in turn.
  */
 export function Credits(props: {
   puzzle: DegreesPuzzle;
@@ -50,26 +53,37 @@ export function Credits(props: {
   /** Whether the board can switch to our route (the player's chain differs), and which it shows. */
   ours: { available: boolean; showing: boolean; toggle(): void };
   onEveryone(): void;
+  /** Opens the portraits' credits. */
+  onPhotoCredits(): void;
 }) {
-  const { puzzle, won, moves, result, date, ours, onEveryone } = props;
+  const { puzzle, won, moves, result, date, ours, onEveryone, onPhotoCredits } = props;
   const { share, copied } = useShare(
     shareText({ appName: APP_NAME, gameName: degrees.name, emoji: degrees.emoji, date, label: result.label, score: result.score, grid: result.shareGrid }),
   );
   const over = moves - puzzle.par;
   const kicker = !won ? "Gave up · a shortest route" : over > 0 ? `Connected · ${over} over par` : over < 0 ? "Connected · under par" : "Connected · at par";
 
+  const line = (n: number) => ({ "--n": n }) as CSSProperties;
+
   return (
-    <section className={styles.credits} aria-label="Today's result">
-      <p className={styles.kicker}>{kicker}</p>
-      <h2 className={styles.points}>
-        {result.score}
-        <small>{result.score === 1 ? "point" : "points"}</small>
-      </h2>
-      <div className={styles.creditActions}>
-        <span className={styles.result}>
-          <ChainMarks grid={result.shareGrid} />
+    <section className={styles.credits} aria-label="Today's result" data-lost={!won || undefined}>
+      <p className={styles.kicker} style={line(0)}>
+        {kicker}
+      </p>
+      <div className={styles.lockup} style={line(1)}>
+        <h2 className={styles.points}>
+          {result.score}
+          <span className={styles.srOnly}> {result.score === 1 ? "point" : "points"}</span>
+        </h2>
+        <div className={styles.lockupSide}>
+          <span className={styles.pointsWord} aria-hidden>
+            {result.score === 1 ? "point" : "points"}
+          </span>
           <span className={styles.score}>{result.label}</span>
-        </span>
+          <ChainMarks grid={result.shareGrid} />
+        </div>
+      </div>
+      <div className={styles.creditActions} style={line(2)}>
         <button type="button" className={styles.go} onClick={() => void share()}>
           {copied ? "Copied" : "Share"}
         </button>
@@ -82,7 +96,15 @@ export function Credits(props: {
           How everyone did
         </button>
       </div>
-      <p className={styles.dataCredit}>{IMDB_ATTRIBUTION}</p>
+      <p className={styles.tomorrow} style={line(3)}>
+        A new pair in <Countdown target={startOfDay(addDays(date, 1)).toISOString()} />
+      </p>
+      <p className={styles.finePrint} style={line(4)}>
+        {IMDB_ATTRIBUTION} ·{" "}
+        <button type="button" onClick={onPhotoCredits} aria-haspopup="dialog">
+          Portraits: Wikimedia Commons
+        </button>
+      </p>
     </section>
   );
 }

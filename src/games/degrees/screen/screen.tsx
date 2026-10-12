@@ -16,6 +16,9 @@ import {
   maxMoves,
   movesLeft,
   movesUsed,
+  RANK_STEP,
+  SPARE_MOVES,
+  TOP_SCORE,
   type DegreesHintKind,
   type DegreesLink,
   type DegreesMove,
@@ -30,36 +33,43 @@ import styles from "./screen.module.css";
 type Props = ImmersiveGameUiProps<typeof degrees>;
 
 /** How long each of the board's live moments plays before it rests (see the stylesheet). */
-const MODE_MS: Record<Exclude<BoardMode, "still">, number> = { intro: 1900, win: 2600, reveal: 2200 };
-/** After the end is reached live, the end card waits for the light to run the thread. */
-const CREDITS_AFTER_MS = 1700;
+const MODE_MS: Record<Exclude<BoardMode, "still">, number> = { intro: 1900, win: 3000, reveal: 2200 };
+/** After the end is reached live, the end titles wait for the light to run the thread. */
+const CREDITS_AFTER_MS = 2300;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** The thread before the play has started: two ends and par's knots, nobody named yet. */
+/**
+ * The thread before the play has started, with the game written on it faintly: the two ends, one
+ * knot between (par isn't known yet), and a note in each place today's names and films will take.
+ */
 const UNLIT: Thread = {
   knots: [
-    { key: "start", kind: "start", person: null, ghost: null },
-    { key: "ahead1", kind: "ahead", person: null, ghost: null },
-    { key: "ahead2", kind: "ahead", person: null, ghost: null },
-    { key: "end", kind: "end", person: null, ghost: null },
+    { key: "start", kind: "start", person: null, ghost: null, note: "today's first actor" },
+    { key: "ahead1", kind: "ahead", person: null, ghost: null, note: "a co-star from it" },
+    { key: "end", kind: "end", person: null, ghost: null, note: "today's second actor" },
   ],
-  segments: Array.from({ length: 3 }, (_, i) => ({ key: `ahead${i}`, kind: "ahead" as const, film: null, draft: false, ghost: null })),
+  segments: [
+    { key: "ahead0", kind: "ahead", film: null, draft: false, ghost: null, note: "a film they were in" },
+    { key: "ahead1", kind: "ahead", film: null, draft: false, ghost: null, note: "and on, film to film" },
+  ],
   slack: 0,
   reached: false,
 };
 
 /**
  * Degrees of Separation, full screen: a dark room and a thread. Today's two actors are its ends,
- * their faces large and dim behind their names; each link ties a film and a co-star (their face
- * the knot) onto it. At par the thread is taut; links over par are slack and it sags with them, so
- * the cost of a long way round is there to see. The next link is made in the console under it: a
- * film the current actor was in, then a co-star from that film.
+ * title cards above the line with their faces large and dim behind them; each link ties a film
+ * (riding the stretch) and a co-star (their face hanging under the knot) onto it. At par the
+ * thread is taut; links over par are slack and it sags with them, so the cost of a long way round
+ * is there to see. The next link is written on the thread where it will live (in the console on
+ * narrower screens): a film the current actor was in, then a co-star from that film.
  *
  * Every link, undo and hint uses one of the day's moves (`../logic.ts`). Two hints: the way in (the
  * film a shortest route reaches the end actor through) and a next link (from where you stand). They
- * ride the thread faintly where they go. Reaching the end runs a light along the thread, each face
- * taking its colour, before the end card comes up; giving up draws a shortest route in its place.
+ * ride the thread faintly where they go. Reaching the end runs one light along the thread, each
+ * knot taking it and each face its colour as it passes; then the house lights come up, the thread
+ * lifts and the end titles rise. Giving up draws a shortest route in its place.
  */
 export function DegreesScreen(props: Props) {
   const { view, start, submitMove, pending, notice, date, friends, viewerId } = props;
@@ -82,11 +92,15 @@ export function DegreesScreen(props: Props) {
   // Faces the cast search has shown this visit, by person (they need a credit too).
   const searchFaces = useRef(new Map<number, string>());
   const [showOurs, setShowOurs] = useState(false);
+  // The slot the board leaves on the thread for the link being made (wide screens only).
+  const [lineHost, setLineHost] = useState<HTMLElement | null>(null);
 
   // The board's live moments play only when they happen in front of the player, never on a reload.
   const [seenStatus, setSeenStatus] = useState(status);
   const [mode, setMode] = useState<BoardMode>("still");
   const [creditsUp, setCreditsUp] = useState(finished);
+  // The end titles came up in front of the player (they rise line by line), not on a reload.
+  const [creditsLive, setCreditsLive] = useState(false);
   if (status !== seenStatus) {
     setSeenStatus(status);
     if (seenStatus === null && status === "in_progress") setMode("intro");
@@ -101,7 +115,10 @@ export function DegreesScreen(props: Props) {
   }, [mode]);
   useEffect(() => {
     if (!finished || creditsUp) return;
-    const timer = setTimeout(() => setCreditsUp(true), CREDITS_AFTER_MS);
+    const timer = setTimeout(() => {
+      setCreditsUp(true);
+      setCreditsLive(true);
+    }, CREDITS_AFTER_MS);
     return () => clearTimeout(timer);
   }, [finished, creditsUp]);
 
@@ -124,6 +141,8 @@ export function DegreesScreen(props: Props) {
         ? threadOf(puzzle, reveal!.path, { open: false })
         : threadOf(puzzle, links, { open: playing, draft: film, next: next && { film: next.film, person: next.person }, wayIn: wayIn?.film ?? null });
   const showingOurs = status === "lost" || (showOurs && ownRoute);
+  // A hint's film on the stretch being made (the next link's, or the way in on the last stretch).
+  const hintFilm = thread.segments.find((s) => s.kind === "open")?.ghost ?? null;
   const boardLabel = showingOurs ? "A shortest route" : "Your chain";
   // Faces for everyone the board can show: both ends, the chain, a hint's co-star, our route once it's out.
   const faceIds = puzzle
@@ -189,14 +208,39 @@ export function DegreesScreen(props: Props) {
   }
 
   const today = formatPuzzleDate(date, { weekday: "short", month: "short", day: "numeric" });
+  // The foot row's reading of the play.
+  const meter =
+    left === 0 ? (
+      // Only a play from before moves were counted can get here.
+      <>
+        No moves left <span className={styles.dot}>·</span> give up to see a shortest route
+      </>
+    ) : lastMove && puzzle ? (
+      <>
+        Last move <span className={styles.dot}>·</span> it has to reach <em>{puzzle.end.name}</em>
+      </>
+    ) : (
+      <>
+        Move <em>{used + 1}</em> of {limit} <span className={styles.dot}>·</span> par <em>{puzzle?.par}</em> <span className={styles.dot}>·</span> worth{" "}
+        <em key={worth} className={styles.worth}>
+          {worth}
+        </em>
+      </>
+    );
 
   return (
-    <div className={`${DISPLAY_FONT_VARS} ${styles.screen}`} data-finished={finished || undefined} data-playing={playing || undefined}>
+    <div
+      className={`${DISPLAY_FONT_VARS} ${styles.screen}`}
+      data-finished={finished || undefined}
+      data-playing={playing || undefined}
+      data-credits={(finished && creditsUp) || undefined}
+    >
       {/* While a panel is open over the room, the rest of the screen is out of reach (focus stays in the panel). */}
       <div className={styles.room} aria-hidden>
         <div className={styles.lamp} />
         <div className={styles.glow} style={{ opacity: puzzle ? Math.min(1, 0.35 + (0.65 * links.length) / Math.max(1, puzzle.par)) : 0.2 }} />
         <div className={styles.vignette} />
+        <div className={styles.houseLights} />
         <div className={styles.grain} />
       </div>
 
@@ -223,12 +267,24 @@ export function DegreesScreen(props: Props) {
           variant={showingOurs ? "ours" : "yours"}
           label={boardLabel}
           portraitOf={portraitOf}
+          lastMove={lastMove}
+          starting={starting && !view}
+          line={playing ? (film ? "cast" : "film") : null}
+          hostLine={setLineHost}
+          onChangeFilm={() => setDraft(null)}
         />
 
         <section className={styles.console}>
           {!view && (
-            <div className={styles.opening}>
-              <ol className={styles.rules}>
+            <div className={styles.opening} data-starting={starting || undefined}>
+              {/* The rules in two lines; the thread above carries how a link is made. The full rules are read with the button. */}
+              <p className={styles.openingLine}>
+                Par + <em>{SPARE_MOVES}</em> moves. A link, an undo or a hint each uses one.
+              </p>
+              <p className={styles.openingLine}>
+                Reach them in par for <em>{TOP_SCORE}</em>; each longer route, <em>{RANK_STEP}</em> fewer. Stuck? The way in, or the next link.
+              </p>
+              <ol id="degrees-rules" className={styles.srOnly}>
                 {degrees.rules.map((rule) => (
                   <li key={rule}>{rule}</li>
                 ))}
@@ -236,6 +292,7 @@ export function DegreesScreen(props: Props) {
               <button
                 type="button"
                 className={styles.roll}
+                aria-describedby="degrees-rules"
                 disabled={pending || starting}
                 onClick={async () => {
                   setStarting(true);
@@ -250,27 +307,6 @@ export function DegreesScreen(props: Props) {
 
           {playing && puzzle && state && from && (
             <>
-              <p className={styles.status}>
-                {left === 0 ? (
-                  // Only a play from before moves were counted can get here.
-                  <>
-                    No moves left <span className={styles.dot}>·</span> give up to see a shortest route
-                  </>
-                ) : lastMove ? (
-                  <>
-                    Last move <span className={styles.dot}>·</span> it has to reach <em>{puzzle.end.name}</em>
-                  </>
-                ) : (
-                  <>
-                    Move <em>{used + 1}</em> of {limit} <span className={styles.dot}>·</span> par <em>{puzzle.par}</em>
-                    <span className={styles.dot}>·</span> worth{" "}
-                    <em key={worth} className={styles.worth}>
-                      {worth}
-                    </em>
-                  </>
-                )}
-              </p>
-
               {(wayIn || next) && (
                 <div className={styles.hints}>
                   {wayIn && (
@@ -304,9 +340,13 @@ export function DegreesScreen(props: Props) {
                 canUndo={links.length > 0}
                 canHint={left > 1}
                 wayInTaken={wayIn !== null}
+                hintFilm={hintFilm}
                 nextShowing={next !== null}
                 undoing={links.at(-1)?.person ?? null}
                 focus={interacted}
+                lineHost={lineHost}
+                meter={meter}
+                lastMove={lastMove}
                 onFilm={(f) => {
                   setError(null);
                   setInteracted(true);
@@ -325,7 +365,7 @@ export function DegreesScreen(props: Props) {
           )}
 
           {finished && puzzle && view?.result && (
-            <div className={styles.creditsWrap} data-show={creditsUp || undefined} inert={!creditsUp}>
+            <div className={styles.creditsWrap} data-show={creditsUp || undefined} data-live={creditsLive || undefined} inert={!creditsUp}>
               <Credits
                 puzzle={puzzle}
                 won={status === "won"}
@@ -334,6 +374,7 @@ export function DegreesScreen(props: Props) {
                 date={date}
                 ours={{ available: ownRoute, showing: showOurs, toggle: () => setShowOurs((s) => !s) }}
                 onEveryone={() => setEveryone(true)}
+                onPhotoCredits={openPhotoCredits}
               />
             </div>
           )}
@@ -344,7 +385,7 @@ export function DegreesScreen(props: Props) {
             </p>
           )}
 
-          {view && (
+          {playing && (
             <button type="button" className={styles.photoCreditsLink} onClick={openPhotoCredits} aria-haspopup="dialog">
               Portraits · Wikimedia Commons
             </button>

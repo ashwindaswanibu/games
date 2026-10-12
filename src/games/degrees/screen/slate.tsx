@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import { filmSearchResponseSchema, personSearchResponseSchema, type FilmRef, type FilmSearchHit, type PersonRef, type PersonSearchHit } from "@/games/_movies/schemas";
 import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
@@ -11,12 +12,15 @@ type Confirming = DegreesHintKind | "undo" | "give-up";
 
 /**
  * The link line: the next link is made in two steps, a film the current actor was in, then a
- * co-star from it. The film chosen rides in front of the field while the cast is searched; Escape
- * or Backspace in the empty field (or its ×) puts it back.
+ * co-star from it. On a wide screen the line is written on the thread itself (`lineHost`, the slot
+ * the board leaves): the film's field on the open stretch, then the co-star's under the knot it
+ * ties, with the chosen film riding the stretch (it puts the film back when clicked). Narrower, the
+ * line sits in the console and the film chosen rides in front of the field. Either way, Escape or
+ * Backspace in the empty field puts the film back.
  *
- * Under it, the play's other moves: Undo, the two hints, Give up. Each asks first (an undo or a hint
- * uses a move; giving up ends the day): the question takes the line's place, and the safe answer
- * has focus.
+ * Under it, the foot row: Undo, the meter (moves, par, worth), the two hints, Give up. Each move
+ * asks first (an undo or a hint uses a move; giving up ends the day): the question takes the
+ * line's place in the console, and the safe answer has focus.
  */
 export function Slate(props: {
   from: PersonRef;
@@ -30,10 +34,18 @@ export function Slate(props: {
   canHint: boolean;
   wayInTaken: boolean;
   nextShowing: boolean;
+  /** A hint's film for the link being made: on the thread, the film's field reads it until something is typed. */
+  hintFilm: FilmRef | null;
   /** Who an undo would take off the chain. */
   undoing: PersonRef | null;
   /** Put the cursor in the field when it mounts (only once the player has acted: it raises a phone's keyboard). */
   focus: boolean;
+  /** Where the board has left room to write the line on the thread; null keeps it in the console. */
+  lineHost: HTMLElement | null;
+  /** The foot row's reading of the play: moves, par and worth (or the last-move warning). */
+  meter: ReactNode;
+  /** The play is on its last move: the meter takes the warm light. */
+  lastMove: boolean;
   onFilm(film: FilmRef): void;
   onBack(): void;
   onCoStar(person: PersonRef): Promise<boolean>;
@@ -43,7 +55,7 @@ export function Slate(props: {
   onHint(kind: DegreesHintKind): Promise<unknown>;
   onGiveUp(): void;
 }) {
-  const { from, end, draft, disabled, canUndo, canHint, wayInTaken, nextShowing, undoing, onUndo, onHint, onGiveUp } = props;
+  const { from, end, draft, disabled, canUndo, canHint, wayInTaken, nextShowing, undoing, lineHost, meter, lastMove, onUndo, onHint, onGiveUp } = props;
   const [confirming, setConfirming] = useState<Confirming | null>(null);
   const backTo = useRef<Confirming | null>(null);
   const buttons = useRef<Partial<Record<Confirming, HTMLButtonElement | null>>>({});
@@ -108,7 +120,12 @@ export function Slate(props: {
             </button>
           </div>
         </div>
-        <div className={styles.moves} aria-hidden />
+        {/* The meter stays while the question is asked (it's what the move would cost); the moves wait. */}
+        <div className={styles.moves}>
+          <span className={styles.meter} data-last={lastMove || undefined}>
+            {meter}
+          </span>
+        </div>
       </div>
     );
   }
@@ -118,14 +135,23 @@ export function Slate(props: {
     buttons.current[what] = el;
   };
 
+  const placement = lineHost ? "thread" : "dock";
+  const line = draft ? (
+    <CastLine key={`cast-${from.id}-${draft.id}`} {...props} draft={draft} placement={placement} />
+  ) : (
+    <FilmLine key={`films-${from.id}`} {...props} placement={placement} />
+  );
+
   return (
     <div key="line" className={styles.slateBlock}>
-      {draft ? <CastLine key={`cast-${from.id}-${draft.id}`} {...props} draft={draft} /> : <FilmLine key={`films-${from.id}`} {...props} />}
+      {lineHost ? createPortal(line, lineHost) : line}
       <div className={styles.moves}>
         <button ref={keep("undo")} type="button" className={styles.quiet} disabled={disabled || !canUndo} onClick={ask("undo")}>
           <span aria-hidden>↶ </span>Undo
         </button>
-        <span className={styles.movesGap} />
+        <span className={styles.meter} data-last={lastMove || undefined}>
+          {meter}
+        </span>
         <button
           ref={keep("film")}
           type="button"
@@ -154,10 +180,12 @@ export function Slate(props: {
   );
 }
 
-type LineProps = Parameters<typeof Slate>[0];
+type LineProps = Parameters<typeof Slate>[0] & { placement: Placement };
+/** Where the line is drawn: written on the thread, or docked in the console. */
+type Placement = "thread" | "dock";
 
 /** Step one: a film the current actor was in. */
-function FilmLine({ from, disabled, focus, onFilm }: LineProps) {
+function FilmLine({ from, disabled, focus, placement, hintFilm, onFilm }: LineProps) {
   const search = useCatalogSearch<FilmSearchHit>({
     endpoint: "/api/catalog/filmography",
     scope: { person: String(from.id) },
@@ -170,10 +198,12 @@ function FilmLine({ from, disabled, focus, onFilm }: LineProps) {
   return (
     <SearchLine
       search={search}
-      focus={focus}
+      // On the thread the caret waits there; docked, a phone's keyboard never comes up unasked.
+      focus={focus || placement === "thread"}
+      placement={placement}
       italic
       label={`A film with ${from.name}`}
-      placeholder={`A film with ${from.name}…`}
+      placeholder={placement === "dock" ? `A film with ${from.name}…` : hintFilm ? `◆ ${hintFilm.title}` : `a film with ${from.name}`}
       describe={(hit) => ({ primary: hit.title, secondary: [hit.year, hit.directors.slice(0, 2).join(" & ")].filter(Boolean).join(" · ") })}
       excludedNote=""
       emptyNote={(q) => `No film with ${from.name} matches “${q}”.`}
@@ -182,7 +212,7 @@ function FilmLine({ from, disabled, focus, onFilm }: LineProps) {
 }
 
 /** Step two: a co-star from the chosen film. */
-function CastLine({ draft, chainIds, disabled, onBack, onCoStar, onFaces }: LineProps & { draft: FilmRef }) {
+function CastLine({ draft, chainIds, disabled, placement, onBack, onCoStar, onFaces }: LineProps & { draft: FilmRef }) {
   const search = useCatalogSearch<PersonSearchHit>({
     endpoint: "/api/catalog/cast",
     scope: { film: String(draft.id) },
@@ -204,29 +234,38 @@ function CastLine({ draft, chainIds, disabled, onBack, onCoStar, onFaces }: Line
     <SearchLine
       search={search}
       focus
+      placement={placement}
       label={`Who else is in ${draft.title}?`}
-      placeholder={`Who else is in ${draft.title}?`}
+      placeholder={placement === "thread" ? "who else is in it?" : `Who else is in ${draft.title}?`}
       describe={(hit) => ({ primary: hit.name, secondary: hit.knownFor ? `Known for ${hit.knownFor}` : "", face: hit.portrait })}
       excludedNote="Already in your chain"
       emptyNote={(q) => `Nobody in the cast of ${draft.title} matches “${q}”.`}
       onBack={onBack}
+      // On the thread the chosen film already rides the stretch (and puts it back when clicked).
       prefix={
-        <span className={styles.via}>
-          <span className={styles.viaLabel}>via</span>
-          <span className={styles.viaTitle}>{draft.title}</span>
-          <button type="button" className={styles.viaClear} onClick={onBack} disabled={disabled} aria-label={`Change the film (${draft.title})`}>
-            ×
-          </button>
-        </span>
+        placement === "dock" && (
+          <span className={styles.via}>
+            <span className={styles.viaLabel}>via</span>
+            <span className={styles.viaTitle}>{draft.title}</span>
+            <button type="button" className={styles.viaClear} onClick={onBack} disabled={disabled} aria-label={`Change the film (${draft.title})`}>
+              ×
+            </button>
+          </span>
+        )
       }
     />
   );
 }
 
-/** A catalog search drawn the room's way: a display-type field on a hairline, hits opening upward. */
+/**
+ * A catalog search drawn the room's way. Docked: a display-type field on a hairline, hits opening
+ * upward over the board. On the thread: the field written where the link will live, hits hanging
+ * from the line.
+ */
 function SearchLine<Hit extends { id: number }>(props: {
   search: ReturnType<typeof useCatalogSearch<Hit>>;
   focus: boolean;
+  placement: Placement;
   italic?: boolean;
   label: string;
   placeholder: string;
@@ -236,7 +275,7 @@ function SearchLine<Hit extends { id: number }>(props: {
   prefix?: ReactNode;
   onBack?(): void;
 }) {
-  const { search, focus, italic = false, label, placeholder, describe, excludedNote, emptyNote, prefix, onBack } = props;
+  const { search, focus, placement, italic = false, label, placeholder, describe, excludedNote, emptyNote, prefix, onBack } = props;
   const { results, status, open, active, excluded, popupRef, listId, optionId, inputRef } = search;
 
   useEffect(() => {
@@ -255,7 +294,7 @@ function SearchLine<Hit extends { id: number }>(props: {
   }
 
   return (
-    <div className={styles.slate}>
+    <div className={placement === "thread" ? styles.slotLine : styles.slate} data-placement={placement}>
       {prefix}
       <div className={styles.field}>
         <label htmlFor={search.inputId} className={styles.srOnly}>

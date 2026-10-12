@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stretch, threadGeometry, threadOf, VERTICAL_BELOW } from "./thread";
+import { endNameSize, lightTimes, stretch, threadGeometry, threadOf, twoLines, VERTICAL_BELOW } from "./thread";
 
 const pacino = { id: 1, name: "Al Pacino" };
 const deNiro = { id: 2, name: "Robert De Niro" };
@@ -59,6 +59,14 @@ describe("threadOf", () => {
     expect(t.reached).toBe(true);
     expect(t.knots.at(-1)!.person).toEqual(hopkins);
   });
+
+  it("keeps the end actor's knot as the same knot once it's reached", () => {
+    const open = threadOf(puzzle, [{ film: heat, person: deNiro }, { film: taxi, person: foster }], { open: true });
+    const reached = threadOf(puzzle, [{ film: heat, person: deNiro }, { film: taxi, person: foster }, { film: lambs, person: hopkins }], { open: true });
+    expect(open.knots.at(-1)!.key).toBe("end");
+    expect(reached.knots.at(-1)!.key).toBe("end");
+    expect(reached.segments.at(-1)!.key).not.toBe(open.segments.at(-1)!.key);
+  });
 });
 
 describe("threadGeometry", () => {
@@ -79,7 +87,51 @@ describe("threadGeometry", () => {
     expect(threadGeometry(6, 0, { width: 390, height: 0 }).height).toBeGreaterThan(g.height);
   });
 
+  it("leaves room down a phone for the ends' title bands above the first pin and below the last", () => {
+    const g = threadGeometry(4, 0, { width: 390, height: 0 });
+    expect(g.points[0]!.y).toBe(150);
+    expect(g.spacing).toBe(76);
+    expect(g.height).toBe(150 + 3 * 76 + 150);
+  });
+
   it("draws a stretch as a length and a turn", () => {
     expect(stretch({ x: 0, y: 0 }, { x: 3, y: 4 })).toEqual({ x: 0, y: 0, length: 5, angle: (Math.atan2(4, 3) * 180) / Math.PI });
+  });
+});
+
+describe("twoLines", () => {
+  it("splits a name where the longer line is shortest, the earlier place on a tie", () => {
+    expect(twoLines("Sandra Bullock")).toEqual(["Sandra", "Bullock"]);
+    expect(twoLines("Louis de Funès")).toEqual(["Louis", "de Funès"]);
+    expect(twoLines("Philip Seymour Hoffman")).toEqual(["Philip Seymour", "Hoffman"]);
+  });
+
+  it("keeps a single word on one line", () => {
+    expect(twoLines("Zendaya")).toEqual(["Zendaya"]);
+  });
+});
+
+describe("endNameSize", () => {
+  it("sets the ends large across a laptop's board, smaller for long names, never under 40px", () => {
+    expect(endNameSize("Sandra Bullock", 1320)).toBe(81);
+    expect(endNameSize("Louis de Funès", 1320)).toBe(81);
+    expect(endNameSize("Maximilian Schellenberger", 1000)).toBeLessThan(61);
+    expect(endNameSize("Maximilian Schellenberger", 300)).toBe(40);
+  });
+});
+
+describe("lightTimes", () => {
+  it("runs the light at one speed from the start pin to the end ring, after the last stretch draws", () => {
+    const t = lightTimes([300, 600, 300]);
+    expect(t.knots[0]).toBe(700);
+    expect(t.segments.map((s) => s.at)).toEqual([700, 700 + 214, 700 + 643]);
+    expect(t.segments[1]!.for).toBeCloseTo(2 * t.segments[0]!.for, -1);
+    expect(t.knots.at(-1)).toBe(700 + 857);
+    expect(t.films[1]).toBe(700 + 429);
+  });
+
+  it("takes between 0.7s and 1.1s to run, however long the thread", () => {
+    expect(lightTimes([100, 100]).knots.at(-1)).toBe(700 + 700);
+    expect(lightTimes([2000, 2000]).knots.at(-1)).toBe(700 + 1100);
   });
 });
