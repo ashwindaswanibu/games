@@ -2,10 +2,10 @@
 
 import { Bodoni_Moda } from "next/font/google";
 import { useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent } from "react";
 import type { AssetRef } from "@/core/assets";
 import { receiveSealed, useAssetSrc } from "@/lib/sealed-assets";
-import { dayFraction, fieldLayout, fieldMetrics, fieldRows, seamAt, tileClip, tileTargets, type HomeModel, type HomeTile, type TileBox } from "./model";
+import { dayFraction, fieldHeight as heightFor, fieldLayout, choosePlan, fieldMetrics, seamAt, tileClip, tileTargets, type HomeCategory, type HomeModel, type HomeTile, type TileBox } from "./model";
 import styles from "./field.module.css";
 
 const display = Bodoni_Moda({ subsets: ["latin", "latin-ext"], style: ["normal", "italic"], axes: ["opsz"], variable: "--hf-display", display: "swap" });
@@ -171,15 +171,23 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fieldHeight = Math.max(200, size.height - TOP);
   const metrics = fieldMetrics(size.width);
-  const rows = fieldRows(tiles, metrics.perRow);
+  const plan = choosePlan(tiles, { width: size.width, height: size.height - TOP }, metrics);
+  const fieldHeight = heightFor(size.height - TOP, plan, metrics);
   const v = motion.values;
   const collapse = tiles.map((_, i) => v[`c${i}`] ?? 0);
   const print = v.print ?? 0;
   const open = (v.openIndex ?? -1) >= 0 && (v.open ?? 0) > 0 ? { index: v.openIndex!, amount: v.open! } : null;
   const peek = (v.peekIndex ?? -1) >= 0 && (v.peek ?? 0) > 0 ? { index: v.peekIndex!, amount: v.peek! } : null;
-  const boxes = fieldLayout({ width: size.width, height: fieldHeight, rows, collapse, print, open, peek, metrics });
+  const boxes = fieldLayout({ width: size.width, height: fieldHeight, plan, collapse, print, open, peek, metrics });
+  const categoryOf = (id: string): HomeCategory => model.categories.find((x) => x.id === id) ?? { id, name: id, tagline: "" };
+  // Every standing plate sets its name at one size: the size the tightest of them allows (with
+  // nothing opening, so a tile growing into its game doesn't shrink the names on its way).
+  const resting = open || peek ? fieldLayout({ width: size.width, height: fieldHeight, plan, collapse, print, open: null, peek: null, metrics }) : boxes;
+  const nameSize = Math.min(
+    112,
+    ...plan.categories.map((id, c) => resting[tiles.length + c]!).flatMap((box, c) => (plateRoom(box, metrics.lean).flat ? [] : [plateNameSize(box, metrics.lean, categoryOf(plan.categories[c]!))])),
+  );
 
   function peekAt(index: number, show: boolean) {
     const tile = tiles[index]!;
@@ -243,23 +251,119 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
 
       <main className={styles.field} style={{ height: `${fieldHeight}px` }}>
         {tiles.length === 0 && <p className={styles.empty}>Today&apos;s puzzles aren&apos;t out yet. Check back soon.</p>}
-        {tiles.map((tile, i) => (
-          <Tile
-            key={tile.id}
-            tile={tile}
-            box={boxes[i]!}
-            lean={metrics.lean}
-            collapse={collapse[i]!}
-            print={print}
-            opened={open?.index === i ? open.amount : 0}
-            arrive={clamp((arrive - 0.08 * i) / 0.8)}
-            peek={peek?.index === i ? peek.amount : 0}
-            onEnter={(e) => enter(e, i)}
-            onPeek={(show) => peekAt(i, show)}
-          />
-        ))}
+        {plan.categories.map((id, c) => {
+          const own = tiles.flatMap((tile, i) => (tile.group === id ? [i] : []));
+          return (
+            <Fragment key={id}>
+              <Plate
+                category={categoryOf(id)}
+                games={own.map((i) => tiles[i]!)}
+                box={boxes[tiles.length + c]!}
+                lean={metrics.lean}
+                arrive={clamp((arrive - 0.08 * own[0]!) / 0.8)}
+                nameSize={nameSize}
+              />
+              {own.map((i) => (
+                <Tile
+                  key={tiles[i]!.id}
+                  tile={tiles[i]!}
+                  box={boxes[i]!}
+                  lean={metrics.lean}
+                  collapse={collapse[i]!}
+                  print={print}
+                  opened={open?.index === i ? open.amount : 0}
+                  arrive={clamp((arrive - 0.08 * i) / 0.8)}
+                  peek={peek?.index === i ? peek.amount : 0}
+                  onEnter={(e) => enter(e, i)}
+                  onPeek={(show) => peekAt(i, show)}
+                />
+              ))}
+            </Fragment>
+          );
+        })}
       </main>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// A category's plate
+// ---------------------------------------------------------------------------------------------
+
+/** Bodoni's italic runs about half an em a letter (a little more, to be safe). */
+const NAME_EM = 0.55;
+
+function plateRoom(box: TileBox, lean: number) {
+  const w = box.x[1] - box.x[0];
+  const h = box.y[1] - box.y[0];
+  const pad = Math.min(28, Math.max(12, w * 0.05));
+  const k = (lean * h) / 2;
+  return { pad, k, room: w - 2 * k - 2 * pad, flat: h < 150 };
+}
+
+function plateCaption(box: TileBox, lean: number, category: HomeCategory) {
+  const h = box.y[1] - box.y[0];
+  const { room } = plateRoom(box, lean);
+  const tagline = room > 200 && h > 240 && category.tagline ? category.tagline : "";
+  return { foot: Math.max(18, Math.min(32, h * 0.05)), caption: (tagline ? 31 : 0) + 10 + 12, tagline };
+}
+
+/** The largest a category's name fits its plate (standing up; a flat plate sizes its own). */
+function plateNameSize(box: TileBox, lean: number, category: HomeCategory): number {
+  const h = box.y[1] - box.y[0];
+  const { pad, room } = plateRoom(box, lean);
+  const { foot, caption } = plateCaption(box, lean, category);
+  return Math.max(26, Math.min(112, room / (category.name.length * NAME_EM), (h - foot - caption - 2 * pad) / 1.1));
+}
+
+/**
+ * A category's plate: its name set large where its games' names are, what it is, and how today's
+ * games in it are going. A plate laid flat (a band) says the same on one line.
+ */
+function Plate({ category, games, box, lean, arrive, nameSize }: { category: HomeCategory; games: HomeTile[]; box: TileBox; lean: number; arrive: number; nameSize: number }) {
+  const w = box.x[1] - box.x[0];
+  const h = box.y[1] - box.y[0];
+  if (w < 1 || h < 1) return null;
+  const done = games.filter((t) => t.state === "finished");
+  const points = done.reduce((sum, t) => sum + (t.result?.score ?? 0), 0);
+  const progress =
+    done.length === 0
+      ? `${games.length} ${games.length === 1 ? "game" : "games"} today`
+      : done.length < games.length
+        ? `${done.length} of ${games.length} played`
+        : `All played · ${points} ${points === 1 ? "point" : "points"}`;
+  const { pad, k, room, flat } = plateRoom(box, lean);
+  const style: CSSProperties = { clipPath: tileClip(box, lean), opacity: clamp(arrive * 3) };
+
+  if (flat) {
+    const size = Math.max(18, Math.min(46, h * 0.44, room / (category.name.length * NAME_EM)));
+    const x = seamAt(box, lean, (box.y[0] + box.y[1]) / 2) + pad;
+    return (
+      <section className={styles.plate} style={style} aria-label={`${category.name}: ${progress}`}>
+        <span className={styles.plateFlat} style={{ left: x, top: (box.y[0] + box.y[1]) / 2, maxWidth: Math.max(0, box.x[1] - k - pad - x) }}>
+          <h2 className={styles.plateName} style={{ fontSize: size }}>
+            {category.name}
+          </h2>
+          <span className={styles.plateLine}>{progress}</span>
+        </span>
+      </section>
+    );
+  }
+
+  // The name stands on its caption at the plate's foot, the same size on every plate.
+  const { foot, caption, tagline } = plateCaption(box, lean, category);
+  const size = Math.min(nameSize, plateNameSize(box, lean, category));
+  const x = seamAt(box, lean, box.y[1] - foot - caption) + pad;
+  return (
+    <section className={styles.plate} style={style} aria-label={`${category.name}: ${progress}`}>
+      <span className={styles.plateCard} style={{ left: x, bottom: `calc(100% - ${box.y[1] - foot}px)`, maxWidth: Math.max(0, box.x[1] - k - pad - x) }}>
+        <h2 className={styles.plateName} style={{ fontSize: size }}>
+          {category.name}
+        </h2>
+        {tagline && <span className={styles.plateTagline}>{tagline}</span>}
+        <span className={styles.plateLine}>{progress}</span>
+      </span>
+    </section>
   );
 }
 
@@ -313,7 +417,7 @@ function Tile({ tile, box, lean, collapse, print, opened, arrive, peek, onEnter,
       {finished && tile.result && strip > 0 && <PlayedStrip tile={tile} box={box} lean={lean} opacity={strip} settle={collapse} peek={peek} />}
       {finished && tile.result && print > 0 && <Print tile={tile} box={box} lean={lean} cover={cover} amount={print} />}
 
-      <Marks tile={tile} box={box} lean={lean} pad={pad} visible={clamp(arrive * 2 - 1) * (finished ? print : live)} />
+      <Marks tile={tile} box={box} lean={lean} pad={pad} y={box.y[1] - footer - 14} visible={clamp(arrive * 2 - 1) * (finished ? print : live)} />
     </a>
   );
 }
@@ -531,12 +635,15 @@ function TitleCard({ tile, box, lean, pad, footer, opacity }: { tile: HomeTile; 
   const narrow = w < 300;
   // The game's name leads the card: the first thing read on a tile still to play.
   const size = Math.max(26, Math.min(72, w * 0.13, footer * 0.34));
+  const tagline = !narrow && footer > 150;
+  // A long name takes a second line rather than lose its end, when the card has the room.
+  const lines = footer - 8 >= size * 2.1 + (tagline ? 50 : 0) + 50 ? 2 : 1;
   return (
     <span className={styles.card} style={{ left: x, top, width: Math.max(140, w - (lean * (box.y[1] - box.y[0])) / 2 - 2 * pad), opacity }}>
-      <span className={styles.cardTitle} style={{ fontSize: size }}>
+      <span className={styles.cardTitle} data-lines={lines} style={{ fontSize: size }}>
         {tile.title}
       </span>
-      {!narrow && footer > 150 && <span className={styles.cardTagline}>{tile.tagline}</span>}
+      {tagline && <span className={styles.cardTagline}>{tile.tagline}</span>}
       <span className={styles.cardRow}>
         <span className={styles.cta} data-verb={tile.cta.verb}>
           {tile.cta.verb} · {tile.cta.detail} <span aria-hidden>▸</span>
@@ -605,11 +712,10 @@ function Print({ tile, box, lean, cover, amount }: { tile: HomeTile; box: TileBo
   );
 }
 
-/** Other players who finished: marks along the tile's foot (how they did shows in the print, once you've finished). */
-function Marks({ tile, box, lean, pad, visible }: { tile: HomeTile; box: TileBox; lean: number; pad: number; visible: number }) {
+/** Other players who finished: marks over the title card (how they did shows in the print, once you've finished). */
+function Marks({ tile, box, lean, pad, y, visible }: { tile: HomeTile; box: TileBox; lean: number; pad: number; y: number; visible: number }) {
   const count = tile.state === "finished" ? 0 : Math.min(12, tile.friends.finished);
   if (count === 0 || visible <= 0) return null;
-  const y = box.y[1] - 44;
   const from = seamAt(box, lean, y) + pad;
   const to = box.x[1] - (lean * (box.y[1] - box.y[0])) / 2 - pad - 40;
   return (

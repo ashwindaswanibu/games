@@ -8,6 +8,7 @@ import type { DegreesPuzzle, DegreesSolution } from "@/games/degrees/schema";
 import { movesUsed, type DegreesState } from "@/games/degrees/logic";
 import { describeGrid, parseGrid } from "@/games/fade-to-color/theater/grid";
 import type { LexiconPuzzle, LexiconReveal, LexiconState } from "@/games/lexicon/logic";
+import { getBucket } from "@/games/buckets";
 import { canPlay, getGame, visibleGames } from "@/games/registry";
 import { assetKey } from "./asset-seal";
 import type { ProfileRow } from "./database.types";
@@ -24,8 +25,11 @@ import { getOrCreatePuzzle, PuzzleUnavailableError } from "./puzzles";
  * then names and scores (`getFriendsResults` decides).
  */
 
-/** The games the home features, in order: the ones that are ready. Others play from their pages. */
-const HOME_GAME_IDS = ["fade-to-color", "degrees", "frame-by-frame", "lexicon"];
+/**
+ * The games the home features, in order: the ones that are ready. Others play from their pages
+ * (Frame by Frame waits off the home until its frames are worked on).
+ */
+const HOME_GAME_IDS = ["fade-to-color", "degrees", "lexicon"];
 
 export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_admin">): Promise<HomeModel> {
   const date = today();
@@ -84,6 +88,10 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
     won,
     max: tiles.length * 100,
     tiles,
+    categories: [...new Set(tiles.map((t) => t.group))].map((id) => {
+      const bucket = getBucket(id as AnyGame["bucket"]);
+      return { id: bucket.id, name: bucket.name, tagline: bucket.tagline };
+    }),
     sealed: { preload: Object.keys(keys), keys },
     user: { username: profile.username, isAdmin: profile.is_admin },
   };
