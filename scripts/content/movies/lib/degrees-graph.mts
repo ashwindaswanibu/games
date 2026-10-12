@@ -40,6 +40,11 @@ export interface PersonInfo {
    * or an animal, null without a Wikidata item. Only people who aren't false start or end a puzzle.
    */
   isHuman: boolean | null;
+  /**
+   * How many English Wikipedia readers open their article a day (`movie_person_fame`): how well
+   * players know them. Null if never measured.
+   */
+  views: number | null;
 }
 
 /** Documentaries and concert films: one rule for the catalog's cast and for Degrees. */
@@ -154,12 +159,15 @@ export interface PathLink {
 /** Scores one link (person → film → co-star); the stored solution is the shortest chain scoring highest. */
 export type LinkScore = (from: number, filmId: number, to: number) => number;
 
-/** Prefers famous films, famous intermediate co-stars, and credits near the top of the bill. */
+/**
+ * Prefers famous films, co-stars players know (English Wikipedia readers; Wikipedia editions for
+ * anyone not measured), and credits near the top of the bill.
+ */
 export function popularityLinkScore(graph: CastGraph, films: ReadonlyMap<number, FilmInfo>, people: ReadonlyMap<number, PersonInfo>): LinkScore {
   const fame = (popularity: number | undefined) => Math.log1p(popularity ?? 0);
+  const known = (person: PersonInfo | undefined) => (person?.views != null ? 0.5 * Math.log1p(person.views) : 0.25 * fame(person?.popularity));
   const billingPenalty = (filmId: number, personId: number) => Math.min(graph.billing(filmId, personId) ?? 20, 20) * 0.12;
-  return (from, filmId, to) =>
-    fame(films.get(filmId)?.popularity) + 0.5 * fame(people.get(to)?.popularity) - billingPenalty(filmId, from) - billingPenalty(filmId, to);
+  return (from, filmId, to) => fame(films.get(filmId)?.popularity) + known(people.get(to)) - billingPenalty(filmId, from) - billingPenalty(filmId, to);
 }
 
 /**
@@ -204,38 +212,51 @@ export function bestShortestPath(
   return path.length === length ? path : null;
 }
 
+/** What makes someone an actor in this catalog, for a puzzle's start and end (see `eligibleActors`). */
+export interface ActorRules {
+  minFilms: number;
+  minLeads: number;
+  leadBilling: number;
+}
+
+/** At least six fiction films, three of them billed in the top five. */
+export const ACTOR_RULES: ActorRules = { minFilms: 6, minLeads: 3, leadBilling: 5 };
+
 /**
- * People eligible as start or end: actors (IMDb or Wikidata says so: famous singers, politicians and
- * documentary subjects credited in films can be links, never endpoints) who are people (not a
- * group or an animal: `isHuman` isn't false), well known (top `size` by popularity) *and* genuinely
- * acting in this catalog, with at least `minFilms` credits of which `minLeads` are
- * top-`leadBilling` billed, counting only fiction: documentaries and concert films (`nonFiction`)
- * don't count, so a singer's concert films and tour documentaries don't make them an actor. The
- * film minimum also guarantees the player has real choices at every step.
- *
- * Interim rule (2026-10-07); the owner chooses the final one (TODO.md, "Degrees with the bigger
- * catalog").
+ * People who can start or end a puzzle, fame aside: actors (IMDb or Wikidata says so: famous
+ * singers, politicians and documentary subjects credited in films can be links, never endpoints)
+ * who are people (not a group or an animal: `isHuman` isn't false) and genuinely act in this
+ * catalog, with at least `minFilms` credits of which `minLeads` are top-`leadBilling` billed,
+ * counting only fiction: documentaries and concert films (`nonFiction`) don't count, so a singer's
+ * concert films and tour documentaries don't make them an actor. The film minimum also guarantees
+ * the player has real choices at every step. Ids, ascending.
+ */
+export function eligibleActors(graph: CastGraph, people: ReadonlyMap<number, PersonInfo>, films: ReadonlyMap<number, FilmInfo>, rules: ActorRules): number[] {
+  const eligible: number[] = [];
+  for (const [personId, credited] of graph.filmsOf) {
+    const person = people.get(personId);
+    if (!person?.isActor || person.isHuman === false) continue;
+    const acting = credited.filter((filmId) => films.get(filmId)?.nonFiction !== true);
+    if (acting.length < rules.minFilms) continue;
+    const leads = acting.filter((filmId) => (graph.billing(filmId, personId) ?? Infinity) < rules.leadBilling).length;
+    if (leads >= rules.minLeads) eligible.push(personId);
+  }
+  return eligible.sort((a, b) => a - b);
+}
+
+/**
+ * The start and end actors: eligible actors (`eligibleActors`) whom at least `minViews` English
+ * Wikipedia readers look up a day. Readership, not Wikipedia's language editions: editions measure
+ * how far a career travelled (a national star of the 1950s tops them), readers measure who players
+ * know now, across Hollywood, Britain and India alike. Ids, ascending.
  */
 export function actorPool(
   graph: CastGraph,
   people: ReadonlyMap<number, PersonInfo>,
   films: ReadonlyMap<number, FilmInfo>,
-  options: { size: number; minFilms: number; minLeads: number; leadBilling: number },
+  options: ActorRules & { minViews: number },
 ): number[] {
-  const eligible: PersonInfo[] = [];
-  for (const [personId, credited] of graph.filmsOf) {
-    const person = people.get(personId);
-    if (!person?.isActor || person.isHuman === false) continue;
-    const acting = credited.filter((filmId) => films.get(filmId)?.nonFiction !== true);
-    if (acting.length < options.minFilms) continue;
-    const leads = acting.filter((filmId) => (graph.billing(filmId, personId) ?? Infinity) < options.leadBilling).length;
-    if (leads >= options.minLeads) eligible.push(person);
-  }
-  return eligible
-    .sort((a, b) => b.popularity - a.popularity || a.id - b.id)
-    .slice(0, options.size)
-    .map((p) => p.id)
-    .sort((a, b) => a - b);
+  return eligibleActors(graph, people, films, options).filter((id) => (people.get(id)?.views ?? 0) >= options.minViews);
 }
 
 export interface PickedPuzzle {

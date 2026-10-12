@@ -87,7 +87,7 @@ describe("schemas", () => {
   it("refuses a puzzle whose ends are the same person, or whose par is out of range", () => {
     expect(degreesPuzzleSchema.safeParse({ ...puzzle, end: pacino }).success).toBe(false);
     expect(degreesPuzzleSchema.safeParse({ ...puzzle, par: 1 }).success).toBe(false);
-    expect(degreesPuzzleSchema.safeParse({ ...puzzle, par: 4 }).success).toBe(false);
+    expect(degreesPuzzleSchema.safeParse({ ...puzzle, par: 8 }).success).toBe(false);
   });
 
   it("accepts only id-only moves from the browser", () => {

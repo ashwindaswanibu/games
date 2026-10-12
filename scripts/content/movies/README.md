@@ -25,7 +25,10 @@ Per-game real pipelines (each documents its flags in its header):
 ```bash
 npm run content:movies:frame-by-frame    # needs cached stills or TMDB_API_KEY
 npm run content:movies:barcode-levels -- --film <id|auto> --date <YYYY-MM-DD|next-free>   # frames from movie-screencaps.com (section 4)
-npm run content:movies:plan-barcode -- --from <YYYY-MM-DD> --days 60 --dry-run   # which film each Fade to Color day gets (section 5)
+npm run content:movies:plan-barcode -- --from <YYYY-MM-DD> --days 60 --dry-run   # which film each Movie Barcode day gets (section 5)
+npm run content:movies:reband-level1 -- --dry-run --preview <dir>   # broader reel-1 bands for stored days nobody has played
+npm run content:movies:fame              # how well players know each actor (English Wikipedia readers), for Degrees
+npm run content:movies:degrees -- --renew-unplayed   # remake stored Degrees days today's rules wouldn't pick
 ```
 
 Run them in this order. Degrees and stills read the catalog; Frame by Frame reads

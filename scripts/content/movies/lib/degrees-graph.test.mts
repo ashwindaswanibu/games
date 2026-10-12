@@ -3,6 +3,7 @@ import { createRng } from "@/core/random";
 import {
   actorPool,
   bestShortestPath,
+  eligibleActors,
   buildGraph,
   chainOfLengthExists,
   missingChainLengths,
@@ -44,7 +45,7 @@ const films = new Map<number, FilmInfo>(
   [100, 101, 102, 103, 104, 105].map((id) => [id, { id, title: `Film ${id}`, year: 2000, popularity: id >= 103 ? 2 : 80, nonFiction: false }]),
 );
 const people = new Map<number, PersonInfo>(
-  [1, 2, 3, 4, 5, 6, 7].map((id) => [id, { id, name: `Person ${id}`, popularity: id === 5 ? 1 : 60, isActor: true, isHuman: true }]),
+  [1, 2, 3, 4, 5, 6, 7].map((id) => [id, { id, name: `Person ${id}`, popularity: id === 5 ? 1 : 60, isActor: true, isHuman: true, views: id === 5 ? 40 : 3000 }]),
 );
 const score = popularityLinkScore(graph, films, people);
 
@@ -83,13 +84,22 @@ describe("bestShortestPath", () => {
 });
 
 describe("actorPool", () => {
-  const options = { size: 10, minFilms: 2, minLeads: 1, leadBilling: 5 };
+  const options = { minViews: 0, minFilms: 2, minLeads: 1, leadBilling: 5 };
 
-  it("keeps popular people with enough (leading) credits, most popular first, capped", () => {
+  it("keeps people with enough (leading) credits whom enough readers look up", () => {
     expect(actorPool(graph, people, films, options)).toEqual([1, 2, 3, 5]);
-    // Person 5 is barely known: cut first when the pool shrinks.
-    expect(actorPool(graph, people, films, { ...options, size: 3 })).toEqual([1, 2, 3]);
+    // Person 5 is barely looked up.
+    expect(actorPool(graph, people, films, { ...options, minViews: 1000 })).toEqual([1, 2, 3]);
     expect(actorPool(graph, people, films, { ...options, minLeads: 2 })).toEqual([2, 3, 5]);
+    expect(eligibleActors(graph, people, films, options)).toEqual([1, 2, 3, 5]);
+  });
+
+  it("goes by readers, not Wikipedia's language editions, and leaves out anyone never measured", () => {
+    const national = new Map(people);
+    // Person 2: in a hundred editions, read by few in English. Person 3: never measured.
+    national.set(2, { ...people.get(2)!, popularity: 100, views: 200 });
+    national.set(3, { ...people.get(3)!, views: null });
+    expect(actorPool(graph, national, films, { ...options, minViews: 1000 })).toEqual([1]);
   });
 
   it("leaves out people who aren't actors (they stay in the graph as links)", () => {
