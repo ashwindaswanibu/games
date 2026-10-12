@@ -7,7 +7,7 @@ import type { HomeModel, HomeTile, TileMaterial, TileResult } from "@/components
 import type { DegreesPuzzle, DegreesSolution } from "@/games/degrees/schema";
 import { movesUsed, type DegreesState } from "@/games/degrees/logic";
 import { LEVEL_COUNT } from "@/games/fade-to-color/logic";
-import { describeGrid, parseGrid } from "@/games/fade-to-color/theater/grid";
+import { describeGrid, parseGrid, type GridMarks } from "@/games/fade-to-color/theater/grid";
 import { gapOf, type LexiconPuzzle, type LexiconReveal, type LexiconState } from "@/games/lexicon/logic";
 import { getBucket } from "@/games/buckets";
 import { canPlay, getGame, visibleGames } from "@/games/registry";
@@ -129,11 +129,13 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 /** Each game's tile: its material from today's puzzle and the viewer's play, and its result. */
 function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: Show): Described {
   const score = view?.result?.score ?? 0;
+  const won = view?.status === "won";
   switch (game.id) {
     case "fade-to-color": {
       const p = puzzle as { first: AssetRef };
       const s = view?.state as { turns: unknown[]; unlocked: AssetRef[] } | undefined;
-      const reveal = view?.reveal as { film: { title: string } } | null | undefined;
+      const reveal = view?.reveal as { film: { title: string; directors: string[]; year: number | null } } | null | undefined;
+      const marks = view?.result ? parseGrid(view.result.shareGrid) : null;
       // The latest reel the viewer has seen: the strip of light, or where they are.
       const shown = show(s?.unlocked.at(-1) ?? p.first)!;
       show(p.first);
@@ -147,7 +149,20 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
         light: { accent: null, on: "#0b0b0c" },
         // The reel's edge print, as the game prints it (theater.tsx).
         material: { kind: "light", image: view && view.status !== "in_progress" ? p.first : shown, edge: playing ? `REEL ${pad2(reel)} ◂ ${LEVEL_COUNT}` : `LEADER ◂ ${LEVEL_COUNT}` },
-        result: reveal ? { title: reveal.film.title, line: view?.result ? describeGrid(parseGrid(view.result.shareGrid)) : "", score, image: p.first, chain: null, frames: null } : null,
+        result: reveal
+          ? {
+              title: reveal.film.title,
+              line: marks ? describeGrid(marks) : "",
+              score,
+              won,
+              // The end card's byline (theater/credits.tsx).
+              note: [reveal.film.directors.slice(0, 2).join(" & "), reveal.film.year].filter(Boolean).join(" · "),
+              reel: marks ? namedOn(marks) : null,
+              image: p.first,
+              chain: null,
+              frames: null,
+            }
+          : null,
       };
     }
     case "degrees": {
@@ -158,7 +173,9 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       // The viewer's chain if they reached the end, else the shortest one (once the play is over).
       const finishedChain = links.length > 0 && links.at(-1)!.person.id === p.end.id ? links : (reveal?.path ?? []);
       const moves = s ? movesUsed(s) : 0;
-      const line = s?.gaveUp ? "Gave up" : moves <= p.par ? `At par · ${moves} moves` : `${moves} moves · par ${p.par}`;
+      // The end card's kicker (screen/credits.tsx).
+      const over = moves - p.par;
+      const line = !won ? "Gave up · a shortest route" : over > 0 ? `Connected · ${over} over par` : over < 0 ? "Connected · under par" : "Connected · at par";
       return {
         sub: `PAR ${p.par}`,
         titleParts: [{ text: "Degrees" }, { text: "of", italic: true }, { text: "Separation" }],
@@ -167,7 +184,17 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
         light: { accent: "236 178 92", on: "#0b0b0c" },
         material: { kind: "thread", from: p.start.name, to: p.end.name, knots: p.par, drawn: links.length },
         result: view && view.status !== "in_progress"
-          ? { title: "", line, score, image: null, chain: { people: [p.start.name, ...finishedChain.map((l) => l.person.name)], films: finishedChain.map((l) => l.film.title) }, frames: null }
+          ? {
+              title: "",
+              line,
+              score,
+              won,
+              note: "",
+              reel: null,
+              image: null,
+              chain: { people: [p.start.name, ...finishedChain.map((l) => l.person.name)], films: finishedChain.map((l) => l.film.title) },
+              frames: null,
+            }
           : null,
       };
     }
@@ -177,7 +204,6 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const reveal = view?.reveal as { film: { title: string }; frames: AssetRef[] } | null | undefined;
       const seen = [p.first, ...(s?.unlocked ?? [])];
       for (const f of seen) show(f);
-      const won = view?.status === "won";
       return {
         sub: "SIX FRAMES",
         start: "Play",
@@ -185,7 +211,7 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
         light: { accent: "239 233 223", on: "#050506" },
         material: { kind: "frames", image: seen.at(-1)!, total: 6, shown: seen.length },
         result: reveal
-          ? { title: reveal.film.title, line: won ? `Named on frame ${seen.length}` : "Not named in six frames", score, image: seen.at(-1)!, chain: null, frames: seen }
+          ? { title: reveal.film.title, line: won ? `Named on frame ${seen.length}` : "Not named in six frames", score, won, note: "", reel: null, image: seen.at(-1)!, chain: null, frames: seen }
           : null,
       };
     }
@@ -194,9 +220,10 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const s = view?.state as LexiconState | undefined;
       const reveal = view?.reveal as LexiconReveal | null | undefined;
       const guesses = s?.guesses.length ?? 0;
-      // The viewer's own guesses: the gap they've closed to and a ribbon at each page they tried.
+      // The viewer's own guesses: the gap they've closed to and a ribbon at each page they tried
+      // (the one that found the word only once they have).
       const gap = s ? gapOf(p, s) : { low: -1, high: p.total };
-      const ribbons = (s?.guesses ?? []).filter((g) => g.side !== "found").map((g) => ({ page: g.page, edge: g.page === gap.low || g.page === gap.high }));
+      const ribbons = (s?.guesses ?? []).map((g) => ({ page: g.page, edge: g.page === gap.low || g.page === gap.high, found: g.side === "found" }));
       return {
         sub: "NINE LETTERS",
         start: "Start guessing",
@@ -204,7 +231,18 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
         light: { accent: "190 48 34", on: "#f6ecdc" },
         material: { kind: "letters", letters: p.letters, length: p.length, total: p.total, gap: { low: gap.low, high: gap.high }, ribbons },
         result: reveal
-          ? { title: reveal.answer, line: view?.status === "won" ? `Found on guess ${guesses}` : "Gave up", score, image: null, chain: null, frames: null }
+          ? {
+              title: reveal.answer,
+              line: won ? `Found on guess ${guesses}` : "Gave up",
+              score,
+              won,
+              // As the dictionary prints it (screen/page.tsx).
+              note: `${reveal.entry.pos} · ${reveal.entry.definition}`,
+              reel: null,
+              image: null,
+              chain: null,
+              frames: null,
+            }
           : null,
       };
     }
@@ -215,7 +253,13 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
         progress: "Continue",
         light: { accent: "239 233 223", on: "#050506" },
         material: { kind: "word", headline: game.name },
-        result: view?.result ? { title: game.name, line: view.result.label, score, image: null, chain: null, frames: null } : null,
+        result: view?.result ? { title: game.name, line: view.result.label, score, won, note: "", reel: null, image: null, chain: null, frames: null } : null,
       };
   }
+}
+
+/** The reel a film was named or picked on, from its share grid; null when it got away, or for a pick after the last reel (no reel lights). */
+function namedOn({ reels, pick }: GridMarks): number | null {
+  if (pick) return pick === "right" && reels.length < LEVEL_COUNT ? reels.length + 1 : null;
+  return reels.at(-1) === "solved" ? reels.length : null;
 }

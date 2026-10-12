@@ -26,7 +26,15 @@ export type TileMaterial =
    * (`low`/`high` are the closest pages guessed either side, -1 and `total` for none), a ribbon at
    * each page guessed (`edge` for the two that bound the gap), and the hidden word's length.
    */
-  | { kind: "letters"; letters: string; length: number; total: number; gap: { low: number; high: number }; ribbons: { page: number; edge: boolean }[] }
+  | {
+      kind: "letters";
+      letters: string;
+      length: number;
+      total: number;
+      gap: { low: number; high: number };
+      /** `found`: the guess that found the word (only ever there once you've finished). */
+      ribbons: { page: number; edge: boolean; found: boolean }[];
+    }
   /** Any other game: its name, set large. */
   | { kind: "word"; headline: string };
 
@@ -37,6 +45,12 @@ export interface TileResult {
   /** How it went, in the game's words ("Named on reel 3"). */
   line: string;
   score: number;
+  /** Whether you won (named the film, reached the end, found the word): its colour and light are what you earn. */
+  won: boolean;
+  /** Under the title, as the game's end card has it: who made the film and when, the word's entry ("verb · take into custody"); empty for none. */
+  note: string;
+  /** Movie Barcode: the reel the film was named (or picked) on, 1–10; null when it got away or was picked after the last reel. */
+  reel: number | null;
   /** A picture to fill the print with (the strip of light, the frame it was named on). */
   image: AssetRef | null;
   /** Degrees: the chain the player made. */
@@ -390,6 +404,31 @@ export function rightSeamAt(box: TileBox, lean: number, y: number): number {
   return box.x[1] + k - 2 * k * u;
 }
 
+/** A strip's centre line at height `y`: halfway between its edges, so it runs parallel to its seams (half as slanted beside the screen's straight edge). */
+export function stripMiddle(box: TileBox, lean: number, y: number): number {
+  return (seamAt(box, lean, y) + rightSeamAt(box, lean, y)) / 2;
+}
+
+/** How far under friends' scale their names reach (two staggered rows). */
+export const SCALE_DEPTH = 36;
+
+/**
+ * Where the day's print sets its lines in a poster. `base` is the baseline every result title sits
+ * on, so a row of posters reads as one line of credits; under it, the note (who made the film, the
+ * word's entry), the result line, and friends' scale. Each depends only on the poster's row (its
+ * height), so posters in a row share every line. On a phone the stack is tighter and stays clear
+ * of the row's slanted bottom cut, which reaches `cut` above its edge.
+ */
+export function printLines(box: Pick<TileBox, "y">, compact: boolean, cut: number): { base: number; note: number; line: number; scale: number } {
+  if (compact) {
+    const base = box.y[1] - cut - 96;
+    return { base, note: base + 8, line: base + 30, scale: base + 56 };
+  }
+  const h = box.y[1] - box.y[0];
+  const base = box.y[1] - Math.max(130, Math.min(230, h * 0.28));
+  return { base, note: base + 14, line: base + 50, scale: base + 84 };
+}
+
 /**
  * The angle a plate's name stands at, in degrees: upright, turned to read up the seam beside it
  * (the seams lean `lean` across per unit down, so the name is a quarter turn less that angle).
@@ -424,13 +463,22 @@ export function tileTargets(tiles: readonly Pick<HomeTile, "state">[]): { collap
 
 /**
  * The header's one line about the day: what's left to play, then the points once some are won,
- * then (all played) the points and the countdown to the next day. A phone says less.
+ * then (all played) the points out of the day's `max` and the countdown to the next day. A phone
+ * says less.
  */
-export function dayLine(tiles: readonly Pick<HomeTile, "state">[], won: number, clock: string, compact: boolean): string {
+export function dayLine(tiles: readonly Pick<HomeTile, "state">[], won: number, max: number, clock: string, compact: boolean): string {
   const left = tiles.filter((t) => t.state !== "finished").length;
   const points = `${won} ${won === 1 ? "point" : "points"}`;
-  if (tiles.length > 0 && left === 0) return compact ? `All played · ${clock}` : `All played · ${won} · Next day in ${clock}`;
+  if (tiles.length > 0 && left === 0) return compact ? `All played · ${clock}` : `All played · ${won} of ${max} · Next day in ${clock}`;
   return left < tiles.length && !compact ? `${left} to play · ${points}` : `${left} to play`;
+}
+
+/** The longest line of `text` set on `lines` lines (two: split at the space that balances them best), in letters. */
+export function longestLine(text: string, lines: number): number {
+  if (lines < 2) return text.length;
+  let best = text.length;
+  for (let i = text.indexOf(" "); i >= 0; i = text.indexOf(" ", i + 1)) best = Math.min(best, Math.max(i, text.length - i - 1));
+  return best;
 }
 
 /** How far through the New York day `now` is (0 at midnight, 1 at the next). */

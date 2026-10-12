@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choosePlan, dayFraction, dayLine, fieldHeight, fieldLayout, fieldMetrics, fieldPlan, PLATE, rightSeamAt, rowClip, seamAt, spans, spineAngle, tileTargets } from "./model";
+import { choosePlan, dayFraction, dayLine, fieldHeight, fieldLayout, fieldMetrics, fieldPlan, longestLine, PLATE, printLines, rightSeamAt, rowClip, rowCut, SCALE_DEPTH, seamAt, spans, spineAngle, stripMiddle, tileTargets } from "./model";
 
 const groups = (ids: string[]) => ids.map((group) => ({ group }));
 
@@ -213,11 +213,17 @@ describe("tileTargets and fieldMetrics", () => {
 
   it("says what's left, then the points, then the countdown", () => {
     const tiles = (...states: ("unplayed" | "playing" | "finished")[]) => states.map((state) => ({ state }));
-    expect(dayLine(tiles("unplayed", "playing", "unplayed"), 0, "05:00:00", false)).toBe("3 to play");
-    expect(dayLine(tiles("finished", "playing", "unplayed"), 80, "05:00:00", false)).toBe("2 to play · 80 points");
-    expect(dayLine(tiles("finished", "finished", "finished"), 230, "05:00:00", false)).toBe("All played · 230 · Next day in 05:00:00");
-    expect(dayLine(tiles("finished", "playing", "unplayed"), 80, "05:00:00", true)).toBe("2 to play");
-    expect(dayLine(tiles("finished", "finished", "finished"), 230, "05:00:00", true)).toBe("All played · 05:00:00");
+    expect(dayLine(tiles("unplayed", "playing", "unplayed"), 0, 300, "05:00:00", false)).toBe("3 to play");
+    expect(dayLine(tiles("finished", "playing", "unplayed"), 80, 300, "05:00:00", false)).toBe("2 to play · 80 points");
+    expect(dayLine(tiles("finished", "finished", "finished"), 250, 300, "01:34:12", false)).toBe("All played · 250 of 300 · Next day in 01:34:12");
+    expect(dayLine(tiles("finished", "playing", "unplayed"), 80, 300, "05:00:00", true)).toBe("2 to play");
+    expect(dayLine(tiles("finished", "finished", "finished"), 230, 300, "05:00:00", true)).toBe("All played · 05:00:00");
+  });
+
+  it("measures a title's longest line, on one line or balanced over two", () => {
+    expect(longestLine("Dune: Part Two", 1)).toBe(14);
+    expect(longestLine("Dune: Part Two", 2)).toBe(8);
+    expect(longestLine("Anora", 2)).toBe(5);
   });
 
   it("measures the New York day", () => {
@@ -256,5 +262,51 @@ describe("seams and cuts", () => {
     // The field's first top and last bottom are straight.
     expect(rows[0]![0]![1]).toBe(rows[0]![1]![1]);
     expect(rows.at(-1)![2]![1]).toBe(rows.at(-1)![3]![1]);
+  });
+});
+
+describe("finished games", () => {
+  const lean = 0.083;
+
+  it("runs a strip's centre line parallel to its seams, halfway across", () => {
+    const box = { x: [180, 312] as [number, number], y: [0, 844] as [number, number], row: 0, col: 1, cols: 5 };
+    for (const y of [0, 422, 844]) expect(stripMiddle(box, lean, y) - seamAt(box, lean, y)).toBeCloseTo(66);
+    expect(stripMiddle(box, lean, 422)).toBeCloseTo(246);
+    // Beside the screen's edge it stays halfway between that straight edge and the seam.
+    const last = { ...box, x: [1308, 1440] as [number, number], col: 4 };
+    for (const y of [0, 844]) expect(stripMiddle(last, lean, y)).toBeCloseTo((seamAt(last, lean, y) + 1440) / 2);
+  });
+
+  it("sets every poster's title on one baseline across its row, its lines under it shared too", () => {
+    for (const [width, height] of [
+      [1440, 844],
+      [1280, 664],
+    ]) {
+      const metrics = fieldMetrics(width);
+      const plan = choosePlan(groups(["movies", "movies", "words"]), { width, height }, metrics);
+      const boxes = fieldLayout({ width, height, plan, collapse: [1, 1, 1], print: 1, open: null, metrics });
+      const lines = boxes.slice(0, 3).map((b) => printLines(b, false, 0));
+      expect(new Set(lines.map((l) => JSON.stringify(l))).size).toBe(1);
+      const { base, note, line, scale } = lines[0]!;
+      // Room above for two lines of a 64px title and the game's object; the stack under it in order, on the field.
+      expect(base).toBeGreaterThanOrEqual(height * 0.6);
+      expect(base < note && note < line && line < scale).toBe(true);
+      expect(scale + SCALE_DEPTH).toBeLessThanOrEqual(height);
+    }
+  });
+
+  it("keeps a phone poster's lines clear of its row's cuts", () => {
+    const metrics = fieldMetrics(390);
+    const plan = choosePlan(groups(["movies", "movies", "words"]), { width: 390, height: 788 }, metrics);
+    const height = fieldHeight(788, plan, metrics);
+    const boxes = fieldLayout({ width: 390, height, plan, collapse: [1, 1, 1], print: 1, open: null, metrics });
+    const cut = (metrics.lean * 390) / 2;
+    for (const b of boxes.slice(0, 3)) {
+      const { base, scale } = printLines(b, true, cut);
+      // Friends' names stay above the bottom cut where it rises highest (the screen's right edge)...
+      expect(scale + SCALE_DEPTH).toBeLessThanOrEqual(rowCut(b.y[1], metrics.lean, 390, 390));
+      // ...and a title and its object keep 80px under the top cut where it falls lowest (the left edge).
+      expect(base - rowCut(b.y[0], metrics.lean, 390, 0)).toBeGreaterThanOrEqual(80);
+    }
   });
 });

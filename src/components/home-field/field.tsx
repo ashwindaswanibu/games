@@ -4,8 +4,10 @@ import { Bodoni_Moda } from "next/font/google";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { AssetRef } from "@/core/assets";
+import { barsFill, type Rgb } from "@/lib/film-palette";
 import { receiveSealed } from "@/lib/sealed-assets";
-import { at, Material, Room, SealedImage, turn, type Rect, type Stage } from "./materials";
+import { clamp, easeInOut, lerp } from "./ease";
+import { at, Material, turn, type Rect, type Stage } from "./materials";
 import {
   choosePlan,
   dayFraction,
@@ -14,6 +16,7 @@ import {
   fieldLayout,
   fieldMetrics,
   leanOf,
+  longestLine,
   rightSeamAt,
   rowClip,
   rowCut,
@@ -27,7 +30,7 @@ import {
   type HomeTile,
   type TileBox,
 } from "./model";
-import { barsFill } from "@/lib/film-palette";
+import { PlayedStrip, Print, printTitleSize } from "./played";
 import { useFilmLight } from "./use-film-light";
 import styles from "./field.module.css";
 
@@ -53,10 +56,6 @@ const ARRIVAL_MS = 3000;
 // ---------------------------------------------------------------------------------------------
 // The clock
 // ---------------------------------------------------------------------------------------------
-
-const easeInOut = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-const clamp = (x: number) => Math.max(0, Math.min(1, x));
-const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
 
 interface Tween {
   key: string;
@@ -241,6 +240,10 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const clipOf = (b: TileBox) => (compact ? rowClip(b, lean, size.width, b.row === 0, b.row === lastRow) : tileClip(b, lean));
   // A phone row's cuts reach `cut` above and below its edges.
   const cut = compact ? (lean * size.width) / 2 : 0;
+  // The day's print sets every title one size, from the field as the print leaves it (so titles hold their size as it opens).
+  const printTitle = targets.print
+    ? printTitleSize(tiles, fieldLayout({ width: size.width, height: fieldHeight, plan, collapse: tiles.map(() => 1), print: 1, open: null, metrics }), lean, compact, cut, size.width)
+    : 0;
   const coverOf = (b: TileBox): Rect => {
     const k = leanOf(b, lean);
     return { left: b.x[0] - k - 40, top: b.y[0] - cut - 2, width: b.x[1] - b.x[0] + 2 * k + 80, height: b.y[1] - b.y[0] + 2 * cut + 4 };
@@ -363,6 +366,8 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
                     title={{ size: titleSize, lines }}
                     collapse={collapse[i]!}
                     print={print}
+                    printTitle={printTitle}
+                    columns={light.columns}
                     opened={open?.index === i ? open.amount : 0}
                     peek={peek?.index === i ? peek.amount : 0}
                     middle={(x) => middleAt(box, x)}
@@ -412,7 +417,7 @@ function DayHeader({ model, compact, width }: { model: HomeModel; compact: boole
         {model.user.isAdmin && <a href="/admin">Admin</a>}
       </nav>
       <span className={styles.score} aria-live="polite">
-        {dayLine(model.tiles, model.won, clock, compact)}
+        {dayLine(model.tiles, model.won, model.max, clock, compact)}
       </span>
       <span className={styles.rule} aria-hidden>
         <i className={styles.ruleRest} style={{ transform: `scaleX(${1 - fraction})` }} />
@@ -670,6 +675,10 @@ interface TileProps {
   title: { size: number; lines: number };
   collapse: number;
   print: number;
+  /** The day's print's one title size. */
+  printTitle: number;
+  /** The film's columns (null until worked out), for its title pressed in its bars. */
+  columns: readonly Rgb[] | null;
   opened: number;
   /** How far this played game's strip is opened under the pointer. */
   peek: number;
@@ -682,8 +691,8 @@ interface TileProps {
   children?: ReactNode;
 }
 
-function Tile({ tile, stage, clip, accent, dateShort, compact, title, collapse, print, opened, peek, middle, veil, onEnter, onPeek, onLight, children }: TileProps) {
-  const { box, lean, cover } = stage;
+function Tile({ tile, stage, clip, accent, dateShort, compact, title, collapse, print, printTitle, columns, opened, peek, middle, veil, onEnter, onPeek, onLight, children }: TileProps) {
+  const { lean, cover } = stage;
   const finished = tile.state === "finished";
   const live = finished ? 0 : 1 - opened;
   const strip = finished ? clamp(collapse * 1.6 - 0.4) * (1 - print) : 0;
@@ -718,7 +727,9 @@ function Tile({ tile, stage, clip, accent, dateShort, compact, title, collapse, 
       {finished && tile.result && strip > 0 && (
         <PlayedStrip tile={tile} stage={stage} opacity={strip} settle={collapse} peek={peek} middle={middle} />
       )}
-      {finished && tile.result && print > 0 && <Print tile={tile} box={box} lean={lean} cover={cover} amount={print} cut={stage.cuts ? (lean * stage.width) / 2 : 0} />}
+      {finished && tile.result && print > 0 && (
+        <Print tile={tile} stage={stage} amount={print} compact={compact} cut={stage.cuts ? (lean * stage.width) / 2 : 0} titleSize={printTitle} columns={columns} />
+      )}
       <span className={styles.veil} style={cover} data-veil={veil} aria-hidden />
     </a>
   );
@@ -780,189 +791,4 @@ function TitleText({ parts, lines }: { parts: HomeTile["titleParts"]; lines: num
       {w.italic ? <i>{w.text}</i> : w.text}
     </Fragment>
   ));
-}
-
-/** The longest line of `text` set on `lines` lines (two: split at the space that balances them best). */
-function longestLine(text: string, lines: number): number {
-  if (lines < 2) return text.length;
-  let best = text.length;
-  for (let i = text.indexOf(" "); i >= 0; i = text.indexOf(" ", i + 1)) best = Math.min(best, Math.max(i, text.length - i - 1));
-  return best;
-}
-
-// ---------------------------------------------------------------------------------------------
-// Finished games
-// ---------------------------------------------------------------------------------------------
-
-/**
- * A game you've played, in its strip: its room, your score large at the top (it counts up as the
- * game settles into the strip), the title running up the side. Opened a little under the pointer
- * (`peek`), it says more (Degrees names its links).
- */
-function PlayedStrip({ tile, stage, opacity, settle, peek, middle: rowMiddle }: { tile: HomeTile; stage: Stage; opacity: number; settle: number; peek: number; middle(x: number): number }) {
-  const { box, lean, order } = stage;
-  const r = tile.result!;
-  const m = tile.material;
-  const w = box.x[1] - box.x[0];
-  const h = box.y[1] - box.y[0];
-  const upright = w < h;
-  const k = (lean * h) / 2;
-  // The strip's middle at height y: its seams lean, so the middle drifts left going down.
-  const middle = (y: number) => (box.x[0] + box.x[1]) / 2 + k * (1 - (2 * (y - box.y[0])) / h);
-  const cx = (box.x[0] + box.x[1]) / 2;
-  const shown = Math.round(r.score * easeInOut(clamp((settle - 0.25) / 0.75)));
-  const write = clamp((settle - 0.45) / 0.55);
-  const area: CSSProperties = { left: box.x[0] - 40, top: box.y[0], width: w + 80, height: h };
-  const arrive = at(300 + order * 90);
-
-  if (!upright) {
-    // A finished row's band: the same, laid along it (centred between a phone row's cuts).
-    const x = box.x[0] + 22;
-    return (
-      <span className={styles.played} style={{ opacity, ...arrive }}>
-        {m.kind === "frames" && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.playedPicture}`} style={area} />}
-        <span className={styles.playedScore} style={{ left: x, top: rowMiddle(x + 20) - 22, fontSize: 40 }}>
-          {shown}
-        </span>
-        <span className={styles.playedTitleFlat} style={{ left: x + 74, top: rowMiddle(x + 160) - 20, maxWidth: w - 120, opacity: write }}>
-          {r.title || r.line}
-          <i>✓ Played · {r.title ? r.line : tile.name}</i>
-        </span>
-      </span>
-    );
-  }
-
-  const digits = String(r.score).length;
-  const score = Math.max(24, Math.min(64, w * 0.5, (w - 30) / (0.62 * digits)));
-  const title = Math.max(16, Math.min(30, w * 0.22));
-  const chainTop = box.y[0] + score * 1.9 + 90;
-  const chainBottom = box.y[1] - 70;
-  const people = r.chain?.people ?? [];
-  return (
-    <span className={styles.played} style={{ opacity, ...arrive }}>
-      {m.kind === "frames" && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.playedPicture}`} style={area} />}
-      <span className={styles.playedShade} style={area} />
-      <span className={styles.playedMark} style={{ left: middle(box.y[0] + 24), top: box.y[0] + 18, transform: "translateX(-50%)" }}>
-        ✓ Played
-      </span>
-      <span className={styles.playedScore} style={{ left: middle(box.y[0] + 46 + score / 2), top: box.y[0] + 46, fontSize: score, transform: "translateX(-50%)" }}>
-        {shown}
-      </span>
-      <span className={styles.playedUnit} style={{ left: middle(box.y[0] + 54 + score), top: box.y[0] + 50 + score, transform: "translateX(-50%)" }}>
-        of 100
-      </span>
-      {people.length > 1 && (
-        <>
-          <svg className={styles.chainSvg} width="100%" height="100%" aria-hidden>
-            <line x1={middle(chainTop)} y1={chainTop} x2={lerp(middle(chainTop), middle(chainBottom), write)} y2={lerp(chainTop, chainBottom, write)} />
-          </svg>
-          {people.map((person, j) => {
-            const y = lerp(chainTop, chainBottom, j / (people.length - 1));
-            const end = j === 0 || j === people.length - 1;
-            return (
-              <span key={j} style={{ position: "absolute", left: middle(y), top: y, opacity: clamp(write * people.length - j) }}>
-                <i className={end ? styles.beadEnd : styles.bead} />
-                <span className={styles.beadName} style={{ opacity: peek }}>
-                  {person}
-                  {r.chain!.films[j] && <em>↳ {r.chain!.films[j]}</em>}
-                </span>
-              </span>
-            );
-          })}
-        </>
-      )}
-      {people.length <= 1 && (
-        <span
-          className={styles.playedTitle}
-          style={{ left: cx - title * 0.62, top: box.y[1] - 44, fontSize: title, maxWidth: h - score * 2 - 140, opacity: write, transform: `rotate(-90deg) translateX(${lerp(-24, 0, write)}px)` }}
-        >
-          {r.title || tile.name}
-        </span>
-      )}
-      <span className={styles.playedLine} style={{ left: people.length > 1 ? middle(box.y[1] - 44) - 22 : cx + title * 0.62 + 2, top: box.y[1] - 44, maxWidth: h - score * 2 - 140, opacity: write * (people.length > 1 ? 1 - peek : 1) }}>
-        <b>{tile.title}</b> · {r.line}
-      </span>
-    </span>
-  );
-}
-
-/** The day's print: a finished game, resolved, filling its share. */
-/** `cut`: how far a phone row's slanted bottom cut reaches above its box, so the scale and friends' marks stay clear of it. */
-function Print({ tile, box, lean, cover, amount, cut }: { tile: HomeTile; box: TileBox; lean: number; cover: Rect; amount: number; cut: number }) {
-  const r = tile.result!;
-  const m = tile.material;
-  const w = box.x[1] - box.x[0];
-  const h = box.y[1] - box.y[0];
-  const title = Math.max(22, Math.min(56, w / 8.5, h / 9));
-  const scaleW = Math.max(80, Math.min(300, w * 0.62));
-  // Under the base line: the scale and two lines of friends' marks (about 74px), clear of a phone row's cut.
-  const baseY = box.y[1] - Math.max(cut ? 80 + cut : 70, Math.min(230, h * 0.28));
-  const x = seamAt(box, lean, baseY) + Math.min(48, w * 0.08);
-  const fade = (from: number) => clamp((amount - from) / (1 - from));
-  return (
-    <span className={styles.print} style={{ opacity: clamp(amount * 1.6) }}>
-      {m.kind === "light" && r.image && <SealedImage asset={r.image} className={styles.strip} style={cover} />}
-      {r.frames && r.image && <SealedImage asset={r.image} className={`${styles.cover} ${styles.wash}`} style={cover} />}
-      {r.frames && r.image && h > 260 && <SealedImage asset={r.image} className={styles.still} style={stillBox(box, lean, r.image, baseY)} />}
-      {m.kind !== "light" && !r.frames && <Room kind={m.kind} stage={{ box, lean, cover, zone: { top: box.y[0], bottom: box.y[1] }, wide: false, cuts: null, width: 0, order: 0 }} />}
-      <span className={styles.shade} style={cover} />
-      {r.chain && (
-        <span className={styles.chain} style={{ opacity: fade(0.3) }}>
-          {r.chain.people.map((person, j) => {
-            // Degrees has no result title, so its chain can run nearer the base line; a name never outgrows its step.
-            const step = Math.min(72, (baseY - box.y[0] - (r.title ? 60 : 24)) / Math.max(1, r.chain!.people.length));
-            const size = Math.min(step / 1.1, Math.max(14, Math.min(40, w / 11, h / 18, step / 1.15)));
-            const y = box.y[0] + Math.max(24, h * 0.1) + j * step;
-            return (
-              <span key={j} style={{ position: "absolute", left: seamAt(box, lean, y + 20) + Math.min(48, w * 0.08), top: y }}>
-                <span className={styles.person} style={{ fontSize: size }}>
-                  {person}
-                </span>
-                {/* The films between, where the print has room for them (a phone's row doesn't). */}
-                {r.chain!.films[j] && step >= size * 1.05 + 28 && <span className={styles.via}>↳ {r.chain!.films[j]}</span>}
-              </span>
-            );
-          })}
-        </span>
-      )}
-      {r.title && (
-        <span className={styles.resultTitle} style={{ left: x, bottom: `calc(100% - ${baseY - title * 0.25}px)`, fontSize: title, opacity: fade(0.35), maxWidth: Math.max(120, box.x[1] - x - 40) }}>
-          {r.title}
-        </span>
-      )}
-      <span className={styles.resultLine} style={{ left: x + 2, top: baseY + 6, opacity: fade(0.4) }}>
-        {r.line} · {r.score}
-      </span>
-      {r.frames && r.frames.length > 1 && h > 260 && (
-        <span className={styles.thumbs} style={{ left: x, top: baseY + 34, opacity: fade(0.5) }}>
-          {r.frames.map((f, j) => (
-            <SealedImage key={f.id} asset={f} className={styles.thumb} style={{ outline: j === r.frames!.length - 1 ? "1.5px solid var(--hf-ink)" : "none" }} />
-          ))}
-        </span>
-      )}
-      <span className={styles.scale} style={{ left: x, top: baseY + (r.frames && r.frames.length > 1 && h > 260 ? 100 : 44), width: scaleW, opacity: fade(0.45) }}>
-        <i className={styles.me} style={{ left: `${r.score}%` }} title={`You: ${r.score}`} />
-        {(tile.friends.marks ?? []).map((f, j) => (
-          <i key={j} className={styles.friendDot} style={{ left: `${f.score}%` }}>
-            <b style={{ top: 12 + (j % 2) * 14 }}>
-              {f.name} {f.score}
-            </b>
-          </i>
-        ))}
-      </span>
-    </span>
-  );
-}
-
-/**
- * The frame it was named on, at its own proportions (never stretched over a tall third of the
- * screen): as wide as the tile allows, above the title.
- */
-function stillBox(box: TileBox, lean: number, image: AssetRef, baseY: number): CSSProperties {
-  const k = (lean * (box.y[1] - box.y[0])) / 2;
-  const room = box.x[1] - box.x[0] - 2 * k - 48;
-  const width = Math.max(120, Math.min(room, (image.width / image.height) * (baseY - box.y[0] - 150)));
-  const height = (width * image.height) / image.width;
-  const top = Math.max(box.y[0] + 24, baseY - 110 - height);
-  return { left: (box.x[0] + box.x[1]) / 2 - width / 2, top, width, height };
 }

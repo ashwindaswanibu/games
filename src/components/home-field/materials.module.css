@@ -35,18 +35,6 @@
   filter: grayscale(1) brightness(0.5);
 }
 
-/* Played: still and quieter than the games still to play. */
-.rested {
-  opacity: 0.6;
-  filter: saturate(0.75);
-}
-
-.shade {
-  position: absolute;
-  background: linear-gradient(180deg, rgb(5 5 6 / 0.55), rgb(5 5 6 / 0) 26%, rgb(5 5 6 / 0) 62%, rgb(5 5 6 / 0.8));
-  pointer-events: none;
-}
-
 /* The film's foot, darkened under its title card. */
 .foot {
   position: absolute;

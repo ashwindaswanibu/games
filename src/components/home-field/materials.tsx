@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { AssetRef } from "@/core/assets";
 import { useAssetSrc } from "@/lib/sealed-assets";
 import { rightSeamAt, seamAt, type HomeTile, type TileBox, type TileMaterial } from "./model";
@@ -70,7 +70,8 @@ export function Room({ kind, stage }: { kind: TileMaterial["kind"]; stage: Stage
 /**
  * The strip of light on a cut of the reel: sprocket rails along its top and bottom edges (the
  * reel's own edges; on a phone they lie along the row's cuts), the date and where you are printed
- * on the top rail as the game prints them, and the bars at full colour.
+ * on the top rail as the game prints them, and the bars at full colour. Played, it's the bars
+ * alone, still at full colour (the strip lays its writing over them; see played.tsx).
  */
 function FilmReel({ m, stage, finished, dateShort }: { m: Extract<TileMaterial, { kind: "light" }>; stage: Stage; finished: boolean; dateShort: string }) {
   const { box, lean, cover, wide, cuts, width } = stage;
@@ -91,10 +92,8 @@ function FilmReel({ m, stage, finished, dateShort }: { m: Extract<TileMaterial, 
   return (
     <>
       <SealedImage asset={m.image} className={`${styles.strip} ${styles.grey}`} style={{ ...picture, ...at(300) }} />
-      <SealedImage asset={m.image} className={`${styles.strip} ${finished ? styles.rested : styles.colour}`} style={{ ...picture, ...at(700) }} />
-      {finished ? (
-        <span className={styles.shade} style={cover} />
-      ) : (
+      <SealedImage asset={m.image} className={`${styles.strip} ${styles.colour}`} style={{ ...picture, ...at(700) }} />
+      {!finished && (
         <>
           {/* Down to the bottom rail (a phone's slanted rail lies over it, so it runs on under). */}
           <span className={styles.foot} style={{ left: cover.left, width: cover.width, top: box.y[1] - Math.min(340, h), height: cuts ? cover.top + cover.height - box.y[1] + Math.min(340, h) : Math.min(340, h) - rail }} />
@@ -281,14 +280,10 @@ function ForeEdge({ m, stage }: { m: Extract<TileMaterial, { kind: "letters" }>;
           Today&apos;s dictionary
         </span>
       )}
-      <span className={styles.book} style={{ left, top: bandTop, width: B, height: band, ...at(700) }}>
-        <span className={styles.bookEdge}>
-          <span className={styles.pages} style={{ "--pages": total } as CSSProperties} />
-          <span className={styles.lamp} />
-          <span className={`${styles.bookShade} ${styles.shadeLeft}`} style={{ transform: `scaleX(${(m.gap.low + 1) / total})`, ...at(800) }} />
-          <span className={`${styles.bookShade} ${styles.shadeRight}`} style={{ transform: `scaleX(${(total - m.gap.high) / total})`, ...at(800) }} />
-        </span>
-      </span>
+      <BookEdge rect={{ left, top: bandTop, width: B, height: band }} pages={total} style={at(700)}>
+        <span className={`${styles.bookShade} ${styles.shadeLeft}`} style={{ transform: `scaleX(${(m.gap.low + 1) / total})`, ...at(800) }} />
+        <span className={`${styles.bookShade} ${styles.shadeRight}`} style={{ transform: `scaleX(${(total - m.gap.high) / total})`, ...at(800) }} />
+      </BookEdge>
       {m.ribbons.map((r, i) => (
         <span
           key={i}
@@ -313,6 +308,22 @@ function ForeEdge({ m, stage }: { m: Extract<TileMaterial, { kind: "letters" }>;
         </span>
       )}
     </>
+  );
+}
+
+/**
+ * The dictionary's fore-edge at `rect`: bone paper, a hairline a page (`pages`), curving in and out
+ * of the lamp's light. Whatever lies on the pages (the shadows) comes as `children`.
+ */
+export function BookEdge({ rect, pages, style, children }: { rect: Rect; pages: number; style?: CSSProperties; children?: ReactNode }) {
+  return (
+    <span className={styles.book} style={{ ...rect, ...style }}>
+      <span className={styles.bookEdge}>
+        <span className={styles.pages} style={{ "--pages": Math.max(1, pages) } as CSSProperties} />
+        <span className={styles.lamp} />
+        {children}
+      </span>
+    </span>
   );
 }
 
