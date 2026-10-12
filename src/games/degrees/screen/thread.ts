@@ -127,7 +127,10 @@ export function threadGeometry(count: number, slack: number, box: { width: numbe
   const spacing = (box.width - 2 * pad) / (n - 1);
   // The ends' names stand above the line; the knots' names and the sag hang below it.
   const line = box.height * 0.52;
-  const sag = Math.min(box.height * 0.26, slack * 24);
+  // The lowest knot's face (12px under it, up to min(184, 0.8 × spacing) across, see `--cd`) and
+  // its name's two lines under that stay on the board, clear of the end titles below it.
+  const hang = 12 + Math.min(184, spacing * 0.8) * 0.7 + 2 * 26;
+  const sag = Math.min(box.height * 0.26, slack * 24, Math.max(0, box.height - line - hang));
   const points = Array.from({ length: n }, (_, i) => ({ x: pad + i * spacing, y: line + sag * bow(i) }));
   return { vertical: false, points, height: box.height, spacing };
 }

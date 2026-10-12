@@ -279,7 +279,7 @@ export function DegreesScreen(props: Props) {
             <div className={styles.opening} data-starting={starting || undefined}>
               {/* The rules in two lines; the thread above carries how a link is made. The full rules are read with the button. */}
               <p className={styles.openingLine}>
-                Par + <em>{SPARE_MOVES}</em> moves. A link, an undo or a hint each uses one.
+                Par + <em>{SPARE_MOVES}</em> moves. A link or a hint uses one; undoing a link doesn&rsquo;t give its move back.
               </p>
               <p className={styles.openingLine}>
                 Reach them in par for <em>{TOP_SCORE}</em>; each longer route, <em>{RANK_STEP}</em> fewer. Stuck? The way in, or the next link.

@@ -108,9 +108,12 @@ function measure(items: readonly HTMLElement[]): Map<string, Seen> {
     const key = el.dataset.flip!;
     const kind = key.startsWith("line:") ? "line" : "cell";
     const rect = el.getBoundingClientRect();
+    // Where the glyph is laid out, not where a transform of its own puts it right now (the
+    // opening's rise, a hover lift): those aren't moves, and would replay as one next render.
+    const own = new DOMMatrixReadOnly(getComputedStyle(el).transform);
     seen.set(key, {
-      x: rect.left + scrollX,
-      y: rect.top + scrollY,
+      x: rect.left - own.m41 + scrollX,
+      y: rect.top - own.m42 + scrollY,
       hidden: kind === "cell" && el.parentElement?.hasAttribute("data-set") === true,
       pos: counts[kind]++,
     });

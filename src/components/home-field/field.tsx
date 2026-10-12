@@ -718,7 +718,7 @@ function Tile({ tile, stage, clip, accent, dateShort, compact, title, collapse, 
       {finished && tile.result && strip > 0 && (
         <PlayedStrip tile={tile} stage={stage} opacity={strip} settle={collapse} peek={peek} middle={middle} />
       )}
-      {finished && tile.result && print > 0 && <Print tile={tile} box={box} lean={lean} cover={cover} amount={print} />}
+      {finished && tile.result && print > 0 && <Print tile={tile} box={box} lean={lean} cover={cover} amount={print} cut={stage.cuts ? (lean * stage.width) / 2 : 0} />}
       <span className={styles.veil} style={cover} data-veil={veil} aria-hidden />
     </a>
   );
@@ -887,14 +887,16 @@ function PlayedStrip({ tile, stage, opacity, settle, peek, middle: rowMiddle }: 
 }
 
 /** The day's print: a finished game, resolved, filling its share. */
-function Print({ tile, box, lean, cover, amount }: { tile: HomeTile; box: TileBox; lean: number; cover: Rect; amount: number }) {
+/** `cut`: how far a phone row's slanted bottom cut reaches above its box, so the scale and friends' marks stay clear of it. */
+function Print({ tile, box, lean, cover, amount, cut }: { tile: HomeTile; box: TileBox; lean: number; cover: Rect; amount: number; cut: number }) {
   const r = tile.result!;
   const m = tile.material;
   const w = box.x[1] - box.x[0];
   const h = box.y[1] - box.y[0];
   const title = Math.max(22, Math.min(56, w / 8.5, h / 9));
   const scaleW = Math.max(80, Math.min(300, w * 0.62));
-  const baseY = box.y[1] - Math.max(70, Math.min(230, h * 0.28));
+  // Under the base line: the scale and two lines of friends' marks (about 74px), clear of a phone row's cut.
+  const baseY = box.y[1] - Math.max(cut ? 80 + cut : 70, Math.min(230, h * 0.28));
   const x = seamAt(box, lean, baseY) + Math.min(48, w * 0.08);
   const fade = (from: number) => clamp((amount - from) / (1 - from));
   return (
@@ -907,8 +909,9 @@ function Print({ tile, box, lean, cover, amount }: { tile: HomeTile; box: TileBo
       {r.chain && (
         <span className={styles.chain} style={{ opacity: fade(0.3) }}>
           {r.chain.people.map((person, j) => {
-            const step = Math.min(72, (baseY - box.y[0] - 60) / Math.max(1, r.chain!.people.length));
-            const size = Math.max(14, Math.min(40, w / 11, h / 18, step / 1.15));
+            // Degrees has no result title, so its chain can run nearer the base line; a name never outgrows its step.
+            const step = Math.min(72, (baseY - box.y[0] - (r.title ? 60 : 24)) / Math.max(1, r.chain!.people.length));
+            const size = Math.min(step / 1.1, Math.max(14, Math.min(40, w / 11, h / 18, step / 1.15)));
             const y = box.y[0] + Math.max(24, h * 0.1) + j * step;
             return (
               <span key={j} style={{ position: "absolute", left: seamAt(box, lean, y + 20) + Math.min(48, w * 0.08), top: y }}>

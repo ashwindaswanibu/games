@@ -75,9 +75,16 @@ describe("threadGeometry", () => {
     expect(taut.vertical).toBe(false);
     expect(new Set(taut.points.map((p) => p.y)).size).toBe(1);
     expect(taut.points[0]!.x).toBeLessThan(taut.points[3]!.x);
-    const slack = threadGeometry(5, 2, { width: 1200, height: 300 });
+    const slack = threadGeometry(5, 2, { width: 1200, height: 600 });
     expect(slack.points[2]!.y).toBeGreaterThan(slack.points[0]!.y);
     expect(slack.points[0]!.y).toBe(slack.points[4]!.y);
+  });
+
+  it("never sags a face and its name off the board", () => {
+    const g = threadGeometry(6, 4, { width: 1200, height: 450 });
+    const spacing = g.spacing;
+    const lowest = Math.max(...g.points.map((p) => p.y));
+    expect(lowest + 12 + Math.min(184, spacing * 0.8) * 0.7 + 52).toBeLessThanOrEqual(450 + 1e-9);
   });
 
   it("runs down a phone, growing with the chain", () => {

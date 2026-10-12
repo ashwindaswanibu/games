@@ -19,7 +19,7 @@ import { filmRefSchema, personIdSchema, personRefSchema } from "@/games/_movies/
  */
 export const DEGREES_MIN_PAR = 2;
 export const DEGREES_MAX_PAR = 7;
-/** Moves a player gets beyond par: a link, an undo and a hint each use one. */
+/** Moves a player gets beyond par: a link or a hint uses one, and undoing a link doesn't give its move back. */
 export const DEGREES_SPARE_MOVES = 4;
 
 export const degreesLinkSchema = z.object({
