@@ -157,8 +157,9 @@ Built from the designers' "result strips as objects" proposals the judge deferre
 - Alternative: keep the generic score strip with "✓ Played" (what it was).
 - Not built: **"Share the day"** (one message with every game's share line). What it says is your call: say the word and it's an hour's work.
 
-### Movie Barcode on a phone: the editing bench — building
+### Movie Barcode on a phone: the editing bench — live
 An overview strip plus a viewer showing a third of the film at three times the size, scrubbed by dragging (the judge's "best phone idea", deferred from round one only for size). Laptop unchanged.
 
 ### Review fixes — live
 An independent review of the four redesigns found four real defects, all fixed: Lexicon's letters dropped and rose twice after opening; the phone's all-played print ran friends' marks under the row's cut; a deep Degrees sag could hide a face under the end titles at 1280x720; Degrees' short rules said an undo costs a move.
+  Builder's notes to weigh: after each unreel the viewer pans back to the film's head (900ms) — "rewind" or busy? The viewer is sized so the four fit without resizing, which leaves ~85px of room above the guess line during play; the alternative is a viewer that shrinks when the four come up.
