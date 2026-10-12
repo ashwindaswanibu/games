@@ -319,10 +319,13 @@ export function Print({ tile, stage, amount, compact, cut, titleSize, columns }:
       {m.kind === "letters" && <ShutBook m={m} stage={stage} compact={compact} hangTo={titleTop - (compact ? 6 : 36)} laid={fade(0.4)} />}
 
       {r.title && (
-        <span className={styles.title} style={{ left: x, bottom: onBaseline(lines.base, titleSize, BASELINE + 0.12), fontSize: titleSize, maxWidth: room, WebkitLineClamp: titleLines, opacity: fade(0.35) }}>
-          {r.title}
+        // Ink and its lit layer are siblings, set alike: WebKit wraps a clamped box's positioned child on its own.
+        <span className={styles.titleBox} style={{ left: x, bottom: onBaseline(lines.base, titleSize, BASELINE + 0.12), fontSize: titleSize, maxWidth: room, opacity: fade(0.35) }}>
+          <span className={styles.title} style={{ WebkitLineClamp: titleLines }}>
+            {r.title}
+          </span>
           {fill !== undefined && (
-            <span className={styles.titleLit} data-on={fill ? "" : undefined} style={{ WebkitLineClamp: titleLines, ...(fill ? { backgroundImage: fill } : {}) }} aria-hidden>
+            <span className={`${styles.title} ${styles.titleLit}`} data-on={fill ? "" : undefined} style={{ WebkitLineClamp: titleLines, ...(fill ? { backgroundImage: fill } : {}) }} aria-hidden>
               {r.title}
             </span>
           )}

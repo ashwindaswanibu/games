@@ -239,6 +239,10 @@
 }
 
 /* The result's title, its last line's baseline on the row's (room under it for descenders, over it for accents). */
+.titleBox {
+  display: block;
+}
+
 .title {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -256,11 +260,6 @@
 .titleLit {
   position: absolute;
   inset: 0;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  padding: inherit;
-  text-wrap: balance;
   color: transparent;
   background: 0 0 / 100% 100% no-repeat;
   -webkit-background-clip: text;
