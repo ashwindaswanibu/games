@@ -6,8 +6,9 @@
  * A puzzle has ten levels, each a full-width picture of the whole film, in film order:
  *
  * - **Level 1, the squeezed-frame barcode.** Frames sampled evenly across the film, each squeezed
- *   horizontally into its own column (so its vertical structure survives: sky above, ground below),
- *   laid out left to right. Letterbox mattes are cut away first.
+ *   horizontally into one column (so its vertical structure survives: sky above, ground below),
+ *   then averaged in runs of consecutive frames into `LEVEL1_BANDS` bands, laid out left to right.
+ *   Letterbox mattes are cut away first.
  * - **Levels 2–10, edges first.** The film is cut into N equal stretches (N falls each level, so
  *   strips get wider). Each stretch contributes its middle frame (or a nearby one, if that frame is
  *   near black), and from it a full-height strip as wide as one N-th of the canvas. Early levels cut
@@ -275,6 +276,113 @@ export function layoutColumns(columns: readonly Float32Array[], width: number): 
   return out;
 }
 
+/**
+ * Bands across level 1. Every sampled frame still counts (each band is the mean of a run of them),
+ * but the barcode reads as 480 stripes, 5 px each on the 2,400-pixel canvas, instead of one hairline
+ * per frame: players found reel 1's 2,400 one-pixel columns too many and too narrow to read
+ * (2026-10). A count rather than a width, so the barcode looks the same at any canvas size.
+ */
+export const LEVEL1_BANDS = 480;
+
+/**
+ * `count` items split into `bands` runs of consecutive items, as even as possible (lengths differ by
+ * at most one), in order: run i is items [start, end) with start = ⌊i·count / bands⌋. With fewer
+ * items than bands, each item is its own run.
+ */
+export function bandRuns(count: number, bands: number): { start: number; end: number }[] {
+  if (!Number.isInteger(count) || !Number.isInteger(bands) || count < 1 || bands < 1) throw new Error(`Invalid banding of ${count} into ${bands}`);
+  const n = Math.min(count, bands);
+  return Array.from({ length: n }, (_, i) => ({ start: Math.floor((i * count) / n), end: Math.floor(((i + 1) * count) / n) }));
+}
+
+/**
+ * Squeezed columns (film order) averaged into `bands` bands (`bandRuns`): each band is the exact
+ * mean of its run of consecutive columns, in sRGB like `layoutColumns`. Lay the result out with
+ * `layoutColumns`.
+ */
+export function bandColumns(columns: readonly Float32Array[], bands: number): Float32Array[] {
+  if (columns.length === 0) throw new Error("No columns to band");
+  const values = columns[0]!.length;
+  if (values % 3 !== 0 || values === 0 || columns.some((c) => c.length !== values)) throw new Error("Columns must all have the same number of rows");
+  return bandRuns(columns.length, bands).map(({ start, end }) => {
+    const sum = new Float64Array(values);
+    for (let i = start; i < end; i++) {
+      const column = columns[i]!;
+      for (let v = 0; v < values; v++) sum[v]! += column[v]!;
+    }
+    const band = new Float32Array(values);
+    for (let v = 0; v < values; v++) band[v] = sum[v]! / (end - start);
+    return band;
+  });
+}
+
+/** Each column of an image as a squeezed column (one row per pixel row), for `layoutColumns`. */
+export function imageColumns(image: RgbImage): Float32Array[] {
+  assertImage(image);
+  const { width, height, data } = image;
+  const columns = Array.from({ length: width }, () => new Float32Array(height * 3));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 3;
+      columns[x]!.set(data.subarray(i, i + 3), y * 3);
+    }
+  }
+  return columns;
+}
+
+/**
+ * A stored level 1 re-banded without fetching a frame: each of its columns is one sampled frame
+ * (levels were rendered with as many frames as pixels before `LEVEL1_BANDS`), so averaging runs of
+ * columns gives the bands the renderer now draws from the frames themselves.
+ */
+export function rebandLevel1(image: RgbImage, bands: number): RgbImage {
+  return layoutColumns(bandColumns(imageColumns(image), bands), image.width);
+}
+
+/** Band widths `detectBands` tries, in pixels. Narrower bands can't be told from WebP's 2-px chroma pairs. */
+const BAND_SEARCH = { narrowest: 3, widest: 24 };
+/** A level is banded when the typical change inside its bands is under this share of the typical change across their edges. */
+export const BANDED_RATIO = 0.5;
+
+function median(values: Float64Array): number {
+  const sorted = Float64Array.from(values).sort();
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+/**
+ * Whether a level 1 is already banded (so re-banding it would only blur it), and into how many
+ * bands. For each band count with bands 3–24 px wide, the median colour change between neighbouring
+ * columns inside a band is set against the median change across band edges. A level with one frame
+ * per column has no structure aligned with the edges (about 1 at every count); a banded one is near
+ * 0 inside its bands, whatever compression added. Medians, because a film's cuts are rare, large
+ * changes that would otherwise swing the means. Returns the count with the lowest ratio (under
+ * compression noise, possibly a divisor of the true count: an estimate, for reports).
+ */
+export function detectBands(image: RgbImage): { bands: number; ratio: number; banded: boolean } {
+  assertImage(image);
+  const { width, height, data } = image;
+  // step[x - 1]: mean absolute change from column x − 1 to column x, for x = 1 … width − 1.
+  const step = new Float64Array(Math.max(0, width - 1));
+  for (let y = 0; y < height; y++) {
+    for (let x = 1; x < width; x++) {
+      const i = (y * width + x) * 3;
+      step[x - 1]! += Math.abs(data[i]! - data[i - 3]!) + Math.abs(data[i + 1]! - data[i - 2]!) + Math.abs(data[i + 2]! - data[i - 1]!);
+    }
+  }
+  let best = { bands: width, ratio: 1 };
+  for (let bands = Math.ceil(width / BAND_SEARCH.widest); bands <= Math.floor(width / BAND_SEARCH.narrowest); bands++) {
+    const isEdge = new Uint8Array(step.length);
+    for (const { start } of bandRuns(width, bands).slice(1)) isEdge[start - 1] = 1;
+    const across = median(step.filter((_, i) => isEdge[i] === 1));
+    const inside = median(step.filter((_, i) => isEdge[i] === 0));
+    const ratio = across > 0 ? inside / across : 1;
+    // Ties go to the narrower bands: every edge of a banding is an edge of half as many bands too.
+    if (ratio <= best.ratio) best = { bands, ratio };
+  }
+  return { ...best, banded: best.ratio < BANDED_RATIO };
+}
+
 /** The frame numbers (1-based, of `total`) sampled for the squeezed barcode: evenly spread, in order. */
 export function sampleFrames(total: number, count: number): number[] {
   if (!Number.isInteger(total) || total < 1) throw new Error(`Invalid frame count ${total}`);
@@ -419,6 +527,42 @@ export function chooseFrame(
     if ((brightness.get(candidate) ?? 0) > NEAR_BLACK_FRAME) return candidate;
   }
   return fallback ?? chunk.target;
+}
+
+/**
+ * Frames a gallery may lack before a render gives up: 1% of the frames sampled for level 1 (24 of
+ * 2,400). Now and then the CDN answers 404 for a single cap (an Alice in Wonderland frame,
+ * 2026-10); such a frame is left out of level 1, where its neighbours' bands cover it, or swapped for
+ * another frame of the same stretch for a strip (`stripFrames`). More missing than that means the
+ * gallery itself is broken (renumbered, half deleted), and the levels would no longer be the film.
+ */
+export const MAX_MISSING_SHARE = 0.01;
+
+export function missingFrameLimit(sampled: number): number {
+  return Math.floor(sampled * MAX_MISSING_SHARE);
+}
+
+/**
+ * The frame for each of `strips` equal stretches of the story (`chooseFrame`), never one the source
+ * turned out not to have: a missing frame is passed over as if it had never been sampled, so its
+ * strip takes the next frame `chooseFrame` would have picked in the same stretch, and every other
+ * strip keeps its frame. Throws when a stretch has no frame left.
+ */
+export function stripFrames(
+  story: FrameRange,
+  strips: number,
+  total: number,
+  sampled: readonly number[],
+  brightness: ReadonlyMap<number, number>,
+  missing: ReadonlySet<number> = new Set(),
+): number[] {
+  const present = missing.size === 0 ? sampled : sampled.filter((n) => !missing.has(n));
+  return Array.from({ length: strips }, (_, i) => {
+    const chunk = chunkIn(story, strips, i);
+    const frame = chooseFrame(chunk, total, present, brightness);
+    if (missing.has(frame)) throw new Error(`No frame of the stretch ${chunk.first}–${chunk.last} is left to cut a strip from: every sampled one is missing from the source`);
+    return frame;
+  });
 }
 
 // ---------------------------------------------------------------------------------------------

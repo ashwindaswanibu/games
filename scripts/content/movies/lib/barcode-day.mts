@@ -26,7 +26,7 @@ import { fadeToColor, LEVEL_COUNT, MAX_GUESSES, type LevelRef, type Puzzle, type
 import { clashes, DIRECTOR_GAP_DAYS, REPEAT_GAP_DAYS, SERIES_GAP_DAYS, type Clash } from "@/games/fade-to-color/picker";
 import { createGameServices } from "@/server/game-services";
 import { encodeImage, type EncodedImage } from "../../lib/images.mjs";
-import { DEFAULT_STORY_TRIM, PACES, type PaceName, type StoryTrim } from "./barcode-levels.mjs";
+import { DEFAULT_STORY_TRIM, LEVEL1_BANDS, PACES, type PaceName, type RgbImage, type StoryTrim } from "./barcode-levels.mjs";
 import { DEFAULT_LEVEL_HEIGHT, DEFAULT_LEVEL_WIDTH, renderLevels, type RenderedFilm } from "./barcode-render.mjs";
 import { finalPickOptions } from "./decoys.mjs";
 import { loadDayAnswers, seriesOf } from "./film-picker.mjs";
@@ -43,6 +43,13 @@ import { canonicalGalleryUrl, GallerySizeError, MAX_CONCURRENCY, openGallery, re
 
 export const GAME_ID = fadeToColor.id;
 const CREDIT_SOURCE = "movie-screencaps.com";
+/** WebP quality the levels are stored at. */
+export const DEFAULT_LEVEL_QUALITY = 88;
+
+/** A rendered level as stored: WebP, sharp chroma on its thin strips, never enlarged. */
+export function encodeLevel(image: RgbImage, quality = DEFAULT_LEVEL_QUALITY): Promise<EncodedImage> {
+  return encodeImage(image, { format: "webp", quality, smartSubsample: true, maxWidth: image.width, maxHeight: image.height });
+}
 
 export type RefusalRule = Clash["rule"] | "black-and-white" | "too-short";
 
@@ -150,6 +157,8 @@ export interface BarcodeDayOptions {
   width?: number;
   height?: number;
   samples?: number;
+  /** Bands in level 1 (default `LEVEL1_BANDS`). */
+  bands?: number;
   quality?: number;
   concurrency?: number;
   trim?: StoryTrim;
@@ -182,7 +191,8 @@ export async function renderBarcodeDay(db: ContentDb, options: BarcodeDayOptions
     width = DEFAULT_LEVEL_WIDTH,
     height = DEFAULT_LEVEL_HEIGHT,
     samples,
-    quality = 88,
+    bands = LEVEL1_BANDS,
+    quality = DEFAULT_LEVEL_QUALITY,
     concurrency = MAX_CONCURRENCY,
     trim = DEFAULT_STORY_TRIM,
     replace = {},
@@ -246,6 +256,7 @@ export async function renderBarcodeDay(db: ContentDb, options: BarcodeDayOptions
       height,
       pace: PACES[pace],
       samples,
+      bands,
       trim,
       log,
       // Black-and-white films make grey, dull levels: refused on the thumbnails, before the long part.
@@ -264,10 +275,11 @@ export async function renderBarcodeDay(db: ContentDb, options: BarcodeDayOptions
     process.off("SIGTERM", interrupted);
   }
   log(`  downloaded ${(source.bytesDownloaded / 1048576).toFixed(1)} MB in ${source.requests} requests; frame cache deleted`);
+  if (rendered.missing.length > 0) log(`  ⚠ ${rendered.missing.length} caps missing from the gallery (worked around): ${rendered.missing.join(", ")}`);
   if (rendered.levels.length !== LEVEL_COUNT) throw new Error(`Rendered ${rendered.levels.length} levels, expected ${LEVEL_COUNT}`);
 
   const encoded: EncodedImage[] = [];
-  for (const level of rendered.levels) encoded.push(await encodeImage(level.image, { format: "webp", quality, smartSubsample: true, maxWidth: width, maxHeight: height }));
+  for (const level of rendered.levels) encoded.push(await encodeLevel(level.image, quality));
   const assets = encoded.map((image, i) => newAsset(`barcode-level-${i + 1}`, image));
   const levels: LevelRef[] = assets.map((asset, i) => ({
     id: asset.id,
@@ -297,7 +309,7 @@ export async function renderBarcodeDay(db: ContentDb, options: BarcodeDayOptions
   rendered.levels.forEach((level, i) => {
     const kb = (encoded[i]!.bytes.length / 1024).toFixed(0);
     const span = level.frames.length > 0 ? `  strips from ${atPercent(level.frames[0]!)} to ${atPercent(level.frames.at(-1)!)}` : "";
-    log(`  level ${String(level.level).padStart(2)}: ${String(level.strips).padStart(4)} ${level.level === 1 ? "frames" : "strips"}  ${kb.padStart(5)} KB  avg ${level.average}  dominant ${level.dominant}${span}`);
+    log(`  level ${String(level.level).padStart(2)}: ${String(level.strips).padStart(4)} ${level.level === 1 ? "bands " : "strips"}  ${kb.padStart(5)} KB  avg ${level.average}  dominant ${level.dominant}${span}`);
   });
   log(`  check the first and last strips for titles or credits; raise --head or --tail if any show`);
   log(`  final pick: ${pickOptions.map((o) => `${o.title}${o.year ? ` (${o.year})` : ""}${o.id === film.id ? " ✓" : ""}`).join(" · ")}`);
@@ -315,7 +327,9 @@ export async function renderBarcodeDay(db: ContentDb, options: BarcodeDayOptions
         pace,
         size: { width, height },
         sampledFrames: rendered.sampled,
+        level1Bands: rendered.levels[0]!.strips,
         stripFrames: rendered.fetched,
+        missingFrames: rendered.missing,
         mattes: rendered.mattes,
         trim,
         story: rendered.story,

@@ -12,6 +12,9 @@
  *     [--pace normal|slower|faster]   how fast the strips widen and move to the centre (default normal)
  *     [--width 2400 --height 800]     level size in pixels
  *     [--samples <n>]            frames squeezed into level 1 (default: the width, kept within 1,600–3,000)
+ *     [--bands <n>]              bands level 1 averages those frames into, each the mean of a run of
+ *                                them (default 480: 5 px each at 2,400 wide; --bands as many as
+ *                                --samples gives one frame per band, the barcode before 2026-10)
  *     [--head 0.05 --tail 0.015] fractions of the film strips never come from: opening titles and
  *                                credits (often over the first scenes) and closing cards. Review the
  *                                first and last strips (--dry-run --out) and raise --head for a film
@@ -50,7 +53,7 @@
 import { parseArgs } from "node:util";
 import { tierLabel } from "@/games/fade-to-color/picker";
 import { renderBarcodeDay, resolveDay } from "./lib/barcode-day.mjs";
-import { DEFAULT_STORY_TRIM, MAX_TRIM, PACE_NAMES, type PaceName } from "./lib/barcode-levels.mjs";
+import { DEFAULT_STORY_TRIM, LEVEL1_BANDS, MAX_TRIM, PACE_NAMES, type PaceName } from "./lib/barcode-levels.mjs";
 import { pickAndRenderDay } from "./lib/barcode-plan.mjs";
 import { DEFAULT_LEVEL_HEIGHT, DEFAULT_LEVEL_WIDTH } from "./lib/barcode-render.mjs";
 import { DEFAULT_PERCENTILE_REFERENCE, loadPickerInputs, PERCENTILE_REFERENCES, type PercentileReference } from "./lib/film-picker.mjs";
@@ -67,6 +70,7 @@ const { values: args } = parseArgs({
     width: { type: "string", default: String(DEFAULT_LEVEL_WIDTH) },
     height: { type: "string", default: String(DEFAULT_LEVEL_HEIGHT) },
     samples: { type: "string" },
+    bands: { type: "string", default: String(LEVEL1_BANDS) },
     quality: { type: "string", default: "88" },
     concurrency: { type: "string", default: String(MAX_CONCURRENCY) },
     head: { type: "string", default: String(DEFAULT_STORY_TRIM.head) },
@@ -104,6 +108,7 @@ async function main() {
     width: positiveInt(args.width, "width", { min: 320, max: 4096 }),
     height: positiveInt(args.height, "height", { min: 120, max: 2048 }),
     samples: args.samples === undefined ? undefined : positiveInt(args.samples, "samples", { min: 100, max: 6000 }),
+    bands: positiveInt(args.bands, "bands", { min: 50, max: 6000 }),
     quality: positiveInt(args.quality, "quality", { min: 40, max: 100 }),
     concurrency: positiveInt(args.concurrency, "concurrency", { min: 1, max: MAX_CONCURRENCY }),
     trim: { head: trimArg(args.head, "head"), tail: trimArg(args.tail, "tail") },

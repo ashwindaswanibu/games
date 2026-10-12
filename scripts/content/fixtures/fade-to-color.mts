@@ -214,8 +214,9 @@ class SyntheticFilm implements FrameSource {
     return numbers.map((n) => drawFrame(this.shots, n, 192, 108, this.pictureAspect));
   }
 
-  async prefetchFrames(_numbers: readonly number[], options: { width: number }): Promise<void> {
+  async prefetchFrames(_numbers: readonly number[], options: { width: number }): Promise<number[]> {
     this.frameWidth = Math.ceil(options.width);
+    return []; // every frame can be drawn
   }
 
   async frame(n: number): Promise<RgbImage> {
