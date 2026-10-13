@@ -251,7 +251,7 @@ const LETTER_EM = 0.74;
 /**
  * Today's dictionary seen from its fore-edge, under the game's lamp: a hairline a page, the pages
  * today's word can't be on in shadow, a red ribbon at each page you've guessed (the two that bound
- * the gap bright), and the nine letters beneath with the word's length in slots.
+ * the gap bright), and the nine letters beneath (today's word's length isn't told).
  */
 function ForeEdge({ m, stage }: { m: Extract<TileMaterial, { kind: "letters" }>; stage: Stage }) {
   const { box, lean, zone, wide } = stage;
@@ -261,7 +261,7 @@ function ForeEdge({ m, stage }: { m: Extract<TileMaterial, { kind: "letters" }>;
   const B = wide ? w - 48 : narrow ? w - 40 : w - 72;
   const band = wide ? 40 : Math.min(112, zoneH * 0.2);
   const letter = wide ? 26 : Math.max(narrow ? 18 : 0, Math.min(44, B / (m.letters.length * LETTER_EM)));
-  // One block: the kicker, the band, the letters and the slots, centred at 45% of the zone (a phone's, in its middle).
+  // One block: the kicker, the band and the letters, centred at 45% of the zone (a phone's, in its middle).
   const block = wide ? band + 10 + letter : 9 + 16 + band + 36 + letter + 16 + 1.5;
   const top = wide ? (zone.top + zone.bottom) / 2 - block / 2 : zone.top + zoneH * 0.45 - block / 2;
   const bandTop = wide ? top : top + 25;
@@ -300,13 +300,6 @@ function ForeEdge({ m, stage }: { m: Extract<TileMaterial, { kind: "letters" }>;
           </span>
         ))}
       </span>
-      {!wide && (
-        <span className={styles.slots} style={{ left: cx, top: lettersTop + letter + 16, ...at(1800) }}>
-          {Array.from({ length: m.length }, (_, j) => (
-            <span key={j} />
-          ))}
-        </span>
-      )}
     </>
   );
 }

@@ -29,7 +29,6 @@ export type TileMaterial =
   | {
       kind: "letters";
       letters: string;
-      length: number;
       total: number;
       gap: { low: number; high: number };
       /** `found`: the guess that found the word (only ever there once you've finished). */

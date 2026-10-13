@@ -327,24 +327,6 @@
   background: #be3022;
 }
 
-/* Today's word's length, filling as you type. */
-.slots {
-  display: flex;
-  gap: 8px;
-}
-
-.slots span {
-  width: 16px;
-  height: 1.5px;
-  background: var(--ink);
-  opacity: 0.22;
-  transition: opacity 160ms ease;
-}
-
-.slots span[data-on] {
-  opacity: 0.8;
-}
-
 /* The nine letters, large: tap one (or type it) to set it in the line; it leaves its cell empty. */
 .row {
   display: flex;
@@ -547,25 +529,36 @@
   color: #f0a58f;
 }
 
-/* Before the play: the rules as a dictionary's run-in numbered senses, and the way in. */
+/* Before the play: the rules in four plain lines, and the way in. */
 .opening {
   display: grid;
   justify-items: center;
 }
 
-.senses {
-  width: min(760px, 100%);
+/* The rules: four plain lines, numbered in the ribbon's red. */
+.steps {
+  width: min(560px, 100%);
   margin: 0;
-  font: 400 clamp(16px, 1.3vw, 19px)/1.5 var(--display);
-  color: rgb(239 233 223 / 0.74);
-  text-align: justify;
-  hyphens: auto;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 12px;
+  font: 400 clamp(17px, 1.35vw, 20px)/1.4 var(--display);
+  color: rgb(239 233 223 / 0.82);
 }
 
-.senses b {
-  margin-right: 0.3em;
-  font-weight: 700;
-  font-variant-numeric: lining-nums;
+.steps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: baseline;
+}
+
+.steps li::before {
+  content: counter(step);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.1em;
   color: rgb(var(--accent));
 }
 
@@ -830,10 +823,9 @@
     margin-top: -8px;
   }
 
-  .senses {
-    font-size: 15.5px;
-    text-align: left;
-    hyphens: manual;
+  .steps {
+    font-size: 16px;
+    gap: 10px;
   }
 
   .panelBackdrop {

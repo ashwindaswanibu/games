@@ -17,8 +17,12 @@ export const lexiconPuzzleSchema = z
   .strictObject({
     /** The nine letters, in the order the day shows them. */
     letters: z.string().regex(new RegExp(`^[a-z]{${JUMBLE_SIZE}}$`)),
-    /** Letters in today's word. */
-    length: z.number().int().min(ANSWER_LENGTHS.min).max(ANSWER_LENGTHS.max),
+    /**
+     * Letters in today's word: written on days before 12 October 2026, when the length was shown.
+     * It isn't any more (owner, 2026-10-12: it misled players into hunting a nine-letter word, and
+     * the game reads cleaner as before-or-after alone), so new days leave it out.
+     */
+    length: z.number().int().min(ANSWER_LENGTHS.min).max(ANSWER_LENGTHS.max).optional(),
     /** Words in today's dictionary. */
     total: z.number().int().min(2).max(2000),
     /** The thumb index: each initial letter present, and the position of its first word. */
@@ -61,7 +65,7 @@ export function isConsistentLexicon(puzzle: LexiconPuzzle, solution: LexiconSolu
     sorted &&
     words.every((w) => canSpell(w, puzzle.letters)) &&
     words.includes(answer) &&
-    answer.length === puzzle.length &&
+    (puzzle.length === undefined || answer.length === puzzle.length) &&
     puzzle.total === words.length &&
     JSON.stringify(puzzle.tabs) === JSON.stringify(thumbIndex(words))
   );

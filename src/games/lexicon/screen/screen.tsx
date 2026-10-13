@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { DISPLAY_FONT_VARS } from "@/components/display-font";
 import { formatPuzzleDate } from "@/core/day";
 import type { ImmersiveGameUiProps } from "@/core/view";
@@ -171,16 +171,11 @@ export function LexiconScreen(props: Props) {
         <section className={styles.console}>
           {!view && (
             <div className={styles.opening}>
-              <p className={styles.senses} lang="en">
-                {lexicon.rules.map((rule, i) => (
-                  <Fragment key={rule}>
-                    {i > 0 && " "}
-                    <span>
-                      <b>{i + 1}</b> {rule}
-                    </span>
-                  </Fragment>
+              <ol className={styles.steps}>
+                {lexicon.rules.map((rule) => (
+                  <li key={rule}>{rule}</li>
                 ))}
-              </p>
+              </ol>
               <button
                 type="button"
                 className={styles.roll}
@@ -213,7 +208,6 @@ export function LexiconScreen(props: Props) {
               ) : (
                 <Tray
                   letters={puzzle.letters}
-                  length={puzzle.length}
                   disabled={pending}
                   listening={listening}
                   refused={refused}

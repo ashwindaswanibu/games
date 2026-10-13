@@ -83,7 +83,6 @@ export function makeDay(
     if (dictionary.length < DAY_WORDS.min || dictionary.length > DAY_WORDS.max) continue;
     const puzzle: LexiconPuzzle = {
       letters: shuffleLetters(letters, answer.word, rng),
-      length: answer.word.length,
       total: dictionary.length,
       tabs: thumbIndex(dictionary),
     };

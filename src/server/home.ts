@@ -229,7 +229,7 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
         start: "Start guessing",
         progress: `Guess ${guesses + 1}`,
         light: { accent: "190 48 34", on: "#f6ecdc" },
-        material: { kind: "letters", letters: p.letters, length: p.length, total: p.total, gap: { low: gap.low, high: gap.high }, ribbons },
+        material: { kind: "letters", letters: p.letters, total: p.total, gap: { low: gap.low, high: gap.high }, ribbons },
         result: reveal
           ? {
               title: reveal.answer,

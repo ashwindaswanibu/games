@@ -279,19 +279,6 @@
   color: var(--hf-ink);
 }
 
-.slots {
-  position: absolute;
-  display: flex;
-  gap: 6px;
-  transform: translateX(-50%);
-}
-
-.slots span {
-  width: 14px;
-  height: 1.5px;
-  background: rgb(239 233 223 / 0.38);
-}
-
 /* ---- Other games ---- */
 
 .slot {
@@ -366,13 +353,8 @@
   animation: open 1400ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--d) both;
 }
 
-[data-arrival] .kicker,
-[data-arrival] .slots {
+[data-arrival] .kicker {
   animation: fade 500ms ease var(--d) both;
-}
-
-[data-arrival] .slots {
-  animation-duration: 400ms;
 }
 
 [data-arrival] .letters > span {

@@ -11,12 +11,10 @@ import styles from "./screen.module.css";
  * home, Escape sends them all. Enter (or Guess) plays the word, and an accepted word rises out of
  * the line toward the book as its ribbon lays in. Space (or Shuffle) reorders the row, to see new
  * words in it. Keys work anywhere on the page unless something else is being typed into or a
- * question is open. The ruler under the line is today's word's length, filling as you type.
+ * question is open. Today's word's length isn't told (owner, 2026-10-12).
  */
 export function Tray(props: {
   letters: string;
-  /** Letters in today's word: the ruler's ticks. */
-  length: number;
   disabled: boolean;
   /** Whether keys belong to the tray right now (no question or panel open). */
   listening: boolean;
@@ -28,7 +26,7 @@ export function Tray(props: {
   /** Asks before giving up (the screen holds the question). */
   onGiveUp(): void;
 }) {
-  const { letters, length, disabled, listening, refused, worth, onGuess, onGiveUp } = props;
+  const { letters, disabled, listening, refused, worth, onGuess, onGiveUp } = props;
   // The row's order (indexes into `letters`), and the letters set in the line (indexes, in order).
   const [order, setOrder] = useState(() => [...letters].map((_, i) => i));
   const [set, setSet] = useState<number[]>([]);
@@ -146,11 +144,6 @@ export function Tray(props: {
             )}
           </p>
         </div>
-        <span className={styles.slots} aria-label={`Today's word has ${length} letters`}>
-          {Array.from({ length }, (_, i) => (
-            <span key={i} data-on={i < word.length || undefined} />
-          ))}
-        </span>
       </div>
 
       <div className={styles.row} role="group" aria-label="Today's letters">
