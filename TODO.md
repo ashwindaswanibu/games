@@ -30,6 +30,12 @@ A running list of things we've agreed to do later. Newest decisions live in `des
 
 - [ ] **Faces for the rest** (2026-10-12): 59 of the 60 upcoming Degrees endpoints have a portrait; Wikimedia's image server refused almost every download overnight (HTTP 429 even at 1.5 s apart). Retry in the day, slower: `content:movies:portraits -- --allow-remote --concurrency 1 --pace 5000`.
 
+## Speed
+- [x] **Feel instant** (2026-10-13, owner: "load super duper quickly, no lag ever"): measured on a production build at phone speed and fixed: games loaded ahead from Today, instant Start, Degrees search in the browser, faces with the page, a (person_id, film_id) index for hints, lighter fonts and JS, first images preloaded, film list ETag, no freeze on Roll film, fewer round trips. Cold home JS 248 → 169 KB, blocking 267 → 80 ms. Plan and measurements: the session's perf-plan.
+- [ ] **The home appears only after its JavaScript runs** (B6 in the plan): render the real layout on the server (window-size cookie) and decide the day's arrival before first paint, so the home shows ~0.4–1 s sooner on a cold phone load. Riskier (the arrival can flicker); do with a careful check.
+- [ ] **Pending moves that look pending** (B3, the rest): a Degrees knot drawn at once in a pending style, Movie Barcode's reel moving at the tap. Design calls.
+- [ ] **Harden the flaky renderer test** `barcode-render.test.mts > works around a few missing frames`: it failed once under heavy machine load and passes alone (timing).
+
 ## Lexicon
 - [x] Live for admins (2026-10-10). Decisions and alternatives: `design/lexicon-decisions.md`.
 - [ ] End-to-end test flow (blocked: Docker Desktop hangs on start and needs a manual restart).
