@@ -12,26 +12,35 @@ import { preloadSealed } from "@/lib/sealed-preload";
 import { clamp, easeInOut, lerp } from "./ease";
 import { at, Material, turn, type Rect, type Stage } from "./materials";
 import {
+  ARRIVED_KEY,
   choosePlan,
   dayFraction,
   dayLine,
+  entrance,
+  entranceScript,
   fieldHeight as heightFor,
   fieldLayout,
   fieldMetrics,
+  HOLD,
+  LAPTOP,
   leanOf,
   longestLine,
   rightSeamAt,
   rowClip,
   rowCut,
   seamAt,
+  SHOWN_KEY,
   spineAngle,
   tileClip,
   tileTargets,
+  viewportCookie,
   type FieldPlan,
   type HomeCategory,
   type HomeModel,
+  type HomeShown,
   type HomeTile,
   type TileBox,
+  type WindowSize,
 } from "./model";
 import { PlayedStrip, Print, printTitleSize } from "./played";
 import { useFilmLight } from "./use-film-light";
@@ -55,6 +64,11 @@ const ARRIVAL_MS = 3000;
  * the field's geometry (a finished game collapsing when you come back, the day's print opening, a
  * tile growing into its game) runs on one clock, so every frame is drawn from a handful of numbers.
  * At rest nothing on the home moves.
+ *
+ * The server's HTML is the home's first frame: it's laid out for the window the browser last
+ * reported, and shows as it arrives, before React. A field about to move as it comes on (the day's
+ * arrival, a game you've just finished shrinking into its strip), or laid out for another window, is
+ * held under the ground instead until React has it ready (`entranceScript`).
  */
 
 // ---------------------------------------------------------------------------------------------
@@ -121,16 +135,23 @@ function useMotion(initial: Record<string, number>) {
   return { values, animate, jump };
 }
 
-/** The window's size, for laying out the field (a fixed laptop size on the server; hidden until hydrated anyway). */
-function useWindowSize(): { width: number; height: number } {
+/**
+ * The window's size, for laying out the field: on the server (and so as the page hydrates) the size
+ * it was laid out for, `laidOut`. Whenever it changes, it's put in the cookie the server lays the
+ * next visit out by (`viewportFor`).
+ */
+function useWindowSize(laidOut: WindowSize): WindowSize {
   const key = useSyncExternalStore(
     (onChange) => {
       window.addEventListener("resize", onChange);
       return () => window.removeEventListener("resize", onChange);
     },
     () => `${window.innerWidth}x${window.innerHeight}`,
-    () => "1440x900",
+    () => `${laidOut.width}x${laidOut.height}`,
   );
+  useEffect(() => {
+    document.cookie = viewportCookie({ width: window.innerWidth, height: window.innerHeight });
+  }, [key]);
   const [width, height] = key.split("x").map(Number);
   return { width: width!, height: height! };
 }
@@ -166,7 +187,16 @@ type Veil = "dim" | "out" | "close" | undefined;
 /** Which side of a piece the film lies on, its light falling across the cut. */
 type Spill = "after" | "before";
 
-export function HomeField({ model, welcome }: { model: HomeModel; welcome: { firstName: string; displayName: string; username: string } | null }) {
+export function HomeField({
+  model,
+  welcome,
+  viewport = LAPTOP,
+}: {
+  model: HomeModel;
+  welcome: { firstName: string; displayName: string; username: string } | null;
+  /** The window the server lays the field out for (`viewportFor`); a laptop's if the page doesn't say. */
+  viewport?: WindowSize;
+}) {
   // The film's picture starts from the HTML: the reel it shows, then its first (a finished play's tile).
   preloadSealed(model.sealed.preload.slice(0, 2));
   receiveSealed(model.sealed);
@@ -178,32 +208,35 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const [arrival, setArrival] = useState(false);
   const [lit, setLit] = useState<number | null>(null);
   const [opening, setOpening] = useState<number | null>(null);
-  const size = useWindowSize();
+  const size = useWindowSize(viewport);
+  const root = useRef<HTMLDivElement>(null);
   const [reduced, setReduced] = useState(false);
   const film = tiles.find((t) => t.material.kind === "light")?.material as { image: AssetRef } | undefined;
   const light = useFilmLight(film?.image ?? null);
 
-  // Before the field shows: what changed since this tab last showed the home, and the day's arrival.
+  // Before the first paint: how the field comes on, from what changed since this tab last showed
+  // the home and whether the day has arrived. A field that's going to move is held under the ground
+  // until it's ready: a page load's own script has already held it (`entranceScript`); arriving from
+  // another page of the app there's no script, so it's held here.
   useLayoutEffect(() => {
+    const noMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const how = entrance(tiles, model.date, { arrived: readStorage<string>(() => localStorage, ARRIVED_KEY), shown: readStorage<HomeShown>(() => sessionStorage, SHOWN_KEY) }, noMotion);
+    if (how.kind !== "still") root.current?.setAttribute(HOLD, "");
     const frame = requestAnimationFrame(() => {
-      const noMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       setReduced(noMotion);
-      const before = readStorage<{ date: string; states: Record<string, string> }>(() => sessionStorage, "home:tiles");
-      const justFinished = before?.date === model.date ? tiles.findIndex((t) => t.state === "finished" && before.states[t.id] !== undefined && before.states[t.id] !== "finished") : -1;
-      const arrived = readStorage<string>(() => localStorage, "home:arrived") === model.date;
-
-      if (!noMotion && justFinished >= 0) {
+      if (how.kind === "back") {
         // Back from a game you've just finished: it shrinks from the whole screen into its strip.
-        motion.jump({ openIndex: justFinished, open: 1, [`c${justFinished}`]: 0, ...(targets.print ? { print: 0 } : {}) });
+        const i = how.index;
+        motion.jump({ openIndex: i, open: 1, [`c${i}`]: 0, ...(targets.print ? { print: 0 } : {}) });
         motion.animate("open", 0, 1000, { delay: 120 });
-        motion.animate(`c${justFinished}`, 1, 1000, { delay: 120 });
+        motion.animate(`c${i}`, 1, 1000, { delay: 120 });
         if (targets.print) motion.animate("print", 1, 1500, { delay: 1100 });
-      } else if (!noMotion && !arrived) {
+      } else if (how.kind === "arrival") {
         // The day's first visit: the field arrives, once.
         setArrival(true);
       }
-      writeStorage(() => localStorage, "home:arrived", model.date);
-      writeStorage(() => sessionStorage, "home:tiles", { date: model.date, states: Object.fromEntries(tiles.map((t) => [t.id, t.state])) });
+      writeStorage(() => localStorage, ARRIVED_KEY, model.date);
+      writeStorage(() => sessionStorage, SHOWN_KEY, { date: model.date, states: Object.fromEntries(tiles.map((t) => [t.id, t.state])) } satisfies HomeShown);
       setReady(true);
     });
     return () => cancelAnimationFrame(frame);
@@ -339,9 +372,13 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const onLight = useCallback((index: number, on: boolean) => actions.current.houseLights(index, on), []);
 
   const rootStyle = { "--light": light.accent, "--spine-angle": turn(spineAngle(lean)) } as CSSProperties;
+  const script = useMemo(() => entranceScript(tiles, model.date, viewport), [tiles, model.date, viewport]);
 
   return (
-    <div className={`${display.variable} ${styles.root}`} style={rootStyle} data-ready={ready ? "" : undefined} data-arrival={arrival ? "" : undefined}>
+    // `suppressHydrationWarning`: the script below may set `HOLD` here before React hydrates.
+    <div ref={root} className={`${display.variable} ${styles.root}`} style={rootStyle} data-ready={ready ? "" : undefined} data-arrival={arrival ? "" : undefined} suppressHydrationWarning>
+      {/* Runs only from the server's HTML; drawn by React (arriving from another page) it's inert text, and the layout effect above does its job. */}
+      <script type={typeof window === "undefined" ? "text/javascript" : "text/plain"} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: script }} />
       <DayHeader model={model} compact={compact} width={size.width} />
 
       {welcome && (
@@ -422,7 +459,7 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
  * doesn't redraw every second.
  */
 function DayHeader({ model, compact, width }: { model: HomeModel; compact: boolean; width: number }) {
-  const [now, setNow] = useState(() => Date.parse(model.rolloverAt) - 12 * 3600_000);
+  const [now, setNow] = useState(() => Date.parse(model.servedAt));
   useEffect(() => {
     const update = () => setNow(Date.now());
     const first = setTimeout(update, 0);

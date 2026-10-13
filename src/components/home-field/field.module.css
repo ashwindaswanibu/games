@@ -17,12 +17,25 @@
   overflow: hidden auto;
   background: var(--hf-ground);
   color: var(--hf-ink);
-  opacity: 0;
+}
+
+/*
+ * A field held as it loads (field.tsx: about to move as it comes on, or laid out for another
+ * window) waits under the ground, which takes no taps meant for what's beneath; the ground lifts as
+ * the field is ready. Any other visit shows the server's HTML as it arrives.
+ */
+.root[data-hold]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--hf-ground);
   transition: opacity 0.25s ease-out;
 }
 
-.root[data-ready] {
-  opacity: 1;
+.root[data-hold][data-ready]::after {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* The day's edge: date, where to go, what's left; along its foot, the day as a rule. */

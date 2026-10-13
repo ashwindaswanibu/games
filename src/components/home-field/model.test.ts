@@ -1,5 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { choosePlan, dayFraction, dayLine, fieldHeight, fieldLayout, fieldMetrics, fieldPlan, longestLine, PLATE, printLines, rightSeamAt, rowClip, rowCut, SCALE_DEPTH, seamAt, spans, spineAngle, stripMiddle, tileTargets } from "./model";
+import {
+  ARRIVED_KEY,
+  choosePlan,
+  dayFraction,
+  dayLine,
+  entrance,
+  entranceScript,
+  fieldHeight,
+  fieldLayout,
+  fieldMetrics,
+  fieldPlan,
+  HOLD,
+  isMobileAgent,
+  LAPTOP,
+  longestLine,
+  PHONE,
+  PLATE,
+  printLines,
+  rightSeamAt,
+  rowClip,
+  rowCut,
+  SCALE_DEPTH,
+  seamAt,
+  SHOWN_KEY,
+  spans,
+  spineAngle,
+  stripMiddle,
+  tileTargets,
+  viewportCookie,
+  viewportFor,
+  type HomeShown,
+  type WindowSize,
+} from "./model";
 
 const groups = (ids: string[]) => ids.map((group) => ({ group }));
 
@@ -308,5 +340,108 @@ describe("finished games", () => {
       // ...and a title and its object keep 80px under the top cut where it falls lowest (the left edge).
       expect(base - rowCut(b.y[0], metrics.lean, 390, 0)).toBeGreaterThanOrEqual(80);
     }
+  });
+});
+
+describe("the first frame", () => {
+  it("lays the field out for the window the cookie last said, or a phone's or a laptop's", () => {
+    expect(viewportFor("390x664", false)).toEqual({ width: 390, height: 664 });
+    expect(viewportFor("2560x1307", true)).toEqual({ width: 2560, height: 1307 });
+    expect(viewportFor(viewportCookie({ width: 1512, height: 823 }).split(";")[0]!.split("=")[1], true)).toEqual({ width: 1512, height: 823 });
+    for (const garbled of [undefined, "", "390", "390x", "0x844", "390x844x2", "99999x844", "390X844", " 390x844", "abc"]) {
+      expect(viewportFor(garbled, true)).toEqual(PHONE);
+      expect(viewportFor(garbled, false)).toEqual(LAPTOP);
+    }
+  });
+
+  it("writes a year-long cookie for the whole site", () => {
+    expect(viewportCookie({ width: 390, height: 844 })).toBe("vw=390x844; Path=/; Max-Age=31536000; SameSite=Lax");
+  });
+
+  it("tells a phone by its client hint or its user agent, and not a tablet or a laptop", () => {
+    const iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+    const android = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36";
+    const tablet = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+    const firefox = "Mozilla/5.0 (Android 14; Mobile; rv:131.0) Gecko/131.0 Firefox/131.0";
+    const mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+    expect([iphone, android, firefox].map((ua) => isMobileAgent(null, ua))).toEqual([true, true, true]);
+    expect(isMobileAgent("?1", tablet)).toBe(true);
+    expect([tablet, mac].map((ua) => isMobileAgent("?0", ua))).toEqual([false, false]);
+    expect(isMobileAgent(null, null)).toBe(false);
+  });
+
+  const date = "2026-10-13";
+  const tiles = [
+    { id: "film", state: "finished" as const },
+    { id: "thread", state: "unplayed" as const },
+    { id: "book", state: "playing" as const },
+  ];
+
+  it("arrives on the day's first visit, and only then", () => {
+    expect(entrance(tiles, date, { arrived: null, shown: null }, false)).toEqual({ kind: "arrival" });
+    expect(entrance(tiles, date, { arrived: "2026-10-12", shown: null }, false)).toEqual({ kind: "arrival" });
+    expect(entrance(tiles, date, { arrived: date, shown: null }, false)).toEqual({ kind: "still" });
+  });
+
+  it("shrinks a game this tab showed unfinished today into its strip, before any arrival", () => {
+    const shown = (states: Record<string, string>, day = date): HomeShown => ({ date: day, states });
+    expect(entrance(tiles, date, { arrived: date, shown: shown({ film: "playing", thread: "unplayed" }) }, false)).toEqual({ kind: "back", index: 0 });
+    expect(entrance(tiles, date, { arrived: null, shown: shown({ film: "unplayed" }) }, false)).toEqual({ kind: "back", index: 0 });
+    // Already finished when this tab last showed it, unknown to this tab, or shown another day: no.
+    expect(entrance(tiles, date, { arrived: date, shown: shown({ film: "finished" }) }, false)).toEqual({ kind: "still" });
+    expect(entrance(tiles, date, { arrived: date, shown: shown({ thread: "unplayed" }) }, false)).toEqual({ kind: "still" });
+    expect(entrance(tiles, date, { arrived: date, shown: shown({ film: "playing" }, "2026-10-12") }, false)).toEqual({ kind: "still" });
+  });
+
+  it("is simply there with reduced motion", () => {
+    expect(entrance(tiles, date, { arrived: null, shown: { date, states: { film: "playing" } } }, true)).toEqual({ kind: "still" });
+  });
+
+  /** Runs the page's script against a browser's memory and window: whether it held the field. */
+  function holds(script: string, env: { local: Record<string, string> | "blocked"; session: Record<string, string> | "blocked"; reduced: boolean; window: WindowSize }): boolean {
+    const set = new Map<string, string>();
+    const browser = {};
+    for (const [name, data] of [["localStorage", env.local], ["sessionStorage", env.session]] as const) {
+      Object.defineProperty(browser, name, {
+        get() {
+          // As a browser that refuses site data does.
+          if (data === "blocked") throw new Error("SecurityError");
+          return { getItem: (key: string) => data[key] ?? null };
+        },
+      });
+    }
+    const root = { setAttribute: (name: string, value: string) => set.set(name, value) };
+    const matchMedia = (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)" && env.reduced });
+    new Function("window", "document", "matchMedia", "innerWidth", "innerHeight", script)(browser, { currentScript: { parentNode: root } }, matchMedia, env.window.width, env.window.height);
+    return set.has(HOLD);
+  }
+
+  it("holds the field in the page's script exactly when it will move as it comes on, or was laid out for another window", () => {
+    const script = entranceScript(tiles, date, PHONE);
+    const arrivals = [null, date, "2026-10-12"];
+    const shows: (HomeShown | null)[] = [null, { date, states: { film: "playing", thread: "unplayed" } }, { date, states: { film: "finished" } }, { date: "2026-10-12", states: { film: "playing" } }, { date, states: { thread: "unplayed" } }];
+    let cases = 0;
+    for (const arrived of arrivals) {
+      for (const shown of shows) {
+        for (const reduced of [false, true]) {
+          const local: Record<string, string> = arrived === null ? {} : { [ARRIVED_KEY]: JSON.stringify(arrived) };
+          const session: Record<string, string> = shown === null ? {} : { [SHOWN_KEY]: JSON.stringify(shown) };
+          const moves = entrance(tiles, date, { arrived, shown }, reduced).kind !== "still";
+          expect(holds(script, { local, session, reduced, window: PHONE })).toBe(moves);
+          expect(holds(script, { local, session, reduced, window: { width: 390, height: 664 } })).toBe(true);
+          cases++;
+        }
+      }
+    }
+    expect(cases).toBe(30);
+    // Storage the browser refuses reads as nothing remembered, as the field reads it: the day arrives.
+    expect(holds(script, { local: "blocked", session: "blocked", reduced: false, window: PHONE })).toBe(true);
+    expect(holds(script, { local: "blocked", session: "blocked", reduced: true, window: PHONE })).toBe(false);
+  });
+
+  it("keeps every value inside its script", () => {
+    const script = entranceScript([{ id: "</script><script>alert(1)</script>", state: "finished" }], date, LAPTOP);
+    expect(script).not.toContain("</script>");
+    expect(script).toContain('"1440x900"');
   });
 });

@@ -99,6 +99,7 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
     dateShort: formatPuzzleDate(date).toUpperCase(),
     rolloverAt: nextRollover().toISOString(),
     dayStartsAt: startOfDay(date).toISOString(),
+    servedAt: new Date().toISOString(),
     won,
     max: tiles.length * 100,
     tiles,

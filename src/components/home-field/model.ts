@@ -103,6 +103,8 @@ export interface HomeModel {
   rolloverAt: string;
   /** Midnight to midnight in New York, ISO, for the day's line. */
   dayStartsAt: string;
+  /** When the server drew the home, ISO: the day's line starts there, so the server's HTML has it right. */
+  servedAt: string;
   won: number;
   max: number;
   tiles: HomeTile[];
@@ -486,4 +488,96 @@ export function dayFraction(now: number, dayStartsAt: string, rolloverAt: string
   const start = Date.parse(dayStartsAt);
   const end = Date.parse(rolloverAt);
   return Math.min(1, Math.max(0, (now - start) / (end - start)));
+}
+
+// ---------------------------------------------------------------------------------------------
+// The first frame
+// ---------------------------------------------------------------------------------------------
+
+/** A window's size in CSS pixels: the field is laid out for one. */
+export interface WindowSize {
+  width: number;
+  height: number;
+}
+
+/**
+ * The browser keeps its window's size in this cookie (`viewportCookie`), so the server lays the
+ * field out for the screen it's going to (`viewportFor`) and its HTML can be the home's first frame.
+ */
+export const VIEWPORT_COOKIE = "vw";
+
+/** What the server lays the field out for before the browser has said: a phone's window or a laptop's. */
+export const PHONE: WindowSize = { width: 390, height: 844 };
+export const LAPTOP: WindowSize = { width: 1440, height: 900 };
+
+/** The cookie for a window's size (`document.cookie = …`), kept a year. */
+export function viewportCookie(size: WindowSize): string {
+  return `${VIEWPORT_COOKIE}=${Math.round(size.width)}x${Math.round(size.height)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+}
+
+/**
+ * The window the server lays the field out for: the size its cookie last said ("390x844"), or,
+ * without one (or a garbled one), a phone's or a laptop's by what the request says it is.
+ */
+export function viewportFor(cookie: string | undefined, mobile: boolean): WindowSize {
+  const said = /^([1-9]\d{1,3})x([1-9]\d{1,3})$/.exec(cookie ?? "");
+  if (said) return { width: Number(said[1]), height: Number(said[2]) };
+  return mobile ? PHONE : LAPTOP;
+}
+
+/** Whether a request comes from a phone: Chromium's `Sec-CH-UA-Mobile: ?1`, or "Mobi" in the user agent (Safari and Firefox say so there). */
+export function isMobileAgent(hint: string | null, userAgent: string | null): boolean {
+  return hint === "?1" || /Mobi/.test(userAgent ?? "");
+}
+
+/** The home's memory in the browser: the day it last arrived (localStorage), and what this tab last showed (sessionStorage). */
+export const ARRIVED_KEY = "home:arrived";
+export const SHOWN_KEY = "home:tiles";
+
+/** What this tab last showed of the home: the day, and each game's state then. */
+export interface HomeShown {
+  date: string;
+  states: Record<string, string>;
+}
+
+/**
+ * How the field comes on: the day's first visit arrives, once (`arrival`); back from a game you've
+ * just finished (one this tab showed unfinished today), that game shrinks from the whole screen into
+ * its strip (`back`); otherwise, and always with reduced motion, it's simply there (`still`).
+ */
+export type Entrance = { kind: "arrival" } | { kind: "back"; index: number } | { kind: "still" };
+
+export function entrance(tiles: readonly Pick<HomeTile, "id" | "state">[], date: string, memory: { arrived: string | null; shown: HomeShown | null }, reducedMotion: boolean): Entrance {
+  if (reducedMotion) return { kind: "still" };
+  const states = memory.shown?.date === date ? memory.shown.states : null;
+  const index = states ? tiles.findIndex((t) => t.state === "finished" && states[t.id] !== undefined && states[t.id] !== "finished") : -1;
+  if (index >= 0) return { kind: "back", index };
+  return memory.arrived === date ? { kind: "still" } : { kind: "arrival" };
+}
+
+/** The attribute that holds the field under the ground until it's ready (field.module.css). */
+export const HOLD = "data-hold";
+
+/**
+ * The field's own script, run as the browser reads the page (before React, before the first paint),
+ * as the first child of the field's root. It holds the field (`HOLD` on the root) when it's going to
+ * move as it comes on (`entrance`, worked out the same way from the same memory) or when the window
+ * isn't the size the server laid it out for (React lays it out again first). Any other visit, the
+ * server's HTML is what shows.
+ */
+export function entranceScript(tiles: readonly Pick<HomeTile, "id" | "state">[], date: string, laidOut: WindowSize): string {
+  // JSON in a script: "<" escaped so no value can close it.
+  const json = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
+  const finished = tiles.filter((t) => t.state === "finished").map((t) => t.id);
+  return [
+    "(function(root,date,finished,size){",
+    "function read(store,key){try{var raw=window[store].getItem(key);return raw?JSON.parse(raw):null}catch(e){return null}}",
+    "var still=false;try{still=matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){}",
+    `var shown=read('sessionStorage',${json(SHOWN_KEY)});`,
+    "var states=shown&&shown.date===date?shown.states:null;",
+    "var back=!!states&&finished.some(function(id){return states[id]!==undefined&&states[id]!=='finished'});",
+    `var moves=!still&&(back||read('localStorage',${json(ARRIVED_KEY)})!==date);`,
+    `if(moves||innerWidth+'x'+innerHeight!==size)root.setAttribute(${json(HOLD)},'')`,
+    `})(document.currentScript.parentNode,${json(date)},${json(finished)},${json(`${laidOut.width}x${laidOut.height}`)})`,
+  ].join("");
 }
