@@ -175,3 +175,13 @@ Every screen was checked in WebKit 18.4 (iPhone 15 and laptop). One defect: the 
 The signed-in pages left the starter template: the home's own edge (‹ TODAY, the date, SCORES · ME · ADMIN) replaces the coloured-squares header and the bottom tab bar; Scores is a credits list in Bodoni with mono toggles; Me sets the name and figures in Bodoni and its form matches sign in. Emoji, avatars and bucket swatches are gone from Scores and Me (Admin keeps them). The older classic game pages (Number Hunt, Frame by Frame) now render in the dark frame too.
 - Alternative: keep the bottom tab bar on phones. Dropped because the home has none and every one of these pages is one step from it.
 - **Your call:** Scores and Me count only games open to everyone. Movie Barcode, Degrees and Lexicon are still testing (admins only), so for now Scores shows almost nothing of your real play. Opening them, or counting testing games for admins, is a product decision.
+
+## 2026-10-12, after your first look
+
+### Lexicon: the length isn't told; four plain rules — live
+You read the rules as "the word is nine letters" and asked to drop the length. Today's word's length is no longer shown anywhere (the ruler under the guess line, the home tile's slots) and isn't in the puzzle data any more (stripped from the 28 stored days nobody had played). The rules are four short lines: find today's word, one of the words the nine letters spell; guess any word you can make from them; each guess tells you before or after; 100 if your first guess finds it.
+- Trade-off: endgames are a little harder (two words left used to be decided by length). Easy to bring back.
+
+### Movie Barcode: "Barcode" printed as a barcode — live
+You asked for more of a barcode feel. Six treatments were rendered (sheet sent). Live: "Barcode" cut into bars of a barcode's widths with slits through the letters, in ink before the film rolls, then the film's colours pressed into the same bars; the end title and the home's title are printed the same way.
+- Alternatives on the sheet: 5 adds a small code label beside the mark (the film's bars over the date in mono); 6 runs the bars as a rule under the mark.

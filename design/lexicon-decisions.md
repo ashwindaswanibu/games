@@ -9,7 +9,7 @@ could have been instead, so any of them can be flipped. Yours are marked **(owne
 |---|---|---|---|
 | Core loop | Guess any word the nine letters spell; learn whether today's word is before or after it alphabetically **(owner)** | Hot/cold distance; letter-position feedback (Wordle-like) | Your idea; alphabetical order is the one feedback that needs no extra UI vocabulary |
 | Answer length | 5–7 letters **(owner: "a shorter word")** | Any length; always the 9-letter word | A full-length answer makes the anagram the whole game |
-| Length shown | Shown as blank slots **(owner)** | Hidden | Gives a foothold without giving letters away |
+| Length shown | Hidden since 2026-10-12 **(owner: "don't tell me the length at all")**; was shown as blank slots **(owner)** | Shown | It misled players into hunting a nine-letter word; before-or-after alone reads cleaner |
 | Guess limit | Unlimited **(owner)** | 10 guesses | Never a dead end; the score carries the pressure |
 | Refused guesses | Free (not a word / not from the letters / outside the gap) | Count them | A typo shouldn't cost points |
 | Words-left count | Shown while playing **(owner)** | Only at the end | Makes the closing gap visible as a number |
