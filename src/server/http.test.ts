@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
   taken: [] as string[],
 }));
 
-vi.mock("./auth", () => ({ getCurrentProfile: async () => mocks.profile }));
+vi.mock("./auth", () => ({
+  getSessionUser: async () => (mocks.profile ? { id: mocks.profile.id } : null),
+  getProfile: async () => mocks.profile,
+}));
 vi.mock("./rate-limit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./rate-limit")>();
   const takeRateLimit = async (subject: string, bucket: string) => {
@@ -48,10 +51,10 @@ describe("guardRequest", () => {
     expect(mocks.taken).toEqual([]);
   });
 
-  it("answers 404 when the caller isn't allowed, so the route isn't confirmed", async () => {
+  it("answers 404 when the caller isn't allowed, so the route isn't confirmed (even with their limit used up)", async () => {
+    mocks.exhausted.add("catalog");
     const result = await guardRequest({ buckets: ["catalog"], signedOutMessage: "x", allowed: () => false });
     expect(!result.ok && result.response.status).toBe(404);
-    expect(mocks.taken).toEqual([]);
   });
 
   it("counts the request against the player's bucket and lets it through", async () => {

@@ -19,7 +19,8 @@ export async function sessionClient() {
         try {
           for (const { name, value, options } of cookiesToSet) cookieStore.set(name, value, options);
         } catch {
-          // Server Components can't write cookies. Safe to ignore: the proxy refreshes sessions.
+          // Server Components can't write cookies. Safe to ignore: the proxy refreshes sessions on
+          // every page. (Route handlers and server actions can, and refresh their own: src/proxy.ts.)
         }
       },
     },

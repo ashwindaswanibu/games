@@ -240,6 +240,14 @@ export function Reel(props: {
     };
   }, [frameKey, viewer]);
 
+  // A picture can go up before its colours are worked out (see `useLevelArt`): the light still
+  // sweeping it in takes its accent as it arrives.
+  const accent = frame?.accent ?? null;
+  useEffect(() => {
+    if (accent === null || frameKey !== shown.current) return;
+    for (const el of [screen.current, viewer.gate?.screen]) if (el?.dataset.unreeling !== undefined) el.style.setProperty("--incoming", accent);
+  }, [accent, frameKey, viewer]);
+
   // A viewer that comes onto the page mid-play (the window narrowed to a phone's) takes the picture on screen.
   const lensOn = Boolean(lens);
   useLayoutEffect(() => {

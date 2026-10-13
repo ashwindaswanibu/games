@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { FILM_INDEX_PARTS } from "@/games/_movies/film-index";
 import { db } from "@/server/supabase/admin";
 
@@ -6,8 +7,11 @@ import { db } from "@/server/supabase/admin";
  * `FILM_INDEX_PARTS`: GET /api/catalog/films/index?part=0. Titles, years, directors and fame of
  * every film anyone can search for, nothing about any puzzle, so no sign-in and no proxy: browsers
  * and the CDN keep each part for a day (stale for a week while it refreshes), so a player downloads
- * the list about once a day and a CDN miss costs one query.
+ * the list about once a day and a CDN miss costs one query. Each part carries an ETag of its
+ * content, so the next day's check costs headers only (304) unless the catalog changed.
  */
+const CACHE_CONTROL = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800";
+
 export async function GET(request: Request) {
   const part = Number(new URL(request.url).searchParams.get("part"));
   if (!Number.isInteger(part) || part < 0 || part >= FILM_INDEX_PARTS) {
@@ -15,10 +19,17 @@ export async function GET(request: Request) {
   }
   const { data, error } = await db().rpc("catalog_film_index", { p_part: part, p_parts: FILM_INDEX_PARTS });
   if (error) throw new Error(`Film index failed: ${error.message}`);
+  const etag = `"${createHash("sha1").update(data).digest("hex").slice(0, 16)}"`;
+  // A cache may have weakened the tag (W/) on a compressed copy; the content is the same.
+  const known = (request.headers.get("If-None-Match") ?? "").split(",").map((tag) => tag.trim().replace(/^W\//, ""));
+  if (known.includes(etag) || known.includes("*")) {
+    return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": CACHE_CONTROL } });
+  }
   return new Response(data, {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+      "Cache-Control": CACHE_CONTROL,
+      ETag: etag,
     },
   });
 }

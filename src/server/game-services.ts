@@ -38,6 +38,8 @@ export interface ChainStep {
   personId: number;
   /** Links in the shortest chain this step starts. */
   links: number;
+  /** The film's title and year and the co-star's name, when the search sends them (else look them up). */
+  names?: { filmTitle: string; filmYear: number | null; personName: string };
 }
 
 /** The deepest chain `nextLink` searches (the generator makes puzzles of at most 4 links). */
@@ -179,7 +181,15 @@ export function createGameServices(client: SupabaseClient<Database>): GameServic
         });
         if (error) throw new Error(`Failed to search for a link: ${error.message}`);
         const row = data[0];
-        return row ? { filmId: row.film_id, personId: row.person_id, links: row.links } : null;
+        if (!row) return null;
+        // The names come with the link since 20261017000300; until that migration is in, they're looked up.
+        const named = typeof row.film_title === "string" && typeof row.person_name === "string";
+        return {
+          filmId: row.film_id,
+          personId: row.person_id,
+          links: row.links,
+          ...(named && { names: { filmTitle: row.film_title, filmYear: row.film_year ?? null, personName: row.person_name } }),
+        };
       },
     },
   };

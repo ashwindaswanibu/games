@@ -1,6 +1,6 @@
 import "server-only";
 import { parsePuzzleDate, type PuzzleDate } from "@/core/day";
-import type { AnyGame } from "@/core/game";
+import type { AnyGame, JsonValue } from "@/core/game";
 import type { FriendResult, MoveResponse, PlayView } from "@/core/view";
 import { getGameServer } from "@/games/server-registry";
 import { db } from "./supabase/admin";
@@ -9,8 +9,6 @@ import { sealedAssets } from "./asset-seal";
 import { advancePlay, parseMove } from "./move-pipeline";
 import { getOrCreatePuzzle, type LoadedPuzzle } from "./puzzles";
 import type { Json, PlayRow } from "./database.types";
-
-const UNIQUE_VIOLATION = "23505";
 
 export async function loadPlay(userId: string, gameId: string, date: PuzzleDate): Promise<PlayRow | null> {
   const { data, error } = await db()
@@ -24,11 +22,21 @@ export async function loadPlay(userId: string, gameId: string, date: PuzzleDate)
   return data;
 }
 
-/** All of a player's plays on one day, keyed by game id. */
-export async function loadPlaysForDay(userId: string, date: PuzzleDate): Promise<Map<string, PlayRow>> {
-  const { data, error } = await db().from("plays").select("*").eq("user_id", userId).eq("puzzle_date", date);
+/**
+ * Every player's plays on one day (Today reads them once: the viewer's own, how many finished
+ * each game, and the friends' results a finished game shows). Their `state` stays on the server.
+ */
+export async function loadDayPlays(date: PuzzleDate): Promise<PlayRow[]> {
+  const { data, error } = await db().from("plays").select("*").eq("puzzle_date", date);
   if (error) throw new Error(`Failed to load plays: ${error.message}`);
-  return new Map(data.map((p) => [p.game_id, p]));
+  return data;
+}
+
+/** Everyone who plays, as friends' results name them. */
+export async function loadPlayers(): Promise<FriendResult["profile"][]> {
+  const { data, error } = await db().from("profiles").select("id, username, display_name");
+  if (error) throw new Error(`Failed to load profiles: ${error.message}`);
+  return data;
 }
 
 /** The only place a play is turned into what the browser sees. The solution stays here. */
@@ -51,37 +59,92 @@ export function toView(game: AnyGame, row: PlayRow, loaded: LoadedPuzzle): PlayV
   };
 }
 
-/** Image ids to download sealed before a play exists (a game's start screen); see `sealedAssets`. */
-export async function preloadAssets(game: AnyGame, date: PuzzleDate): Promise<string[]> {
-  const loaded = await getOrCreatePuzzle(game, date);
-  return sealedAssets({ puzzle: loaded.puzzle, solution: loaded.solution, visible: [] }).preload;
+/**
+ * What the game's server module sends with `view` for its screen (`viewExtras`; Degrees' faces), or
+ * undefined. Never fails: extras only save the screen asking for them itself, which it still can.
+ */
+async function extrasFor(game: AnyGame, view: PlayView): Promise<JsonValue | undefined> {
+  const viewExtras = getGameServer(game.id)?.viewExtras;
+  if (!viewExtras) return undefined;
+  try {
+    return await viewExtras({ puzzle: view.puzzle, state: view.state, reveal: view.reveal });
+  } catch (error) {
+    console.error(`${game.id}: the view's extras failed`, error);
+    return undefined;
+  }
 }
 
-export async function getPlayView(userId: string, game: AnyGame, date: PuzzleDate): Promise<PlayView | null> {
-  // Both at once: the puzzle is needed whenever there's a play (and by a start screen's images).
+const withExtras = (view: PlayView, extras: JsonValue | undefined): PlayView => (extras === undefined ? view : { ...view, extras });
+
+/** A new play as the database will hold it (the table's defaults), before it's saved. */
+function newPlay(userId: string, game: AnyGame, date: PuzzleDate, loaded: LoadedPuzzle): PlayRow {
+  const now = new Date().toISOString();
+  return {
+    user_id: userId,
+    game_id: game.id,
+    puzzle_date: date,
+    state: game.initialState(loaded.puzzle) as Json,
+    status: "in_progress",
+    score: null,
+    result_label: null,
+    share_grid: null,
+    version: 0,
+    started_at: now,
+    finished_at: null,
+    updated_at: now,
+  };
+}
+
+/**
+ * The view `startPlay` returns for a play that doesn't exist yet, so a start screen can show the
+ * board the moment Start is pressed while the server makes the play. It shows nothing a started
+ * play wouldn't (it's built by `toView` from the same row), and nothing Today doesn't already
+ * show: each game's opening (`describe` in home.ts).
+ */
+export async function getStartingView(userId: string, game: AnyGame, date: PuzzleDate): Promise<PlayView> {
+  const loaded = await getOrCreatePuzzle(game, date);
+  const view = toView(game, newPlay(userId, game, date, loaded), loaded);
+  return withExtras(view, await extrasFor(game, view));
+}
+
+/** A player's play of a puzzle and the puzzle, read at once; no puzzle without a play. */
+export interface PlayRead {
+  row: PlayRow | null;
+  loaded: LoadedPuzzle | null;
+}
+
+export async function readPlay(userId: string, game: AnyGame, date: PuzzleDate): Promise<PlayRead> {
+  // Both at once: the puzzle is needed whenever there's a play.
   const puzzle = getOrCreatePuzzle(game, date);
   puzzle.catch(() => {}); // without a play, a missing puzzle is only the start screen's problem
   const row = await loadPlay(userId, game.id, date);
-  if (!row) return null;
-  return toView(game, row, await puzzle);
+  return { row, loaded: row ? await puzzle : null };
+}
+
+export async function getPlayView(userId: string, game: AnyGame, date: PuzzleDate): Promise<PlayView | null> {
+  const { row, loaded } = await readPlay(userId, game, date);
+  if (!row || !loaded) return null;
+  const view = toView(game, row, loaded);
+  return withExtras(view, await extrasFor(game, view));
 }
 
 /** Idempotent: starting a play that already exists returns it unchanged. */
 export async function startPlay(userId: string, game: AnyGame, date: PuzzleDate): Promise<PlayView> {
   const loaded = await getOrCreatePuzzle(game, date);
-  const { error } = await db()
+  const { data: inserted, error } = await db()
     .from("plays")
-    .insert({
-      user_id: userId,
-      game_id: game.id,
-      puzzle_date: date,
-      state: game.initialState(loaded.puzzle) as Json,
-    });
-  if (error && error.code !== UNIQUE_VIOLATION) throw new Error(`Failed to start play: ${error.message}`);
+    .upsert(
+      { user_id: userId, game_id: game.id, puzzle_date: date, state: game.initialState(loaded.puzzle) as Json },
+      { onConflict: "user_id,game_id,puzzle_date", ignoreDuplicates: true },
+    )
+    .select("*");
+  if (error) throw new Error(`Failed to start play: ${error.message}`);
 
-  const row = await loadPlay(userId, game.id, date);
+  // Ours went in: that's the play. One was already there (another tab or device): read it.
+  const row = inserted?.[0] ?? (await loadPlay(userId, game.id, date));
   if (!row) throw new Error("Play vanished after insert");
-  return toView(game, row, loaded);
+  const view = toView(game, row, loaded);
+  return withExtras(view, await extrasFor(game, view));
 }
 
 /**
@@ -95,6 +158,8 @@ export async function applyMove(params: {
   date: PuzzleDate;
   expectedVersion: number;
   rawMove: unknown;
+  /** The play and puzzle (`readPlay`), when the caller read them already (alongside its own checks). */
+  read?: PlayRead;
   now?: Date;
   /** Injected in tests; defaults to the catalog-backed services. */
   services?: GameServices;
@@ -104,10 +169,9 @@ export async function applyMove(params: {
   const parsedMove = parseMove(game, rawMove);
   if (!parsedMove.ok) return { ok: false, reason: "invalid_move", message: "That move isn't valid." };
 
-  const row = await loadPlay(userId, game.id, date);
-  if (!row) return { ok: false, reason: "not_started", message: "Start the game first." };
+  const { row, loaded } = params.read ?? (await readPlay(userId, game, date));
+  if (!row || !loaded) return { ok: false, reason: "not_started", message: "Start the game first." };
 
-  const loaded = await getOrCreatePuzzle(game, date);
   const current = toView(game, row, loaded);
   if (row.status !== "in_progress") {
     return { ok: false, reason: "finished", message: "You've already finished this one.", view: current };
@@ -136,6 +200,8 @@ export async function applyMove(params: {
     patch.finished_at = now.toISOString();
   }
 
+  // The new view's extras are looked up while the move saves (it's the view the save will make).
+  const extras = extrasFor(game, toView(game, { ...row, ...patch }, loaded));
   const { data: updated, error } = await db()
     .from("plays")
     .update(patch)
@@ -157,7 +223,7 @@ export async function applyMove(params: {
       view: latest ? toView(game, latest, loaded) : undefined,
     };
   }
-  return { ok: true, view: toView(game, updated, loaded) };
+  return { ok: true, view: withExtras(toView(game, updated, loaded), await extras) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -174,12 +240,11 @@ export type FriendPlay = Pick<PlayRow, "user_id" | "status" | "score" | "result_
  * themselves (returns null until then). Finished players first, best score first.
  */
 export async function getFriendsResults(viewerId: string, game: AnyGame, date: PuzzleDate): Promise<FriendResult[] | null> {
-  const [{ data: plays, error: playsError }, { data: profiles, error: profilesError }] = await Promise.all([
+  const [{ data: plays, error }, profiles] = await Promise.all([
     db().from("plays").select("user_id, status, score, result_label, share_grid, state").eq("game_id", game.id).eq("puzzle_date", date),
-    db().from("profiles").select("id, username, display_name"),
+    loadPlayers(),
   ]);
-  if (playsError) throw new Error(`Failed to load results: ${playsError.message}`);
-  if (profilesError) throw new Error(`Failed to load profiles: ${profilesError.message}`);
+  if (error) throw new Error(`Failed to load results: ${error.message}`);
   return friendsResultsFrom({ game, viewerId, plays, profiles });
 }
 
@@ -219,13 +284,4 @@ export function friendsResultsFrom(params: {
         (b.score ?? -1) - (a.score ?? -1) ||
         a.profile.display_name.localeCompare(b.profile.display_name),
     );
-}
-
-/** How many players have finished each game today (for the Today cards). */
-export async function finishedCounts(date: PuzzleDate): Promise<Map<string, number>> {
-  const { data, error } = await db().from("plays").select("game_id").eq("puzzle_date", date).neq("status", "in_progress");
-  if (error) throw new Error(`Failed to count plays: ${error.message}`);
-  const counts = new Map<string, number>();
-  for (const { game_id } of data) counts.set(game_id, (counts.get(game_id) ?? 0) + 1);
-  return counts;
 }

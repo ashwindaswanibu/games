@@ -1,11 +1,14 @@
 "use client";
 
 import { Bodoni_Moda } from "next/font/google";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { AssetRef } from "@/core/assets";
 import { barsFill, inkSlit, type Rgb } from "@/lib/film-palette";
 import { receiveSealed } from "@/lib/sealed-assets";
+import { preloadSealed } from "@/lib/sealed-preload";
 import { clamp, easeInOut, lerp } from "./ease";
 import { at, Material, turn, type Rect, type Stage } from "./materials";
 import {
@@ -34,7 +37,8 @@ import { PlayedStrip, Print, printTitleSize } from "./played";
 import { useFilmLight } from "./use-film-light";
 import styles from "./field.module.css";
 
-const display = Bodoni_Moda({ subsets: ["latin", "latin-ext"], style: ["normal", "italic"], axes: ["opsz"], variable: "--hf-display", display: "swap" });
+// Latin preloaded only; latin-ext stays behind its unicode-range (see display-font.ts).
+const display = Bodoni_Moda({ subsets: ["latin"], style: ["normal", "italic"], axes: ["opsz"], variable: "--hf-display", display: "swap" });
 
 const TOP = 56;
 /** The day's arrival is over by then (it ends sooner on any input). */
@@ -163,6 +167,8 @@ type Veil = "dim" | "out" | "close" | undefined;
 type Spill = "after" | "before";
 
 export function HomeField({ model, welcome }: { model: HomeModel; welcome: { firstName: string; displayName: string; username: string } | null }) {
+  // The film's picture starts from the HTML: the reel it shows, then its first (a finished play's tile).
+  preloadSealed(model.sealed.preload.slice(0, 2));
   receiveSealed(model.sealed);
   const router = useRouter();
   const { tiles } = model;
@@ -218,10 +224,13 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
     };
   }, [arrival]);
 
-  const metrics = fieldMetrics(size.width);
+  // The field's plan for the window, worked out once per size (not on every frame of a movement).
+  const { metrics, plan, fieldHeight } = useMemo(() => {
+    const metrics = fieldMetrics(size.width);
+    const plan = choosePlan(tiles, { width: size.width, height: size.height - TOP }, metrics);
+    return { metrics, plan, fieldHeight: heightFor(size.height - TOP, plan, metrics) };
+  }, [tiles, size.width, size.height]);
   const { compact, lean } = metrics;
-  const plan = choosePlan(tiles, { width: size.width, height: size.height - TOP }, metrics);
-  const fieldHeight = heightFor(size.height - TOP, plan, metrics);
   const v = motion.values;
   const collapse = tiles.map((_, i) => v[`c${i}`] ?? 0);
   const print = v.print ?? 0;
@@ -231,19 +240,31 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const categoryOf = (id: string): HomeCategory => model.categories.find((x) => x.id === id) ?? { id, name: id, tagline: "" };
   // Type sizes come from the field at rest (with nothing opening, so a tile growing into its game
   // doesn't shrink the names on its way): every plate's name one size, every game's title one size.
-  const resting = open || peek ? fieldLayout({ width: size.width, height: fieldHeight, plan, collapse, print, open: null, peek: null, metrics }) : boxes;
-  const spine = Math.max(40, Math.min(132, ...plan.categories.flatMap((id, c) => (standing(resting[tiles.length + c]!, compact) ? [spineRoom(resting[tiles.length + c]!, lean, categoryOf(id).name)] : []))));
-  const fits = tiles.map((tile, i) => (tile.state === "finished" ? null : titleFit(tile, resting[i]!, lean, compact, size.width)));
-  const titleSize = Math.min(72, ...fits.flatMap((f) => (f ? [f.size] : [])));
+  // Worked out when the field at rest changes (its size, a game collapsing, the print opening), so
+  // not on every frame of a tile growing or a strip peeking.
+  const restKey = `${collapse.join(",")}:${print}`;
+  const { resting, spine, fits, titleSize } = useMemo(() => {
+    const resting = fieldLayout({ width: size.width, height: fieldHeight, plan, collapse, print, open: null, peek: null, metrics });
+    const nameOf = (id: string) => model.categories.find((x) => x.id === id)?.name ?? id;
+    const spine = Math.max(40, Math.min(132, ...plan.categories.flatMap((id, c) => (standing(resting[tiles.length + c]!, compact) ? [spineRoom(resting[tiles.length + c]!, lean, nameOf(id))] : []))));
+    const fits = tiles.map((tile, i) => (tile.state === "finished" ? null : titleFit(tile, resting[i]!, lean, compact, size.width)));
+    const titleSize = Math.min(72, ...fits.flatMap((f) => (f ? [f.size] : [])));
+    return { resting, spine, fits, titleSize };
+    // `restKey` stands for `collapse` and `print`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiles, model.categories, size.width, fieldHeight, plan, metrics, restKey]);
 
   const lastRow = plan.rows.length - 1;
   const clipOf = (b: TileBox) => (compact ? rowClip(b, lean, size.width, b.row === 0, b.row === lastRow) : tileClip(b, lean));
   // A phone row's cuts reach `cut` above and below its edges.
   const cut = compact ? (lean * size.width) / 2 : 0;
-  // The day's print sets every title one size, from the field as the print leaves it (so titles hold their size as it opens).
-  const printTitle = targets.print
-    ? printTitleSize(tiles, fieldLayout({ width: size.width, height: fieldHeight, plan, collapse: tiles.map(() => 1), print: 1, open: null, metrics }), lean, compact, cut, size.width)
-    : 0;
+  // The day's print sets every title one size, from the field as the print leaves it (so titles hold
+  // their size as it opens): once per window size.
+  const prints = targets.print > 0;
+  const printTitle = useMemo(
+    () => (prints ? printTitleSize(tiles, fieldLayout({ width: size.width, height: fieldHeight, plan, collapse: tiles.map(() => 1), print: 1, open: null, metrics }), lean, compact, cut, size.width) : 0),
+    [prints, tiles, size.width, fieldHeight, plan, metrics, lean, compact, cut],
+  );
   const coverOf = (b: TileBox): Rect => {
     const k = leanOf(b, lean);
     return { left: b.x[0] - k - 40, top: b.y[0] - cut - 2, width: b.x[1] - b.x[0] + 2 * k + 80, height: b.y[1] - b.y[0] + 2 * cut + 4 };
@@ -251,12 +272,15 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
   const tilt = (Math.atan(lean) * 180) / Math.PI;
   const cutsOf = (b: TileBox) => (compact ? { top: b.row === 0 ? 0 : -tilt, bottom: b.row === lastRow ? 0 : -tilt } : null);
   // A phone row's middle at x, between its cuts (or the field's straight edges).
-  const middleAt = (b: TileBox, x: number) => {
-    if (!compact) return (b.y[0] + b.y[1]) / 2;
-    const top = b.row === 0 ? b.y[0] : rowCut(b.y[0], lean, size.width, x);
-    const bottom = b.row === lastRow ? b.y[1] : rowCut(b.y[1], lean, size.width, x);
-    return (top + bottom) / 2;
-  };
+  const middleAt = useCallback(
+    (b: TileBox, x: number) => {
+      if (!compact) return (b.y[0] + b.y[1]) / 2;
+      const top = b.row === 0 ? b.y[0] : rowCut(b.y[0], lean, size.width, x);
+      const bottom = b.row === lastRow ? b.y[1] : rowCut(b.y[1], lean, size.width, x);
+      return (top + bottom) / 2;
+    },
+    [compact, lean, size.width, lastRow],
+  );
   const orderOf = (b: TileBox) => (compact ? b.row : b.col);
   const stageOf = (i: number, zone: { top: number; bottom: number }): Stage => {
     const b = boxes[i]!;
@@ -277,10 +301,6 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
     });
   });
   const veilOf = (piece: number): Veil => (opening !== null ? (opening === piece ? "close" : "out") : lit !== null && lit !== piece ? "dim" : undefined);
-  const spillOf = (piece: number, b: TileBox) => {
-    const side = spills.get(piece);
-    return side ? <SpillLight side={side} box={b} lean={lean} compact={compact} width={size.width} /> : null;
-  };
 
   function houseLights(index: number, on: boolean) {
     setLit((current) => (on ? index : current === index ? null : current));
@@ -308,9 +328,15 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
     setTimeout(() => router.push(href), 420);
   }
 
+  // What the pieces call, the same functions every frame (so a piece whose own props hold still
+  // isn't redrawn), each acting on the latest state.
+  const actions = useRef({ enter, peekAt, houseLights });
   useEffect(() => {
-    for (const tile of tiles) router.prefetch(tile.href);
-  }, [router, tiles]);
+    actions.current = { enter, peekAt, houseLights };
+  });
+  const onEnter = useCallback((event: MouseEvent<HTMLAnchorElement>, index: number) => actions.current.enter(event, index), []);
+  const onPeek = useCallback((index: number, show: boolean) => actions.current.peekAt(index, show), []);
+  const onLight = useCallback((index: number, on: boolean) => actions.current.houseLights(index, on), []);
 
   const rootStyle = { "--light": light.accent, "--spine-angle": turn(spineAngle(lean)) } as CSSProperties;
 
@@ -321,7 +347,7 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
       {welcome && (
         <p className={styles.welcome} role="status">
           Hey {welcome.firstName}. Friends see you as {welcome.displayName} (@{welcome.username}).{" "}
-          <a href={`/u/${welcome.username}`}>Change either on your profile</a>.
+          <Link href={`/u/${welcome.username}`} prefetch={true}>Change either on your profile</Link>.
         </p>
       )}
 
@@ -344,12 +370,12 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
                 compact={compact}
                 spine={spine}
                 lit={own.some((i) => tiles[i]!.material.kind === "light") ? barsFill(light.columns, model.categories.find((x) => x.id === id)?.name ?? id, 5) : undefined}
-                middle={(x) => middleAt(b, x)}
+                middleAt={middleAt}
                 order={orderOf(b)}
                 veil={veilOf(piece)}
-              >
-                {spillOf(piece, b)}
-              </Plate>
+                spill={spills.get(piece)}
+                width={size.width}
+              />
               {own.map((i) => {
                 const tile = tiles[i]!;
                 const box = boxes[i]!;
@@ -357,27 +383,28 @@ export function HomeField({ model, welcome }: { model: HomeModel; welcome: { fir
                 return (
                   <Tile
                     key={tile.id}
+                    index={i}
                     tile={tile}
                     stage={stageOf(i, objectZone(box, compact, titleSize, lines))}
                     clip={clipOf(box)}
                     accent={tile.accent ?? light.accent}
                     dateShort={model.dateShort}
                     compact={compact}
-                    title={{ size: titleSize, lines }}
+                    titleSize={titleSize}
+                    titleLines={lines}
                     collapse={collapse[i]!}
                     print={print}
                     printTitle={printTitle}
                     columns={light.columns}
                     opened={open?.index === i ? open.amount : 0}
                     peek={peek?.index === i ? peek.amount : 0}
-                    middle={(x) => middleAt(box, x)}
+                    middleAt={middleAt}
                     veil={veilOf(i)}
-                    onEnter={(e) => enter(e, i)}
-                    onPeek={(show) => peekAt(i, show)}
-                    onLight={(on) => houseLights(i, on)}
-                  >
-                    {spillOf(i, box)}
-                  </Tile>
+                    spill={spills.get(i)}
+                    onEnter={onEnter}
+                    onPeek={onPeek}
+                    onLight={onLight}
+                  />
                 );
               })}
             </Fragment>
@@ -411,10 +438,11 @@ function DayHeader({ model, compact, width }: { model: HomeModel; compact: boole
   return (
     <header className={styles.top}>
       <span className={styles.date}>{model.dateLabel}</span>
+      {/* Loaded ahead in full like the app's own nav (app-nav.tsx), so each opens without a page load. */}
       <nav className={styles.nav} aria-label="Elsewhere">
-        <a href="/leaderboard">Scores</a>
-        <a href={`/u/${model.user.username}`}>Me</a>
-        {model.user.isAdmin && <a href="/admin">Admin</a>}
+        <Link href="/leaderboard" prefetch={true}>Scores</Link>
+        <Link href={`/u/${model.user.username}`} prefetch={true}>Me</Link>
+        {model.user.isAdmin && <Link href="/admin" prefetch={true}>Admin</Link>}
       </nav>
       <span className={styles.score} aria-live="polite">
         {dayLine(model.tiles, model.won, model.max, clock, compact)}
@@ -458,7 +486,7 @@ function spineRoom(box: TileBox, lean: number, name: string): number {
  * share. A plate laid flat (a band) says its name and how its games are going on one line. The
  * film's own category is filled with the film's light.
  */
-function Plate({
+const Plate = memo(function Plate({
   category,
   games,
   box,
@@ -469,10 +497,11 @@ function Plate({
   compact,
   spine,
   lit,
-  middle,
+  middleAt,
   order,
   veil,
-  children,
+  spill,
+  width,
 }: {
   category: HomeCategory;
   games: HomeTile[];
@@ -486,10 +515,14 @@ function Plate({
   spine: number;
   /** The film's light for the name (null while it's worked out); undefined for a category without the film. */
   lit: string | null | undefined;
-  middle(x: number): number;
+  /** A piece's middle at x (a phone row's, between its cuts). */
+  middleAt(box: TileBox, x: number): number;
   order: number;
   veil: Veil;
-  children?: ReactNode;
+  /** Which side the film's light falls across onto this piece, if it does. */
+  spill: Spill | undefined;
+  /** The field's width. */
+  width: number;
 }) {
   const w = box.x[1] - box.x[0];
   const h = box.y[1] - box.y[0];
@@ -531,7 +564,7 @@ function Plate({
     const size = compact ? 28 : Math.max(18, Math.min(46, h * 0.44, (w - 2 * k - 2 * pad) / (category.name.length * 0.55)));
     const x = compact ? 20 : seamAt(box, lean, (box.y[0] + box.y[1]) / 2) + pad;
     body = (
-      <span className={styles.plateFlat} style={{ left: x, top: middle(x + category.name.length * size * 0.25), maxWidth: Math.max(0, box.x[1] - k - pad - x), ...arrive }}>
+      <span className={styles.plateFlat} style={{ left: x, top: middleAt(box, x + category.name.length * size * 0.25), maxWidth: Math.max(0, box.x[1] - k - pad - x), ...arrive }}>
         <h2 className={styles.plateName} style={{ fontSize: size }}>
           {name}
         </h2>
@@ -542,12 +575,12 @@ function Plate({
 
   return (
     <section className={styles.plate} style={{ clipPath: clip }} aria-label={label}>
-      {children}
+      {spill && <SpillLight side={spill} box={box} lean={lean} compact={compact} width={width} />}
       {body}
       <span className={styles.veil} style={cover} data-veil={veil} aria-hidden />
     </section>
   );
-}
+}, sameProps);
 
 /**
  * The film's light falling across a cut onto the piece beside it, following the cut's slant: on
@@ -664,6 +697,8 @@ function objectZone(box: TileBox, compact: boolean, size: number, lines: number)
 }
 
 interface TileProps {
+  /** The tile's place among the day's games, for the field's handlers. */
+  index: number;
   tile: HomeTile;
   stage: Stage;
   clip: string;
@@ -672,7 +707,8 @@ interface TileProps {
   dateShort: string;
   compact: boolean;
   /** The field's one title size, and this title's lines. */
-  title: { size: number; lines: number };
+  titleSize: number;
+  titleLines: number;
   collapse: number;
   print: number;
   /** The day's print's one title size. */
@@ -682,57 +718,89 @@ interface TileProps {
   opened: number;
   /** How far this played game's strip is opened under the pointer. */
   peek: number;
-  middle(x: number): number;
+  /** A piece's middle at x (a phone row's, between its cuts). */
+  middleAt(box: TileBox, x: number): number;
   veil: Veil;
-  onEnter(event: MouseEvent<HTMLAnchorElement>): void;
-  onPeek(open: boolean): void;
+  /** Which side the film's light falls across onto this piece, if it does. */
+  spill: Spill | undefined;
+  onEnter(event: MouseEvent<HTMLAnchorElement>, index: number): void;
+  onPeek(index: number, open: boolean): void;
   /** The house lights: this game under the pointer or focused. */
-  onLight(on: boolean): void;
-  children?: ReactNode;
+  onLight(index: number, on: boolean): void;
 }
 
-function Tile({ tile, stage, clip, accent, dateShort, compact, title, collapse, print, printTitle, columns, opened, peek, middle, veil, onEnter, onPeek, onLight, children }: TileProps) {
+/**
+ * A game's tile. Redrawn only when its own props change by value (`sameProps`): a frame that moves
+ * other pieces, or the house lights over another game, leaves it be.
+ */
+const Tile = memo(function Tile(props: TileProps) {
+  const { index, tile, stage, clip, accent, dateShort, compact, titleSize, titleLines, collapse, print, printTitle, columns, opened, peek, middleAt, veil, spill, onEnter, onPeek, onLight } = props;
+  const router = useRouter();
   const { lean, cover } = stage;
   const finished = tile.state === "finished";
   const live = finished ? 0 : 1 - opened;
   const strip = finished ? clamp(collapse * 1.6 - 0.4) * (1 - print) : 0;
   const style = { clipPath: clip, zIndex: opened > 0 ? 3 : 1, "--accent": accent, "--on-accent": tile.onAccent } as CSSProperties;
+  // A game not started or finished is loaded ahead whole (not just its route), so the tap opens it
+  // without a wait; a copy the browser has since dropped starts loading again at the press, under
+  // the tile's grow. Its page changes only through Start or the finishing move, and both revalidate.
+  // A game in progress changes with every move, which doesn't, so only its route is loaded ahead.
+  const whole = tile.state !== "playing";
 
   return (
-    <a
+    <Link
       href={tile.href}
+      prefetch={whole ? true : null}
       className={styles.tile}
       style={style}
-      onClick={onEnter}
+      onClick={(e) => onEnter(e, index)}
+      onPointerDown={whole ? () => router.prefetch(tile.href, { kind: PrefetchKind.FULL }) : undefined}
       onPointerEnter={(e) => {
         if (e.pointerType !== "mouse") return;
-        onLight(true);
-        onPeek(true);
+        onLight(index, true);
+        onPeek(index, true);
       }}
       onPointerLeave={(e) => {
         if (e.pointerType !== "mouse") return;
-        onLight(false);
-        onPeek(false);
+        onLight(index, false);
+        onPeek(index, false);
       }}
-      onFocus={() => onLight(true)}
-      onBlur={() => onLight(false)}
+      onFocus={() => onLight(index, true)}
+      onBlur={() => onLight(index, false)}
       aria-label={tile.label}
       data-state={tile.state}
     >
       <Material tile={tile} stage={stage} finished={finished} dateShort={dateShort} />
-      {children}
+      {spill && <SpillLight side={spill} box={stage.box} lean={lean} compact={compact} width={stage.width} />}
 
-      {!finished && <TitleCard tile={tile} stage={stage} compact={compact} size={title.size} lines={title.lines} opacity={live} />}
+      {!finished && <TitleCard tile={tile} stage={stage} compact={compact} size={titleSize} lines={titleLines} opacity={live} />}
 
       {finished && tile.result && strip > 0 && (
-        <PlayedStrip tile={tile} stage={stage} opacity={strip} settle={collapse} peek={peek} middle={middle} />
+        <PlayedStrip tile={tile} stage={stage} opacity={strip} settle={collapse} peek={peek} middle={(x) => middleAt(stage.box, x)} />
       )}
       {finished && tile.result && print > 0 && (
         <Print tile={tile} stage={stage} amount={print} compact={compact} cut={stage.cuts ? (lean * stage.width) / 2 : 0} titleSize={printTitle} columns={columns} />
       )}
       <span className={styles.veil} style={cover} data-veil={veil} aria-hidden />
-    </a>
+    </Link>
   );
+}, sameProps);
+
+/**
+ * Whether a piece's props are the same by value: its geometry comes as new objects every frame,
+ * mostly holding the same numbers, so objects and arrays (a few levels deep) are compared by their
+ * contents; functions and everything else by identity.
+ */
+function sameProps<P extends object>(a: P, b: P): boolean {
+  return sameValue(a, b, 4);
+}
+
+function sameValue(a: unknown, b: unknown, depth: number): boolean {
+  if (Object.is(a, b)) return true;
+  if (depth === 0 || typeof a !== "object" || typeof b !== "object" || a === null || b === null || Array.isArray(a) !== Array.isArray(b)) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => sameValue((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], depth - 1));
 }
 
 /**

@@ -1,5 +1,5 @@
 import "server-only";
-import { getCurrentProfile } from "./auth";
+import { getProfile, getSessionUser } from "./auth";
 import type { ProfileRow } from "./database.types";
 import { RATE_LIMITS, takeRateLimits, type RateLimitBucket } from "./rate-limit";
 
@@ -15,17 +15,20 @@ export type GuardResult = { ok: true; profile: ProfileRow } | { ok: false; respo
 /**
  * The start of every route handler that serves player data: the caller must be signed in (401),
  * may be refused outright by `allowed` (404, so the route's existence isn't confirmed), and is held
- * to each of the buckets' rate limits, in order (429 with Retry-After).
+ * to each of the buckets' rate limits, in order (429 with Retry-After). The session is checked
+ * locally (a signed token), so the profile and the rate limits are read at once, as server actions
+ * do; a refused caller is still counted against their own limits, which changes nothing they see.
  */
 export async function guardRequest(options: {
   buckets: readonly [RateLimitBucket, ...RateLimitBucket[]];
   signedOutMessage: string;
   allowed?: (profile: ProfileRow) => boolean;
 }): Promise<GuardResult> {
-  const profile = await getCurrentProfile();
+  const user = await getSessionUser();
+  if (!user) return { ok: false, response: jsonError(401, options.signedOutMessage) };
+  const [profile, exhausted] = await Promise.all([getProfile(user.id), takeRateLimits(options.buckets.map((bucket) => ({ subject: user.id, bucket })))]);
   if (!profile) return { ok: false, response: jsonError(401, options.signedOutMessage) };
   if (options.allowed && !options.allowed(profile)) return { ok: false, response: jsonError(404, "Not found.") };
-  const exhausted = await takeRateLimits(options.buckets.map((bucket) => ({ subject: profile.id, bucket })));
   if (exhausted) {
     const retryAfter = String(RATE_LIMITS[exhausted].windowSeconds);
     return { ok: false, response: jsonError(429, "Too many requests. Wait a few seconds and try again.", { "Retry-After": retryAfter }) };

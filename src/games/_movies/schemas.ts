@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { CATALOG_MIN_QUERY_KEY, catalogSearchKey } from "./search-key";
 
 /**
@@ -106,6 +106,9 @@ export const portraitSchema = z.object({
 });
 export type Portrait = z.infer<typeof portraitSchema>;
 export const portraitsResponseSchema = z.object({ portraits: z.array(portraitSchema) });
+/** Faces sent with a play view (`PlayView.extras`): those the people on the board have, and who was looked up without one. */
+export const viewPortraitsSchema = z.object({ portraits: z.array(portraitSchema), without: z.array(personIdSchema) });
+export type ViewPortraits = z.infer<typeof viewPortraitsSchema>;
 
 export const personSearchHitSchema = personRefSchema.extend({
   /** Title of their best-known film, to tell namesakes apart. */
@@ -119,6 +122,29 @@ export const filmSearchResponseSchema = z.object({ results: z.array(filmSearchHi
 export const personSearchResponseSchema = z.object({ results: z.array(personSearchHitSchema) });
 export type FilmSearchResponse = z.infer<typeof filmSearchResponseSchema>;
 export type PersonSearchResponse = z.infer<typeof personSearchResponseSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Whole lists, searched in the browser (GET /api/catalog/filmography?person=… and /cast?film=…)
+// ---------------------------------------------------------------------------------------------
+
+/** Most films or people a whole list holds: a filmography is at most about 175 films, a cast a few dozen people. */
+export const SCOPED_LIST_MAX = 400;
+
+/**
+ * One person's films, as rows of the film list (`FilmIndexPart` in film-index.ts: id, year, up to
+ * two directors, fame, then the display title and every other name), so the browser ranks a query
+ * exactly as film search does.
+ */
+export const filmographyListSchema = z.object({
+  films: z.array(z.tuple([filmIdSchema, z.number().int().nullable(), z.array(z.string()).max(2), z.number(), z.array(z.string()).min(1)])).max(SCOPED_LIST_MAX),
+});
+export type FilmographyList = z.infer<typeof filmographyListSchema>;
+
+/** One film's cast, top billed first: each person's fame (`popularity`, how a cast ranks) and face. */
+export const castListSchema = z.object({
+  people: z.array(personRefSchema.extend({ popularity: z.number(), portrait: portraitSrcSchema.nullable() })).max(SCOPED_LIST_MAX),
+});
+export type CastList = z.infer<typeof castListSchema>;
 
 // ---------------------------------------------------------------------------------------------
 // Clues: what a wrong guess tells you about the answer. Computed by `computeClues` in ./hints.

@@ -1,13 +1,15 @@
 import "server-only";
+import type { ViewPortraits } from "@/games/_movies/schemas";
 import { FILM_NOT_FOUND, PERSON_NOT_FOUND, toPersonRef } from "@/games/_movies/server";
 import { defineGameServer } from "@/server/game-server";
 import type { GameServices } from "@/server/game-services";
-import { chainPersonIds, currentActor, degrees, hintRefusal, movesLeft, type DegreesHint, type DegreesPuzzle, type DegreesSolution, type DegreesState } from "./logic";
+import { loadPortraits } from "@/server/portraits";
+import { chainPersonIds, currentActor, degrees, hintRefusal, hintsOf, movesLeft, type DegreesHint, type DegreesPuzzle, type DegreesSolution, type DegreesState } from "./logic";
 
 /**
  * Checks a proposed link against the catalog: the current actor and the chosen co-star must both be
  * credited in the chosen film. Finds what a hint shows. It only looks things up; the chain rules
- * live in `applyMove`.
+ * live in `applyMove`. Every view goes out with the faces of the people it puts on the board.
  */
 export const degreesServer = defineGameServer(degrees, {
   async resolveMove({ move, puzzle, solution, state }, services) {
@@ -49,6 +51,22 @@ export const degreesServer = defineGameServer(degrees, {
       },
     };
   },
+
+  /** The faces of everyone the board can show: both ends, the chain, a hint's co-star, the shortest route once it's out. */
+  async viewExtras({ puzzle, state, reveal }): Promise<ViewPortraits> {
+    const ids = [
+      ...new Set([
+        puzzle.start.id,
+        puzzle.end.id,
+        ...state.links.map((link) => link.person.id),
+        ...hintsOf(state).flatMap((hint) => (hint.kind === "link" ? [hint.person.id] : [])),
+        ...(reveal?.path.map((link) => link.person.id) ?? []),
+      ]),
+    ];
+    const portraits = await loadPortraits(ids);
+    const found = new Set(portraits.map((portrait) => portrait.id));
+    return { portraits, without: ids.filter((id) => !found.has(id)) };
+  },
 });
 
 type Found = { ok: true; hint: DegreesHint } | { ok: false; error: string };
@@ -84,6 +102,10 @@ async function nextLink(puzzle: DegreesPuzzle, solution: DegreesSolution, state:
       ok: false,
       error: `There's no short way to ${puzzle.end.name} from ${from.name}${left < 3 ? " in the moves you have left" : ""}. Undo a link and ask again from there (this hint didn't use a move).`,
     };
+  }
+  if (step.names) {
+    const { filmTitle, filmYear, personName } = step.names;
+    return { ok: true, hint: { kind: "link", fromPersonId: from.id, film: { id: step.filmId, title: filmTitle, year: filmYear }, person: toPersonRef({ id: step.personId, name: personName }) } };
   }
   const [films, people] = await Promise.all([services.films.get([step.filmId]), services.people.get([step.personId])]);
   const film = films.get(step.filmId);

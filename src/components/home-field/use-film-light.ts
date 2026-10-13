@@ -24,7 +24,9 @@ function canvas(w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  const ctx = c.getContext("2d", { willReadFrequently: true });
+  // Each canvas is read back once or twice, so it stays on the GPU: `willReadFrequently` would put
+  // it on the CPU, and its first `drawImage` would freeze the page for ~150 ms on a phone.
+  const ctx = c.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D is unavailable");
   return { c, ctx };
 }

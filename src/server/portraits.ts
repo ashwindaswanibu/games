@@ -1,6 +1,6 @@
 import "server-only";
 import type { Portrait } from "@/games/_movies/schemas";
-import { decodeBytea } from "./assets";
+import { decodeBytea } from "./bytea";
 import { db } from "./supabase/admin";
 
 /**

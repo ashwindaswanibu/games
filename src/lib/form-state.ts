@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import type * as z from "zod";
 
 /** What a `useActionState` form action returns when it doesn't redirect. */
 export interface FormState {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { createPortal } from "react-dom";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
 import { filmSearchResponseSchema, personSearchResponseSchema, type FilmRef, type FilmSearchHit, type PersonRef, type PersonSearchHit } from "@/games/_movies/schemas";
+import { prefetchScopedList } from "@/games/_movies/ui/scoped-lists";
 import { useCatalogSearch } from "@/games/_movies/ui/use-catalog-search";
 import type { DegreesHintKind } from "../logic";
 import styles from "./screen.module.css";
@@ -193,7 +194,11 @@ function FilmLine({ from, disabled, focus, placement, hintFilm, onFilm }: LinePr
     disabled,
     noun: { one: "film", many: "films" },
     emptyNote: (q) => `No film with ${from.name} matches “${q}”.`,
-    onSelect: (hit) => onFilm({ id: hit.id, title: hit.title, year: hit.year }),
+    onSelect: (hit) => {
+      // The film's cast starts down now, so "who else is in it?" answers from the first letter.
+      prefetchScopedList("/api/catalog/cast", { film: String(hit.id) });
+      onFilm({ id: hit.id, title: hit.title, year: hit.year });
+    },
   });
   return (
     <SearchLine

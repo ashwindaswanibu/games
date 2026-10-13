@@ -4,6 +4,7 @@ import { parsePuzzleDate, type PuzzleDate } from "@/core/day";
 import type { AnyGame } from "@/core/game";
 import type { PlayView } from "@/core/view";
 import { canPlay, getGame } from "@/games/registry";
+import { decodeBytea } from "./bytea";
 import { getPlayView } from "./plays";
 import { db } from "./supabase/admin";
 
@@ -36,13 +37,8 @@ export async function canViewAsset(params: {
   return view !== null && viewReferencesAsset(view, asset.id);
 }
 
-const HEX_BYTEA = /^\\x(?:[0-9a-f]{2})*$/i;
-
-/** PostgREST returns bytea as "\x…" hex text. */
-export function decodeBytea(value: string): Buffer {
-  if (!HEX_BYTEA.test(value)) throw new Error("Unexpected bytea encoding");
-  return Buffer.from(value.slice(2), "hex");
-}
+// In a module of its own, so faces (portraits.ts) decode without importing plays and the game servers.
+export { decodeBytea };
 
 /**
  * The asset's metadata if `viewer` may see it, else null (also for ids that don't exist, so the two

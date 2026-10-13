@@ -7,8 +7,6 @@ import { publicEnv } from "@/lib/public-env";
 const PUBLIC_PREFIXES = ["/login", "/signup", "/auth/"];
 /** Routes a signed-in user has no reason to see. */
 const SIGNED_OUT_ONLY = ["/login", "/signup"];
-/** Route handlers answer signed-out callers with 401 themselves; a redirect to HTML would break fetch(). */
-const API_PREFIX = "/api/";
 
 const matches = (path: string, prefixes: string[]) =>
   prefixes.some((p) => path === p || path.startsWith(p.endsWith("/") ? p : `${p}/`));
@@ -16,6 +14,11 @@ const matches = (path: string, prefixes: string[]) =>
 /**
  * Refreshes the Supabase session cookie on every navigation and bounces signed-out visitors to
  * /login. This is a convenience layer only: every page and server action re-checks auth itself.
+ *
+ * Route handlers (`/api/`) and server actions don't come through here (see `config`): each reads
+ * the session itself (`getSessionUser`), which refreshes an expired one and can write its cookie
+ * there (src/server/supabase/session.ts), and answers a signed-out caller its own way (401 for a
+ * route, the redirect to /login for an action). That saves every search, image and move a hop.
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -44,7 +47,6 @@ export async function proxy(request: NextRequest) {
     return redirect;
   };
 
-  if (path.startsWith(API_PREFIX)) return response;
   if (!signedIn && !matches(path, PUBLIC_PREFIXES)) return redirectTo("/login");
   if (signedIn && matches(path, SIGNED_OUT_ONLY)) return redirectTo("/");
   return response;
@@ -52,7 +54,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Sealed puzzle images, the film search list and people's faces need no session (see their routes).
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|api/assets/.+/sealed$|api/catalog/films/index$|api/catalog/portraits/[0-9]+$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    {
+      // Not route handlers (api/) nor server actions (the next-action header): they read the session themselves.
+      source: "/((?!api/|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+      missing: [{ type: "header", key: "next-action" }],
+    },
   ],
 };

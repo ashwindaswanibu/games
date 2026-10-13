@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { assetUrl } from "@/core/assets";
+import { assetUrl } from "@/core/asset-urls";
 import { useAssetSrc } from "@/lib/sealed-assets";
 import { formatPuzzleDate } from "@/core/day";
 import type { Outcome } from "@/core/game";
 import type { ImmersiveGameUiProps } from "@/core/view";
 import type { FilmRef, FilmSearchHit } from "@/games/_movies/schemas";
+import { startFilmIndex } from "@/games/_movies/ui/film-index-client";
 import { fadeToColor, guessedFilmIds, isGuess, isSkip, LEVEL_COUNT, levelsInView, MAX_GUESSES, OPTION_COUNT, pickWorth, reelOf, stoppedEarly, type State } from "../logic";
 import { barsFill } from "../palette";
 import { ContactStrip } from "./contact-strip";
@@ -133,6 +134,12 @@ export function FadeToColorTheater(props: Props) {
   // only those in view are shown until then.
   const levels = view ? (over && reveal ? reveal.levels : inView) : [];
   const art = useLevelArt(view ? (reveal?.levels ?? inView) : []);
+  // A reel goes up as soon as its picture is in, its colours following; the first waits for them,
+  // because it's pressed with the wordmark, which takes its bars from them.
+  const shows = (id: string) => {
+    const a = art.get(id);
+    return a !== undefined && (a.developed || id !== levels[0]?.id);
+  };
 
   // The newest reel: the one being played, or the film's last once it's over (the payoff).
   const latest = over ? LEVEL_COUNT - 1 : Math.max(0, levels.length - 1);
@@ -154,7 +161,7 @@ export function FadeToColorTheater(props: Props) {
   const [display, setDisplay] = useState<{ index: number; latest: number; move: ReelMove } | null>(null);
   const targetRef = levels[target];
   const threading = display === null && rolled && !threaded;
-  if (targetRef && art.has(targetRef.id) && !threading && (display === null || display.index !== target || display.latest !== latest)) {
+  if (targetRef && shows(targetRef.id) && !threading && (display === null || display.index !== target || display.latest !== latest)) {
     const earned = display !== null && target === latest && latest > display.latest;
     // The win unreels the last reel over its title card itself; the reel takes the picture underneath.
     const unreel: ReelMove = win?.exit === "roll" ? "none" : "unreel";
@@ -163,7 +170,7 @@ export function FadeToColorTheater(props: Props) {
   }
   const shownRef = display ? levels[display.index] : undefined;
   const shownArt = shownRef ? art.get(shownRef.id) : undefined;
-  const waiting = view !== null && (!targetRef || !art.has(targetRef.id) || threading);
+  const waiting = view !== null && (!targetRef || !shows(targetRef.id) || threading);
   // The press has begun: the wordmark's "Barcode" is pressed with the strip.
   const [pressed, setPressed] = useState(false);
 
@@ -174,6 +181,19 @@ export function FadeToColorTheater(props: Props) {
   const firstArt = levels[0] ? art.get(levels[0].id) : undefined;
   // What every lit title is pressed from: the first reel's columns (the barcode itself, never a clue).
   const columns = firstArt?.columns.length ? firstArt.columns : null;
+
+  // The film list for the guess line (about 1.5 MB) starts in an idle moment once the first reel is
+  // in, so it never competes with the reel (the guess line starts it on focus if that comes first).
+  const firstReelIn = playing && firstArt !== undefined;
+  useEffect(() => {
+    if (!firstReelIn) return;
+    if (typeof window.requestIdleCallback === "function") {
+      const idle = window.requestIdleCallback(startFilmIndex, { timeout: 2000 });
+      return () => window.cancelIdleCallback(idle);
+    }
+    const timer = setTimeout(startFilmIndex, 200);
+    return () => clearTimeout(timer);
+  }, [firstReelIn]);
 
   // The win plays once, and only when the film is named in front of the player (never on a reload).
   const [seenStatus, setSeenStatus] = useState(status);
@@ -199,7 +219,7 @@ export function FadeToColorTheater(props: Props) {
   const lastSrc = useAssetSrc(lastLevel?.id ?? null).src;
   // The card unreels onto the last reel only once its picture is decoded and its art is in.
   const [lastDecoded, setLastDecoded] = useState(false);
-  const winReady = lastArt !== undefined && (win?.shown === LEVEL_COUNT - 1 || lastDecoded);
+  const winReady = lastArt?.developed === true && (win?.shown === LEVEL_COUNT - 1 || lastDecoded);
   useWinTimeline({ win, setWin, root, ready: winReady, fill: firstArt?.graded || null, lastAccent: lastArt?.accent ?? null, instant: snap });
   // The card stays until the reel beneath it shows what it shows, then comes down for good: once it
   // has done its work and the reel has taken the last reel at least once (or the picture it lifted
@@ -277,7 +297,7 @@ export function FadeToColorTheater(props: Props) {
   }, [resolve, pickMade, answerId]);
   // The film rolls on once its last reel is ready to unreel (or after a while regardless: the reel
   // then waits at the gate), so the four never leave an empty console behind them.
-  const lastReady = lastArt !== undefined;
+  const lastReady = lastArt?.developed === true;
   if (resolve?.stage === "held" && lastReady) setResolve({ ...resolve, stage: "leaving" });
   useEffect(() => {
     if (resolve?.stage !== "held") return;

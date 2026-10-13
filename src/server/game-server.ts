@@ -1,5 +1,5 @@
 import "server-only";
-import type { AnyGame, MoveOf, PuzzleOf, ResolvedMoveOf, SolutionOf, StateOf } from "@/core/game";
+import type { AnyGame, JsonValue, MoveOf, PuzzleOf, ResolvedMoveOf, RevealOf, SolutionOf, StateOf } from "@/core/game";
 import type { GameServices } from "./game-services";
 
 /**
@@ -13,6 +13,20 @@ import type { GameServices } from "./game-services";
  */
 export interface GameServer<G extends AnyGame> {
   resolveMove(ctx: ResolveContext<G>, services: GameServices): Promise<ResolveResult<ResolvedMoveOf<G>>>;
+  /**
+   * Facts from outside the puzzle that the game's screen shows with a view (Degrees: the faces of
+   * the people on the board), sent with the view (`PlayView.extras`) so the screen needn't ask for
+   * them once it has loaded. Given only what the view shows, never the solution.
+   */
+  viewExtras?(view: ViewParts<G>): Promise<JsonValue>;
+}
+
+/** The parts of a play view the player sees. */
+export interface ViewParts<G extends AnyGame> {
+  puzzle: PuzzleOf<G>;
+  state: StateOf<G>;
+  /** Present once the play has finished. */
+  reveal: RevealOf<G> | null;
 }
 
 export interface ResolveContext<G extends AnyGame> {
@@ -33,6 +47,7 @@ export interface RegisteredGameServer {
     ctx: { move: unknown; puzzle: unknown; solution: unknown; state: unknown },
     services: GameServices,
   ): Promise<ResolveResult<unknown>>;
+  viewExtras?(view: { puzzle: unknown; state: unknown; reveal: unknown }): Promise<JsonValue>;
 }
 
 /**
@@ -44,5 +59,6 @@ export function defineGameServer<G extends AnyGame>(game: G, server: NoInfer<Gam
   return {
     gameId: game.id,
     resolveMove: (ctx, services) => server.resolveMove(ctx as ResolveContext<G>, services),
+    ...(server.viewExtras && { viewExtras: (view: { puzzle: unknown; state: unknown; reveal: unknown }) => server.viewExtras!(view as ViewParts<G>) }),
   };
 }

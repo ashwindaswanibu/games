@@ -8,6 +8,10 @@ export { catalogSearchKey, catalogSplitKey };
  * (`/api/catalog/cast`). Degrees of Separation uses these so a player picks a film the current
  * actor was in, then a co-star from it.
  *
+ * Both also send their whole list (only the id, no search), small enough to search in the browser
+ * as the player types: a filmography as film-list rows, ranked by `searchFilmIndex` exactly as
+ * `search_films` ranks it (the server is asked only for its typo matches), a cast ranked here.
+ *
  * A filmography is searched in SQL (`search_films` with a person), so films match by every name
  * they are known by. A cast is small (a few dozen people), so it is matched here, in memory, with
  * the same keys as the SQL `catalog_search_key` and `catalog_split_key` and the same match classes
@@ -144,3 +148,14 @@ export function parseScopedSearchParams<Scope extends "person" | "film">(
 }
 
 export const SCOPED_PARAMS_ERROR = `Pass a catalog id and a search of 2–80 characters, with a limit of 1–${CATALOG_MAX_LIMIT}.`;
+
+/**
+ * A scoped route asked for its whole list (only the id, no search): the id, or null when that isn't
+ * such a request. Repeated or extra keys are refused, as for a search.
+ */
+export function parseScopedListParams(search: URLSearchParams, scope: "person" | "film"): number | null {
+  if ([...search.keys()].some((key) => key !== scope) || search.getAll(scope).length !== 1) return null;
+  const raw = search.get(scope) ?? "";
+  const id = (scope === "person" ? personIdSchema : filmIdSchema).safeParse(Number(raw));
+  return id.success && /^[1-9][0-9]*$/.test(raw) ? id.data : null;
+}

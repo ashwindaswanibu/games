@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import type * as z from "zod";
 import type { PuzzleDate } from "./day";
 import type { Rng } from "./random";
 

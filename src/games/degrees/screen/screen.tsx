@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatPuzzleDate } from "@/core/day";
 import type { ImmersiveGameUiProps } from "@/core/view";
 import type { FilmRef, PersonRef } from "@/games/_movies/schemas";
+import { prefetchScopedList } from "@/games/_movies/ui/scoped-lists";
 import { DISPLAY_FONT_VARS } from "@/components/display-font";
 import {
   bestStillPossible,
@@ -155,7 +156,7 @@ export function DegreesScreen(props: Props) {
         ...(photoCredits?.map((p) => p.id) ?? []),
       ]
     : [];
-  const portraitOf = usePortraits(faceIds);
+  const portraitOf = usePortraits(faceIds, view?.extras);
   const boardPeople = thread.knots.flatMap((knot) => {
     const who = knot.person ?? knot.ghost;
     return who ? [who] : [];
@@ -177,6 +178,8 @@ export function DegreesScreen(props: Props) {
 
   async function link(person: PersonRef, via: FilmRef): Promise<boolean> {
     if (!puzzle) return false;
+    // Their films start down while the link is checked: the next search is theirs.
+    if (person.id !== puzzle.end.id) prefetchScopedList("/api/catalog/filmography", { person: String(person.id) });
     const ok = await send({ type: "link", filmId: via.id, personId: person.id });
     if (ok) {
       setDraft(null);

@@ -132,10 +132,9 @@ describe("hints", () => {
     expect(fake.calls).toEqual([]);
   });
 
-  it("searches the catalog from off the route, around anyone already in the chain", async () => {
-    // Pacino → Keitel (Detour) → De Niro (Taxi Driver): from De Niro the stored route continues, so
-    // go off it instead: Pacino → Keitel, who shares Taxi Driver with Foster.
-    const fake = createFakeGameServices({
+  /** Pacino → Keitel (Detour), off the stored route: Keitel shares Taxi Driver with Foster. */
+  const offRouteCatalog = () =>
+    createFakeGameServices({
       films: [
         film({ id: 11, title: "Taxi Driver", year: 1976 }),
         film({ id: 12, title: "The Silence of the Lambs", year: 1991 }),
@@ -156,15 +155,31 @@ describe("hints", () => {
         { filmId: 12, personId: 4 },
       ],
     });
-    const offRoute: DegreesState = { links: [{ film: { id: 13, title: "Detour", year: 1990 }, person: { id: 5, name: "Harvey Keitel" } }], gaveUp: false };
-    expect(await resolve({ type: "hint", kind: "link" }, offRoute, fake)).toEqual({
-      ok: true,
-      move: {
-        type: "hint",
-        hint: { kind: "link", fromPersonId: 5, film: { id: 11, title: "Taxi Driver", year: 1976 }, person: { id: 3, name: "Jodie Foster" } },
-      },
-    });
-    expect(fake.calls).toContain("credits.nextLink(5,4)");
+  const offRoute: DegreesState = { links: [{ film: { id: 13, title: "Detour", year: 1990 }, person: { id: 5, name: "Harvey Keitel" } }], gaveUp: false };
+  const offRouteHint = {
+    ok: true,
+    move: {
+      type: "hint",
+      hint: { kind: "link", fromPersonId: 5, film: { id: 11, title: "Taxi Driver", year: 1976 }, person: { id: 3, name: "Jodie Foster" } },
+    },
+  };
+
+  it("searches the catalog from off the route, around anyone already in the chain, in one lookup", async () => {
+    const fake = offRouteCatalog();
+    expect(await resolve({ type: "hint", kind: "link" }, offRoute, fake)).toEqual(offRouteHint);
+    // The search names its link itself: nothing else is looked up.
+    expect(fake.calls).toEqual(["credits.nextLink(5,4)"]);
+  });
+
+  it("looks the link's names up when the search doesn't send them (before 20261017000300)", async () => {
+    const fake = offRouteCatalog();
+    const search = fake.credits.nextLink;
+    fake.credits.nextLink = async (...args) => {
+      const step = await search(...args);
+      return step && { filmId: step.filmId, personId: step.personId, links: step.links };
+    };
+    expect(await resolve({ type: "hint", kind: "link" }, offRoute, fake)).toEqual(offRouteHint);
+    expect(fake.calls).toEqual(["credits.nextLink(5,4)", "films.get(11)", "people.get(3)"]);
   });
 
   it("refuses, free, when no short route fits the links left", async () => {

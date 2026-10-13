@@ -1,5 +1,5 @@
 import "server-only";
-import { z } from "zod";
+import * as z from "zod";
 
 /** Server-only secrets, validated on first use so a misconfigured deploy fails loudly. */
 const schema = z.object({

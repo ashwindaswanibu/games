@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AssetRef } from "@/core/assets";
 import type { GameUiProps } from "@/core/view";
 import { spokenGuess } from "@/games/_movies/clue-text";
@@ -17,6 +17,7 @@ import {
   type RevealStep,
   type RevealStepStatus,
 } from "@/games/_movies/ui";
+import { startFilmIndex } from "@/games/_movies/ui/film-index-client";
 import styles from "./frame-by-frame.module.css";
 import { FRAME_COUNT, frameByFrame, framesInView, guessedFilmIds, isSkip, type State, type Turn } from "./logic";
 import { connectGameUi } from "../game-ui-context";
@@ -81,6 +82,11 @@ export function FrameByFrameUi({ view, submitMove, pending }: Props) {
   // The frame being played (or, once over, the last one played).
   const latest = playing ? state.turns.length : Math.max(0, state.turns.length - 1);
   const onLastFrame = playing && state.turns.length === FRAME_COUNT - 1;
+
+  // The film list for search in the browser starts with the play (the search box is its only input).
+  useEffect(() => {
+    if (playing) startFilmIndex();
+  }, [playing]);
 
   // A flip back through earlier frames lasts until the next frame is earned or the play ends.
   const viewKey = `${status}:${frames.length}`;

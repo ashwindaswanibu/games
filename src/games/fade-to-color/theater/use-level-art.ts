@@ -1,14 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { assetUrl, type AssetRef } from "@/core/assets";
+import { assetUrl, type AssetRef } from "@/core/asset-urls";
 import { assetBlob, assetObjectUrl } from "@/lib/sealed-assets";
 import { accentOf, columnMeans, cssTriplet, gradeRgb, litBands, type Rgb } from "../palette";
 
-/** Everything the screen draws from one level, derived once in the browser from the image. */
+/**
+ * Everything the screen draws from one level, derived once in the browser from the image. The
+ * picture comes first, as soon as it's opened and decoded; its colours follow once they're worked
+ * out (`developed`), the house light standing in until then.
+ */
 export interface LevelArt {
   /** The level itself, as the reel shows it. */
   src: string;
+  /** The colours below are the level's own (until then: the house light, and nothing to draw). */
+  developed: boolean;
   /** The level's accent, "r g b". */
   accent: string;
   /** A one-pixel-tall strip of the barcode as light (see `litBands`), as a data URL. */
@@ -38,7 +44,9 @@ function canvas(w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  const ctx = c.getContext("2d", { willReadFrequently: true });
+  // Each canvas is read back once or twice, so it stays on the GPU: `willReadFrequently` would put
+  // it on the CPU, and its first `drawImage` would freeze the page for ~150 ms on a phone.
+  const ctx = c.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D is unavailable");
   return { c, ctx };
 }
@@ -65,6 +73,11 @@ function binned(colors: readonly Rgb[], n: number): Rgb[] {
   });
 }
 
+/** A level whose picture is in and whose colours are still being worked out (or couldn't be). */
+function undeveloped(src: string, developed = false): LevelArt {
+  return { src, developed, accent: HOUSE_ACCENT, bands: "", graded: "", room: "", columns: [], thumb: "" };
+}
+
 function derive(img: ImageBitmap, src: string): LevelArt {
   const sample = canvas(SAMPLE.w, SAMPLE.h);
   sample.ctx.drawImage(img, 0, 0, SAMPLE.w, SAMPLE.h);
@@ -83,6 +96,7 @@ function derive(img: ImageBitmap, src: string): LevelArt {
 
   return {
     src,
+    developed: true,
     accent,
     bands: stripUrl(lit),
     graded: stripUrl(lit.map((rgb) => gradeRgb(rgb))),
@@ -143,10 +157,12 @@ function whenIdle<T>(priority: number, work: () => T): Promise<T> {
   });
 }
 
-async function load(ref: AssetRef, priority: number): Promise<LevelArt> {
+async function load(ref: AssetRef, priority: number, onPicture: (art: LevelArt) => void): Promise<LevelArt> {
   // Usually already downloaded (sealed) when the game opened; its key came with this level.
   const [blob, src] = await Promise.all([assetBlob(ref.id), assetObjectUrl(ref.id)]);
   const bitmap = await createImageBitmap(blob, { resizeWidth: SOURCE.w, resizeHeight: SOURCE.h, resizeQuality: "medium" });
+  // The picture is open and decodes: it can go up now, while its colours wait for an idle moment.
+  onPicture(undeveloped(src));
   try {
     return await whenIdle(priority, () => derive(bitmap, src));
   } finally {
@@ -155,10 +171,11 @@ async function load(ref: AssetRef, priority: number): Promise<LevelArt> {
 }
 
 /**
- * Loads each level the player may see and derives its art, keyed by asset id. Levels arrive one
- * at a time as they are earned; each is fetched and worked out once, the latest first (the newest
- * reel, or the film's last once it's over). A level that fails to load gets plain art (the image
- * URL and the house light) so the screen never waits on it forever.
+ * Loads each level the player may see and derives its art, keyed by asset id: first the picture
+ * alone (`developed` false), then with its colours. Levels arrive one at a time as they are earned;
+ * each is fetched and worked out once, the latest first (the newest reel, or the film's last once
+ * it's over). A level that fails to load gets plain art (the image URL and the house light) so the
+ * screen never waits on it forever.
  */
 export function useLevelArt(levels: readonly AssetRef[]): ReadonlyMap<string, LevelArt> {
   const [art, setArt] = useState<ReadonlyMap<string, LevelArt>>(() => new Map());
@@ -177,8 +194,11 @@ export function useLevelArt(levels: readonly AssetRef[]): ReadonlyMap<string, Le
     levels.forEach((ref, index) => {
       if (started.current.has(ref.id)) return;
       started.current.add(ref.id);
-      load(ref, index)
-        .catch((): LevelArt => ({ src: assetUrl(ref.id), accent: HOUSE_ACCENT, bands: "", graded: "", room: "", columns: [], thumb: "" }))
+      const picture = (art: LevelArt) => {
+        if (mounted.current) setArt((prev) => (prev.has(ref.id) ? prev : new Map(prev).set(ref.id, art)));
+      };
+      load(ref, index, picture)
+        .catch(() => undeveloped(assetUrl(ref.id), true))
         .then((done) => {
           if (mounted.current) setArt((prev) => new Map(prev).set(ref.id, done));
         });

@@ -1,8 +1,8 @@
 import "server-only";
 import type { AssetRef } from "@/core/assets";
-import { formatPuzzleDate, nextRollover, startOfDay, today, type PuzzleDate } from "@/core/day";
+import { formatPuzzleDate, nextRollover, startOfDay, today } from "@/core/day";
 import type { AnyGame } from "@/core/game";
-import type { PlayView } from "@/core/view";
+import type { FriendResult, PlayView } from "@/core/view";
 import type { HomeModel, HomeTile, TileMaterial, TileResult } from "@/components/home-field/model";
 import type { DegreesPuzzle, DegreesSolution } from "@/games/degrees/schema";
 import { movesUsed, type DegreesState } from "@/games/degrees/logic";
@@ -12,8 +12,8 @@ import { gapOf, type LexiconPuzzle, type LexiconReveal, type LexiconState } from
 import { getBucket } from "@/games/buckets";
 import { canPlay, getGame, visibleGames } from "@/games/registry";
 import { assetKey } from "./asset-seal";
-import type { ProfileRow } from "./database.types";
-import { finishedCounts, getFriendsResults, loadPlaysForDay, toView } from "./plays";
+import type { PlayRow, ProfileRow } from "./database.types";
+import { friendsResultsFrom, loadDayPlays, loadPlayers, toView } from "./plays";
 import { getOrCreatePuzzle, PuzzleUnavailableError } from "./puzzles";
 
 /**
@@ -23,7 +23,7 @@ import { getOrCreatePuzzle, PuzzleUnavailableError } from "./puzzles";
  * Spoiler wall: a tile shows only what the viewer's own view of the game would (the puzzle's
  * opening picture, what they've earned, the reveal once they've finished), so its pictures' keys
  * are exactly those (src/core/assets.ts). Other players are a count until the viewer finishes;
- * then names and scores (`getFriendsResults` decides).
+ * then names and scores (`friendsResultsFrom` decides).
  */
 
 /**
@@ -37,7 +37,13 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
   const featured = HOME_GAME_IDS.map(getGame).filter((g): g is AnyGame => g !== undefined && canPlay(g, profile.is_admin));
   // A player without the featured games (they're still in testing) gets the games they can play.
   const games = featured.length > 0 ? featured : visibleGames(profile.is_admin);
-  const [plays, counts] = await Promise.all([loadPlaysForDay(profile.id, date), finishedCounts(date)]);
+  // One round of reads: everyone's plays today (the viewer's own, how many finished each game, the
+  // results a finished game shows), the players, and each game's puzzle (a failure is its own).
+  const [dayPlays, players, puzzles] = await Promise.all([
+    loadDayPlays(date),
+    loadPlayers(),
+    Promise.all(games.map((game) => getOrCreatePuzzle(game, date).then((loaded) => ({ loaded }), (error: unknown) => ({ error })))),
+  ]);
 
   const keys: Record<string, string> = {};
   const show = (ref: AssetRef | null | undefined) => {
@@ -45,21 +51,19 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
     return ref ?? null;
   };
 
-  const tiles = (
-    await Promise.all(
-      games.map(async (game): Promise<HomeTile | null> => {
-        let loaded;
-        try {
-          loaded = await getOrCreatePuzzle(game, date);
-        } catch (error) {
-          if (error instanceof PuzzleUnavailableError) return null; // not scheduled today: no tile
-          throw error;
-        }
-        const row = plays.get(game.id);
+  const tiles = games
+    .map((game, i): HomeTile | null => {
+      try {
+        const puzzle = puzzles[i]!;
+        if ("error" in puzzle) throw puzzle.error;
+        const { loaded } = puzzle;
+        const gamePlays = dayPlays.filter((p) => p.game_id === game.id);
+        const row = gamePlays.find((p) => p.user_id === profile.id);
         const view = row ? toView(game, row, loaded) : null;
         const state = !view ? "unplayed" : view.status === "in_progress" ? "playing" : "finished";
-        const others = Math.max(0, (counts.get(game.id) ?? 0) - (state === "finished" ? 1 : 0));
-        const friends = state === "finished" ? await friendMarks(profile.id, game, date) : null;
+        const finished = gamePlays.filter((p) => p.status !== "in_progress").length;
+        const others = Math.max(0, finished - (state === "finished" ? 1 : 0));
+        const friends = state === "finished" ? friendMarks(profile.id, game, gamePlays, players) : null;
         const tile = describe(game, loaded.puzzle, view, show);
         return {
           id: game.id,
@@ -79,9 +83,14 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
           friends: { finished: others, marks: friends },
           label: `${game.name}: ${state === "finished" ? `${tile.result?.line ?? "done"}, ${view?.result?.score ?? 0} points` : state === "playing" ? "in progress" : "not played yet"}`,
         };
-      }),
-    )
-  ).filter((t): t is HomeTile => t !== null);
+      } catch (error) {
+        // Not scheduled today: no tile. Anything else (a stored puzzle the code no longer reads, a
+        // failed read of it) costs that game its tile, never the whole page.
+        if (!(error instanceof PuzzleUnavailableError)) console.error(`Today: dropped ${game.id}'s tile`, error);
+        return null;
+      }
+    })
+    .filter((t): t is HomeTile => t !== null);
 
   const won = tiles.reduce((sum, t) => sum + (t.result?.score ?? 0), 0);
   return {
@@ -102,8 +111,8 @@ export async function getHome(profile: Pick<ProfileRow, "id" | "username" | "is_
   };
 }
 
-async function friendMarks(viewerId: string, game: AnyGame, date: PuzzleDate) {
-  const results = (await getFriendsResults(viewerId, game, date)) ?? [];
+function friendMarks(viewerId: string, game: AnyGame, plays: readonly PlayRow[], players: readonly FriendResult["profile"][]) {
+  const results = friendsResultsFrom({ game, viewerId, plays, profiles: players }) ?? [];
   return results
     .filter((r) => r.profile.id !== viewerId && r.status !== "not_started" && r.status !== "in_progress" && r.score !== null)
     .map((r) => ({ name: r.profile.display_name.split(" ")[0]!.toUpperCase(), score: r.score! }));

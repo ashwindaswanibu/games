@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
+import * as z from "zod";
 import { fieldErrors, formText, type FormState } from "@/lib/form-state";
 import { displayNameSchema, usernameSchema } from "@/lib/validation";
 import { requireProfile } from "@/server/auth";

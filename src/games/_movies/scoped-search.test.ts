@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalogSearchKey, catalogSplitKey, matchClass, nameMatchClass, parseScopedSearchParams, rankByQuery, searchKeys } from "./scoped-search";
+import { catalogSearchKey, catalogSplitKey, matchClass, nameMatchClass, parseScopedListParams, parseScopedSearchParams, rankByQuery, searchKeys } from "./scoped-search";
 
 describe("catalogSearchKey", () => {
   it("lowercases, strips accents and collapses punctuation like the SQL key", () => {
@@ -256,5 +256,20 @@ describe("parseScopedSearchParams", () => {
       expect(parse(bad), bad).toBeNull();
     }
     expect(parse("person=12&q=heat", "film")).toBeNull();
+  });
+});
+
+describe("parseScopedListParams", () => {
+  const parse = (query: string, scope: "person" | "film" = "person") => parseScopedListParams(new URLSearchParams(query), scope);
+
+  it("takes the scope's id alone: a request for the whole list", () => {
+    expect(parse("person=12")).toBe(12);
+    expect(parse("film=7", "film")).toBe(7);
+  });
+
+  it("refuses anything else: a search, extra or repeated keys, a malformed id, the other scope", () => {
+    for (const bad of ["", "person=", "person=0", "person=1.5", "person=1e3", "person=99999999999", "person=12&person=13", "person=12&limit=5", "person=12&q=heat", "film=12"]) {
+      expect(parse(bad), bad).toBeNull();
+    }
   });
 });

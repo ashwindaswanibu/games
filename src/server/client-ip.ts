@@ -1,6 +1,6 @@
 import "server-only";
 import { headers } from "next/headers";
-import { z } from "zod";
+import * as z from "zod";
 
 const ipv4Schema = z.ipv4();
 const ipv6Schema = z.ipv6();

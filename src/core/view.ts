@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import type { SealedAssets } from "./assets";
 import type { PuzzleDate } from "./day";
-import type { AnyGame, FriendDetail, MoveOf, Outcome, PuzzleOf, RevealOf, StateOf } from "./game";
+import type { AnyGame, FriendDetail, JsonValue, MoveOf, Outcome, PuzzleOf, RevealOf, StateOf } from "./game";
 
 /** Everything the browser receives about one player's play of one puzzle. */
 export interface PlayView<Puzzle = unknown, State = unknown, Reveal = unknown> {
@@ -17,6 +17,11 @@ export interface PlayView<Puzzle = unknown, State = unknown, Reveal = unknown> {
   reveal: Reveal | null;
   /** The puzzle's images, sealed: all to preload, keys for the ones this view shows (`src/core/assets.ts`). */
   sealed?: SealedAssets;
+  /**
+   * What the game's server module sends with the view for its screen (`viewExtras` in
+   * `src/server/game-server.ts`), so the screen needn't ask for it after loading: Degrees' faces.
+   */
+  extras?: JsonValue;
 }
 
 export type MoveFailureReason =

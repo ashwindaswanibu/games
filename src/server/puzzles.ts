@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { cache } from "react";
-import type { PuzzleDate } from "@/core/day";
+import { today, type PuzzleDate } from "@/core/day";
 import type { AnyGame } from "@/core/game";
 import { createRng, type RngSeed } from "@/core/random";
 import { serverEnv } from "./env";
@@ -46,12 +46,35 @@ async function selectPuzzle(game: AnyGame, date: PuzzleDate, options: { fresh?: 
 }
 
 /**
+ * Past days' puzzles a server keeps in memory: a past day's never changes. Today's (or a later
+ * day's) is read for each request, because until someone plays it the content pipeline may still
+ * replace it, and a kept copy would show one puzzle while moves are judged against another.
+ */
+const kept = new Map<string, Promise<LoadedPuzzle>>();
+
+/**
  * The puzzle for a game on a date. Stored puzzles always win (that's how curated puzzles and
  * past days stay stable across code changes); otherwise it is generated and persisted. Concurrent
- * first requests are safe: generation is deterministic and the insert ignores duplicates. Read once
- * per request (React `cache`): a play page asks for it for the view and for its images.
+ * first requests are safe: generation is deterministic and the insert ignores duplicates.
+ *
+ * Read once per request (React `cache`); a past day's is also kept by the server (`kept`), and
+ * requests that ask while it's being read share that read. A failure is never kept: the next
+ * request asks again.
  */
-export const getOrCreatePuzzle = cache(async (game: AnyGame, date: PuzzleDate): Promise<LoadedPuzzle> => {
+export const getOrCreatePuzzle = cache((game: AnyGame, date: PuzzleDate): Promise<LoadedPuzzle> => {
+  if (date >= today()) return loadPuzzle(game, date);
+  const key = `${game.id}:${date}`;
+  const held = kept.get(key);
+  if (held) return held;
+  const loaded = loadPuzzle(game, date);
+  kept.set(key, loaded);
+  loaded.catch(() => {
+    if (kept.get(key) === loaded) kept.delete(key);
+  });
+  return loaded;
+});
+
+async function loadPuzzle(game: AnyGame, date: PuzzleDate): Promise<LoadedPuzzle> {
   const stored = await selectPuzzle(game, date);
   if (stored) return stored;
   if (!game.generate) throw new PuzzleUnavailableError(game.id, date);
@@ -74,4 +97,4 @@ export const getOrCreatePuzzle = cache(async (game: AnyGame, date: PuzzleDate): 
   const saved = await selectPuzzle(game, date, { fresh: true });
   if (!saved) throw new Error(`Puzzle for ${game.id} on ${date} vanished after insert`);
   return saved;
-});
+}

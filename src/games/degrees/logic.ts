@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { defineGame } from "@/core/game";
 import { clampScore } from "@/core/scoring";
 import { filmIdSchema, filmRefSchema, personIdSchema, personRefSchema, type PersonRef } from "@/games/_movies/schemas";

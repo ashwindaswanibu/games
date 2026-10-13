@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { defineGame } from "@/core/game";
 import { canSpell, compareWords, indexOfWord, isLetters, JUMBLE_SIZE, MIN_WORD, normalizeWord } from "./letters";
 import { lexiconPuzzleSchema, lexiconSolutionSchema, type LexiconEntry, type LexiconPuzzle, type LexiconSolution } from "./schema";

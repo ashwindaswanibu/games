@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
 import { today } from "@/core/day";
 import { canPlay, getGame } from "@/games/registry";
+import { preloadSealed } from "@/lib/sealed-preload";
 import { requireProfile } from "@/server/auth";
-import { getFriendsResults, getPlayView, preloadAssets } from "@/server/plays";
+import { getFriendsResults, getPlayView, getStartingView } from "@/server/plays";
 import { FriendsResults, LockedResults } from "./friends-results";
 import { GameHost } from "./game-host";
 import { ImmersiveHost } from "./immersive-host";
@@ -32,14 +33,18 @@ async function loadPlayScreen(gameId: string) {
   const date = today();
   const view = await getPlayView(profile.id, game, date);
   const finished = view !== null && view.status !== "in_progress";
-  // Before the play starts there's no view to list the puzzle's images, so list them here.
-  const [friends, preload] = await Promise.all([finished ? getFriendsResults(profile.id, game, date) : null, view ? [] : preloadAssets(game, date)]);
-  return { profile, game, date, view, friends, preload };
+  // Before the play starts: the view Start will make (shown the moment it's pressed, while the
+  // server makes the play), which also lists the puzzle's images to download ahead.
+  const [friends, startingView] = await Promise.all([finished ? getFriendsResults(profile.id, game, date) : null, view ? null : getStartingView(profile.id, game, date)]);
+  const preload = startingView?.sealed?.preload ?? [];
+  // The first picture (level 1 first: the ids are in the puzzle's order) starts from the HTML.
+  preloadSealed((view?.sealed?.preload ?? preload).slice(0, 1));
+  return { profile, game, date, view, startingView, friends, preload };
 }
 
 /** The play screen for `gameId`; `children` is that game's connected UI (see `connectGameUi`). */
 export async function PlayScreen({ gameId, children }: { gameId: string; children: ReactNode }) {
-  const { profile, game, date, view, friends, preload } = await loadPlayScreen(gameId);
+  const { profile, game, date, view, startingView, friends, preload } = await loadPlayScreen(gameId);
 
   return (
     <div className="grid gap-6" style={{ "--accent": game.accent } as CSSProperties}>
@@ -52,7 +57,17 @@ export async function PlayScreen({ gameId, children }: { gameId: string; childre
       </header>
 
       {/* Keyed so client state resets when switching games or when the day rolls over. */}
-      <GameHost key={`${game.id}:${date}`} gameId={game.id} gameName={game.name} emoji={game.emoji} rules={game.rules} date={date} initialView={view} preload={preload}>
+      <GameHost
+        key={`${game.id}:${date}`}
+        gameId={game.id}
+        gameName={game.name}
+        emoji={game.emoji}
+        rules={game.rules}
+        date={date}
+        initialView={view}
+        startingView={startingView}
+        preload={preload}
+      >
         {children}
       </GameHost>
 
@@ -66,10 +81,19 @@ export async function PlayScreen({ gameId, children }: { gameId: string; childre
  * (`children`, see `connectImmersiveGameUi`). Render it from a route outside the app's chrome.
  */
 export async function ImmersivePlayScreen({ gameId, children }: { gameId: string; children: ReactNode }) {
-  const { profile, game, date, view, friends, preload } = await loadPlayScreen(gameId);
+  const { profile, game, date, view, startingView, friends, preload } = await loadPlayScreen(gameId);
   return (
     // Keyed so client state resets when the day rolls over.
-    <ImmersiveHost key={`${game.id}:${date}`} gameId={game.id} date={date} initialView={view} preload={preload} viewerId={profile.id} friends={friends}>
+    <ImmersiveHost
+      key={`${game.id}:${date}`}
+      gameId={game.id}
+      date={date}
+      initialView={view}
+      startingView={startingView}
+      preload={preload}
+      viewerId={profile.id}
+      friends={friends}
+    >
       {children}
     </ImmersiveHost>
   );

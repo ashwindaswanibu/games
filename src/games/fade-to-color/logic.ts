@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { assetRefSchema } from "@/core/assets";
 import { defineGame } from "@/core/game";
 import { attemptsScore } from "@/core/scoring";

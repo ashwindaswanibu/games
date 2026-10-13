@@ -52,7 +52,7 @@ export function toFilmDetails(record: FilmRecord): FilmDetails {
   };
 }
 
-export function toPersonRef(record: PersonRecord): PersonRef {
+export function toPersonRef(record: Pick<PersonRecord, "id" | "name">): PersonRef {
   return { id: record.id, name: clip(record.name, MAX_NAME) };
 }
 

@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { z } from "zod";
+import * as z from "zod";
 import { fieldErrors, formText as text, type FormState } from "@/lib/form-state";
 import { publicEnv } from "@/lib/public-env";
 import { optionalDisplayNameSchema, passwordSchema, usernameSchema } from "@/lib/validation";

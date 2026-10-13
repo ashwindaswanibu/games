@@ -513,6 +513,9 @@ export type Database = {
           film_id: number;
           person_id: number;
           links: number;
+          film_title: string;
+          film_year: number | null;
+          person_name: string;
         }[];
       };
       orphan_auth_user_for_email: {

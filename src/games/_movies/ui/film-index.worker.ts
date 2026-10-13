@@ -16,7 +16,8 @@ void (async () => {
   try {
     const parts = await Promise.all(
       Array.from({ length: FILM_INDEX_PARTS }, async (_, part) => {
-        const response = await fetch(`/api/catalog/films/index?part=${part}`);
+        // Low priority: the list is a convenience, never ahead of the puzzle's images or a move.
+        const response = await fetch(`/api/catalog/films/index?part=${part}`, { priority: "low" });
         if (!response.ok) throw new Error(`Film list part ${part}: ${response.status}`);
         return (await response.json()) as FilmIndexPart;
       }),

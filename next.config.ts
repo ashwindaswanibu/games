@@ -19,8 +19,11 @@ const nextConfig: NextConfig = {
   experimental: {
     // Keep pages the player has seen (or that were loaded ahead, below) in the browser for a while,
     // so going back to Today or the leaderboard is instant. Starting or finishing a game calls
-    // refresh() (src/app/_play/actions.ts), which drops these copies, so Today never shows a stale
-    // result. Loaded ahead: the bottom nav, the game cards and "back to today" (prefetch={true}).
+    // revalidatePath("/") (src/app/_play/actions.ts), which drops every copy loaded ahead (refresh()
+    // would drop only the pages already visited), so Today never shows a stale result. Loaded ahead
+    // in full (prefetch={true}, kept for `static`): the app's nav, Today's links and the tiles of
+    // games not started or finished (a game in progress changes with every move, which doesn't
+    // revalidate, so only its route is loaded ahead), and each game's "back to today".
     staleTimes: { dynamic: 60, static: 300 },
   },
   // Dev only: let phones on the same Wi-Fi open the dev server via the laptop's LAN IP.

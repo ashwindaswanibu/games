@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
+import * as z from "zod";
 import { defineGame } from "@/core/game";
 import { attemptsScore } from "@/core/scoring";
 import { defineGameServer } from "./game-server";

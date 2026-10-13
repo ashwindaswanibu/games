@@ -4,8 +4,9 @@ import type { FilmSearchHit } from "../schemas";
 
 /*
  * The page's side of film search in the browser (`film-index.worker.ts`). One worker per page,
- * started by the first film search box; until its list is ready (or if it fails) searches return
- * null and the caller asks the server, as before.
+ * started by the game when the list won't compete with its opening (Fade to Color: once the first
+ * reel is in) or else by the first film search box to be focused; until its list is ready (or if
+ * it fails) searches return null and the caller asks the server, as before.
  */
 
 let worker: Worker | null = null;

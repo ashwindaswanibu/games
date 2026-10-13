@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { ANSWER_LENGTHS, canSpell, compareWords, JUMBLE_SIZE, MIN_WORD } from "./letters";
 
 /**

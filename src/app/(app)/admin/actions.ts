@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
+import * as z from "zod";
 import { passwordSchema } from "@/lib/validation";
 import { canResetPassword, canSetAdmin, type ManagedAccount } from "@/server/admin-policy";
 import { isPasswordAccountEmail, requireAdmin, weakPasswordMessage } from "@/server/auth";

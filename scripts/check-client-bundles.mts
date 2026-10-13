@@ -4,6 +4,10 @@
  * of a chunk that only a testing game's page uses. (Puzzles and solutions are server-side either
  * way; this is about not leaking what's coming.)
  *
+ * Also that no page ships all of zod: imported as a namespace (`import * as z from "zod"`), the
+ * bundler keeps only what's used; `import { z }` pulls in every export (JSON Schema conversion,
+ * every locale's messages), about 70 KB compressed on every page.
+ *
  *   npm run build && npm run test:bundles
  *
  * It reads the client reference manifests Next writes per route (.next/server/app/**), which list
@@ -98,5 +102,12 @@ for (const game of testing) {
   check(`nothing a player loads names ${game.id} or points at its code`, leaks.length === 0, leaks);
 }
 
-console.log(failures ? `\n${failures} check(s) failed` : "\nTesting games stay out of players' bundles");
+// `fromJSONSchema` is only reachable through zod's whole namespace (`toJSONSchema` won't do: every
+// schema has a method of that name).
+const allChunks = new Set(rootFiles());
+for (const chunks of routes.values()) chunks.forEach((c) => allChunks.add(c));
+const wholeZod = [...allChunks].filter((file) => file.endsWith(".js") && readFileSync(path.join(NEXT_DIR, file), "utf8").includes("fromJSONSchema"));
+check("no page ships all of zod (import it as `* as z`)", wholeZod.length === 0, wholeZod);
+
+console.log(failures ? `\n${failures} check(s) failed` : "\nTesting games stay out of players' bundles, and zod stays small");
 process.exit(failures ? 1 : 0);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { assetUrl, SEALED_NONCE_BYTES, sealedAssetUrl, type SealedAssets } from "@/core/assets";
+import { assetUrl, SEALED_NONCE_BYTES, sealedAssetUrl, type SealedAssets } from "@/core/asset-urls";
 
 /*
  * The browser side of sealed puzzle images (see `src/core/assets.ts`). A play view's `sealed.preload`
@@ -21,10 +21,10 @@ const urls = new Map<string, Promise<string>>();
 
 const canUnseal = () => typeof window !== "undefined" && window.isSecureContext && typeof crypto !== "undefined" && Boolean(crypto.subtle);
 
-function download(id: string) {
+function download(id: string, priority: RequestPriority = "auto") {
   let pending = downloads.get(id);
   if (!pending) {
-    pending = fetch(sealedAssetUrl(id)).then(async (response) => {
+    pending = fetch(sealedAssetUrl(id), { priority }).then(async (response) => {
       if (!response.ok) throw new Error(`Sealed image ${id} didn't load (${response.status})`);
       return { data: await response.arrayBuffer(), type: response.headers.get("X-Asset-Type") ?? "" };
     });
@@ -34,11 +34,15 @@ function download(id: string) {
   return pending;
 }
 
-/** Takes in a view's sealed images: remembers its keys and starts downloading what it lists. */
+/**
+ * Takes in a view's sealed images: remembers its keys and starts downloading what it lists. The
+ * first (the page's HTML preloaded it, see `sealed-preload.ts`) and any the view shows now come
+ * first; the rest, levels still to be earned, wait behind them at low priority.
+ */
 export function receiveSealed(sealed: SealedAssets | undefined): void {
   if (!sealed || typeof window === "undefined") return;
   for (const [id, key] of Object.entries(sealed.keys)) keys.set(id, key);
-  if (canUnseal()) for (const id of sealed.preload) void download(id);
+  if (canUnseal()) sealed.preload.forEach((id, i) => void download(id, i === 0 || id in sealed.keys ? "auto" : "low"));
 }
 
 function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {

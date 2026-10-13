@@ -14,6 +14,8 @@ export function ImmersiveHost(props: {
   gameId: string;
   date: PuzzleDate;
   initialView: PlayView | null;
+  /** The view a new play starts from, shown the moment Start is pressed (see `useGameSession`). */
+  startingView: PlayView | null;
   /** The puzzle's images to download sealed before the play starts (see `useGameSession`). */
   preload: string[];
   viewerId: string;
@@ -21,7 +23,7 @@ export function ImmersiveHost(props: {
   children: ReactNode;
 }) {
   const { gameId, date, viewerId, friends } = props;
-  const { view, pending, notice, start, move } = useGameSession({ gameId, date, initialView: props.initialView, preload: props.preload });
+  const { view, pending, notice, start, move } = useGameSession({ gameId, date, initialView: props.initialView, startingView: props.startingView, preload: props.preload });
   return (
     <ImmersiveGameUiProvider value={{ view, start, submitMove: move, pending, notice, date, viewerId, friends }}>
       {props.children}

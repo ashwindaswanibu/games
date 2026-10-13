@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import type { z } from "zod";
+import type * as z from "zod";
 import { CATALOG_MIN_QUERY_KEY, catalogSearchKey } from "../search-key";
 import { searchFilmsLocally, startFilmIndex } from "./film-index-client";
+import { isScopedList, prefetchScopedList, searchScopedList, serverAddsTypos } from "./scoped-lists";
 
 export type CatalogEndpoint = "/api/catalog/films" | "/api/catalog/people" | "/api/catalog/filmography" | "/api/catalog/cast";
 
@@ -41,7 +42,10 @@ export type CatalogSearchStatus = "idle" | "loading" | "ready" | "error";
  *
  * Film search (`/api/catalog/films`, unscoped) runs in the browser once the film list has arrived
  * (`film-index-client.ts`): every keystroke answers at once, and the server is asked only for typo
- * matches when the list comes up short, which go after the real ones, as on the server.
+ * matches when the list comes up short, which go after the real ones, as on the server. The list
+ * starts downloading when the field is first focused, if the game hasn't started it already.
+ * Filmography and cast searches likewise rank their whole list in the browser (`scoped-lists.ts`),
+ * fetched as the field mounts if the game hasn't fetched it ahead.
  */
 export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSearchConfig<Hit>) {
   const { endpoint, scope, responseSchema, onSelect, excludeIds = [], clearOnSelect = true, disabled = false, emptyNote, noun } = config;
@@ -66,16 +70,20 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
   /** Counts searches, so a local answer to an older one is dropped. */
   const latest = useRef(0);
   const local = endpoint === "/api/catalog/films" && !scope;
+  const scopeKey = scope ? new URLSearchParams(scope).toString() : "";
 
   useEffect(() => {
-    if (local) startFilmIndex();
     return () => {
       clearTimeout(timer.current);
       inflight.current?.abort();
     };
-  }, [local]);
+  }, []);
 
-  const scopeKey = scope ? new URLSearchParams(scope).toString() : "";
+  useEffect(() => {
+    if (scope && isScopedList(endpoint)) prefetchScopedList(endpoint, scope);
+    // `scopeKey` stands for `scope`: a new object with the same scope needs nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoint, scopeKey]);
   const excluded = new Set(excludeIds);
   const selectable = (index: number) => index >= 0 && index < results.length && !excluded.has(results[index].id);
 
@@ -136,6 +144,25 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
     if (cached) {
       show(cached);
       return;
+    }
+    if (scope && isScopedList(endpoint)) {
+      const found = searchScopedList(endpoint, scope, q, LIMIT);
+      if (found instanceof Promise) {
+        // The list is on its way: search it once it's here (or the server, if it can't come).
+        setStatus("loading");
+        void found.then(() => {
+          if (ticket === latest.current) search(value);
+        });
+        return;
+      }
+      const parsed = found === null ? null : responseSchema.safeParse({ results: found });
+      if (parsed?.success) {
+        const hits = parsed.data.results;
+        show(hits);
+        if (serverAddsTypos(endpoint) && hits.length < LIMIT && catalogSearchKey(q).length >= TYPO_MIN_KEY) timer.current = setTimeout(() => void fetchHits(q, key, hits), DEBOUNCE_MS);
+        else remember(key, hits);
+        return;
+      }
     }
     if (local) {
       void searchFilmsLocally(q, LIMIT).then((found) => {
@@ -285,6 +312,7 @@ export function useCatalogSearch<Hit extends { id: number }>(config: CatalogSear
     onChange: (event: { target: { value: string } }) => change(event.target.value),
     onKeyDown,
     onFocus: () => {
+      if (local) startFilmIndex();
       if (searchable(query)) setOpen(true);
     },
     onBlur: () => setOpen(false),

@@ -56,7 +56,11 @@ export function createFakeGameServices(data: {
       },
       async nextLink(from, to, { avoid, maxLinks }) {
         calls.push(`credits.nextLink(${from},${to})`);
-        return nextLink(credits, films, from, to, new Set(avoid), Math.min(MAX_NEXT_LINK_DEPTH, maxLinks));
+        const step = nextLink(credits, films, from, to, new Set(avoid), Math.min(MAX_NEXT_LINK_DEPTH, maxLinks));
+        // Named, as the real search names its link (when this fake knows the film and the co-star).
+        const film = step && films.get(step.filmId);
+        const person = step && people.get(step.personId);
+        return step && film && person ? { ...step, names: { filmTitle: film.title, filmYear: film.year, personName: person.name } } : step;
       },
     },
   };

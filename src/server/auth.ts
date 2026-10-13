@@ -87,15 +87,6 @@ export const getProfile = cache(async (userId: string): Promise<ProfileRow | nul
   return data;
 });
 
-/**
- * For route handlers, which answer with a status code rather than a redirect: the signed-in
- * caller with a profile, or null (respond 401).
- */
-export async function getCurrentProfile(): Promise<ProfileRow | null> {
-  const user = await getSessionUser();
-  return user ? getProfile(user.id) : null;
-}
-
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");

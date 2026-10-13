@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import type { z } from "zod";
+import type * as z from "zod";
 import type { portraitsResponseSchema } from "@/games/_movies/schemas";
 import { canUseMoviesCatalog } from "@/server/catalog";
 import { guardRequest, jsonError } from "@/server/http";

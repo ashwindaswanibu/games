@@ -1,14 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { z } from "zod";
+import type { FriendDetail } from "@/core/game";
 import type { FriendResult } from "@/core/view";
 import styles from "./screen.module.css";
 
 /** The sources' credit, wherever today's dictionary is shown. */
 export const WORDS_CREDIT = "Words: 12dicts by Alan Beale (AGID © Kevin Atkinson). Definitions: WordNet 3.1 © Princeton University.";
 
-const guessesDetail = z.object({ guesses: z.array(z.string()) });
+const isStrings = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/** A finished play's guesses as Lexicon shares them (its `friendDetail`), or null if `detail` holds none. */
+function guessesOf(detail: FriendDetail | undefined): readonly string[] | null {
+  const guesses = detail?.guesses;
+  return isStrings(guesses) ? guesses : null;
+}
 
 /**
  * One result's guesses as ribbons, from its share marks: red for each guess today's word was after
@@ -60,7 +66,7 @@ export function EveryonePanel({ friends, viewerId, onClose }: { friends: readonl
           <ol className={styles.people} aria-label="Players">
             {friends.map((f) => {
               const done = f.status === "won" || f.status === "lost";
-              const detail = done ? guessesDetail.safeParse(f.detail) : null;
+              const guesses = done ? guessesOf(f.detail) : null;
               return (
                 <li key={f.profile.id} data-you={f.profile.id === viewerId || undefined}>
                   <span className={styles.who}>
@@ -75,7 +81,7 @@ export function EveryonePanel({ friends, viewerId, onClose }: { friends: readonl
                           {f.score ?? 0} · {f.label}
                         </span>
                       </span>
-                      {detail?.success && detail.data.guesses.length > 0 && <span className={styles.theirWords}>{detail.data.guesses.join(" · ")}</span>}
+                      {guesses && guesses.length > 0 && <span className={styles.theirWords}>{guesses.join(" · ")}</span>}
                     </span>
                   ) : (
                     <span className={styles.panelNote}>{f.status === "in_progress" ? "Guessing…" : "Not yet"}</span>

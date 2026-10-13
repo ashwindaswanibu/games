@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { z } from "zod";
 import { Countdown } from "@/components/countdown";
 import { useShare } from "@/components/share-button";
 import { APP_NAME } from "@/config";
 import { addDays, startOfDay, type PuzzleDate } from "@/core/day";
+import type { FriendDetail } from "@/core/game";
 import { shareText } from "@/core/share";
 import type { FriendResult } from "@/core/view";
 import { IMDB_ATTRIBUTION } from "@/games/_movies/attribution";
@@ -109,7 +109,14 @@ export function Credits(props: {
   );
 }
 
-const chainDetail = z.object({ people: z.array(z.string()), films: z.array(z.string()) });
+const isStrings = (value: unknown): value is readonly string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/** A finished play's chain as Degrees shares it (its `friendDetail`), or null if `detail` holds none. */
+function chainOf(detail: FriendDetail | undefined): { people: readonly string[]; films: readonly string[] } | null {
+  const people = detail?.people;
+  const films = detail?.films;
+  return isStrings(people) && isStrings(films) ? { people, films } : null;
+}
 
 /** Everyone's results, in a panel over the room: each player's score and, once finished, their chain. */
 export function EveryonePanel({ friends, viewerId, start, onClose }: { friends: readonly FriendResult[] | null; viewerId: string; start: string; onClose(): void }) {
@@ -130,7 +137,7 @@ export function EveryonePanel({ friends, viewerId, start, onClose }: { friends: 
           <ol className={styles.people} aria-label="Players">
             {friends.map((f) => {
               const done = f.status === "won" || f.status === "lost";
-              const chain = done ? chainDetail.safeParse(f.detail) : null;
+              const chain = done ? chainOf(f.detail) : null;
               return (
                 <li key={f.profile.id} data-you={f.profile.id === viewerId || undefined}>
                   <span className={styles.who}>
@@ -145,13 +152,13 @@ export function EveryonePanel({ friends, viewerId, start, onClose }: { friends: 
                           {f.score ?? 0} · {f.label}
                         </span>
                       </span>
-                      {chain?.success && f.status === "won" && chain.data.people.length > 0 && (
+                      {chain && f.status === "won" && chain.people.length > 0 && (
                         <span className={styles.theirChain}>
                           {start}
-                          {chain.data.people.map((name, i) => (
+                          {chain.people.map((name, i) => (
                             <span key={i}>
                               {" "}
-                              <i>{chain.data.films[i]}</i> {name}
+                              <i>{chain.films[i]}</i> {name}
                             </span>
                           ))}
                         </span>

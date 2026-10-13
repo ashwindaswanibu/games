@@ -8,13 +8,16 @@ import styles from "./screen.module.css";
 /**
  * The guess line, the nine letters and the keys. A guess is set from the letters themselves: tap a
  * letter (or type it) and it flies up into the line, leaving its cell empty; Backspace sends it
- * home, Escape sends them all. Enter (or Guess) plays the word, and an accepted word rises out of
- * the line toward the book as its ribbon lays in. Space (or Shuffle) reorders the row, to see new
- * words in it. Keys work anywhere on the page unless something else is being typed into or a
- * question is open. Today's word's length isn't told (owner, 2026-10-12).
+ * home, Escape sends them all. Enter (or Guess) plays the word: it rises out of the line toward the
+ * book at once, as the ribbon lays in once the guess is in; a refused word drops back into the line
+ * as it shakes. Space (or Shuffle) reorders the row, to see new words in it. Keys work anywhere on
+ * the page unless something else is being typed into or a question is open, and the letters, Back
+ * and Shuffle stay usable while a guess is on its way. Today's word's length isn't told (owner,
+ * 2026-10-12).
  */
 export function Tray(props: {
   letters: string;
+  /** A move is on its way: Guess and Give up wait (the letters don't). */
   disabled: boolean;
   /** Whether keys belong to the tray right now (no question or panel open). */
   listening: boolean;
@@ -38,7 +41,7 @@ export function Tray(props: {
   });
 
   const rootRef = useRef<HTMLDivElement>(null);
-  const typedRef = useRef<HTMLParagraphElement>(null);
+  const lineRef = useRef<HTMLDivElement>(null);
   // Set as a played word leaves the line, so its letters fade back into the row instead of flying.
   const playedRef = useRef(false);
   // A word is on its way (asked, or rising out of the line): Enter again mustn't play it twice.
@@ -57,26 +60,33 @@ export function Tray(props: {
   }
 
   async function play() {
-    const { word: w, disabled: off, onGuess: guess } = latest.current;
+    const { set: played, word: w, disabled: off, onGuess: guess } = latest.current;
     if (off || w.length === 0 || playingRef.current) return;
     playingRef.current = true;
+    // The word rises out of the line toward the book at once; the answer decides whether it goes.
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const rise = still
+      ? null
+      : lineRef.current?.animate(
+          [
+            { opacity: 1, transform: "none" },
+            { opacity: 0, transform: "translateY(-22px)" },
+          ],
+          { duration: 260, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" },
+        );
     try {
-      if (!(await guess(w))) return;
-      // The word rises out of the line toward the book, then the line clears.
-      const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const rise = still
-        ? null
-        : typedRef.current?.animate(
-            [
-              { opacity: 1, transform: "none" },
-              { opacity: 0, transform: "translateY(-22px)" },
-            ],
-            { duration: 260, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" },
-          );
+      if (!(await guess(w))) {
+        // Refused: it drops back into the line as the line shakes.
+        rise?.reverse();
+        await rise?.finished.catch(() => {});
+        rise?.cancel();
+        return;
+      }
       await rise?.finished.catch(() => {});
       playedRef.current = true;
-      // Cleared in the same frame the rise lets go, so the word never flashes back.
-      flushSync(() => setSet([]));
+      // Cleared in the same frame the rise lets go, so the word never flashes back. Only the played
+      // word goes: anything typed while it was on its way stays.
+      flushSync(() => setSet((s) => s.filter((i) => !played.includes(i))));
       rise?.cancel();
     } finally {
       playingRef.current = false;
@@ -127,10 +137,10 @@ export function Tray(props: {
 
   return (
     <div className={styles.tray} ref={rootRef}>
-      <div className={styles.line}>
+      <div className={styles.line} ref={lineRef}>
         {/* Refused: the line shakes. Keyed, so each refusal shakes it again. */}
         <div className={styles.shake} data-shake={refused || undefined} key={refused}>
-          <p ref={typedRef} className={styles.typed} aria-live="polite" aria-label={word ? `Your guess: ${word}` : "Type a word from today's letters"}>
+          <p className={styles.typed} aria-live="polite" aria-label={word ? `Your guess: ${word}` : "Type a word from today's letters"}>
             {set.map((i) => (
               <span key={i} data-flip={`line:${i}`}>
                 {letters[i]}
@@ -153,7 +163,7 @@ export function Tray(props: {
             type="button"
             className={styles.letter}
             data-set={set.includes(i) || undefined}
-            disabled={disabled || set.includes(i)}
+            disabled={set.includes(i)}
             onClick={() => add(i)}
             aria-label={`Add ${letters[i]!.toUpperCase()}`}
             style={{ "--k": k } as CSSProperties}
@@ -164,10 +174,10 @@ export function Tray(props: {
       </div>
 
       <div className={styles.keys}>
-        <button type="button" className={styles.quiet} onClick={shuffle} disabled={disabled} aria-label="Shuffle the letters">
+        <button type="button" className={styles.quiet} onClick={shuffle} aria-label="Shuffle the letters">
           Shuffle
         </button>
-        <button type="button" className={styles.quiet} onClick={() => setSet((s) => s.slice(0, -1))} disabled={disabled || set.length === 0} aria-label="Take back a letter">
+        <button type="button" className={styles.quiet} onClick={() => setSet((s) => s.slice(0, -1))} disabled={set.length === 0} aria-label="Take back a letter">
           Back
         </button>
         <span className={styles.keysRule} aria-hidden />
