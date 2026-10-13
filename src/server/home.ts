@@ -113,7 +113,7 @@ type Show = (ref: AssetRef | null | undefined) => AssetRef | null;
 interface Described {
   sub: string;
   /** The wordmark's parts, as the game's own header sets them (the plain name if absent). */
-  titleParts?: { text: string; italic?: boolean }[];
+  titleParts?: { text: string; italic?: boolean; slit?: boolean }[];
   /** The game's own first button ("Roll film"), for a game not yet started. */
   start: string;
   /** Where a started play is, in the game's words ("Reel 4"), for its button. */
@@ -143,7 +143,7 @@ function describe(game: AnyGame, puzzle: unknown, view: PlayView | null, show: S
       const playing = view?.status === "in_progress";
       return {
         sub: "TEN REELS",
-        titleParts: [{ text: "Movie" }, { text: "Barcode", italic: true }],
+        titleParts: [{ text: "Movie" }, { text: "Barcode", slit: true }],
         start: "Roll film",
         progress: `Reel ${reel}`,
         light: { accent: null, on: "#0b0b0c" },

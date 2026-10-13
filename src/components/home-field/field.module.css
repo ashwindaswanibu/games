@@ -456,3 +456,11 @@
     opacity: 0;
   }
 }
+
+/* A title's barcode word (Movie Barcode's "Barcode"): bars and slits through the letters, as its game prints it. */
+.slit {
+  color: transparent;
+  background: var(--slit) 0 0 / 100% 100% repeat-y;
+  -webkit-background-clip: text;
+  background-clip: text;
+}

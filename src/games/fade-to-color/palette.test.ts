@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accentOf, barCount, barGradient, columnMeans, gradeRgb, litBands, luminance, oklchToRgb, pressBars, rgbToOklch, type Rgb } from "./palette";
+import { accentOf, barCount, barGradient, barRhythm, barsFill, columnMeans, gradeRgb, inkSlit, litBands, luminance, oklchToRgb, pressBars, rgbToOklch, type Rgb } from "./palette";
 
 /** RGBA pixels, one per colour, in order. */
 function pixels(...colors: Rgb[]): Uint8ClampedArray {
@@ -169,5 +169,27 @@ describe("gradeRgb", () => {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(255);
     }
+  });
+});
+
+describe("barRhythm and slit bars", () => {
+  it("gives a word the same barcode every time, in a barcode's widths", () => {
+    const a = barRhythm("Barcode", 42);
+    expect(barRhythm("Barcode", 42)).toEqual(a);
+    expect(a.widths).toHaveLength(42);
+    expect(new Set(a.widths)).toEqual(new Set([1, 2, 3]));
+    expect(barRhythm("Maleficent", 42).widths).not.toEqual(a.widths);
+  });
+
+  it("cuts a slit after each bar, transparent, and ends at 100%", () => {
+    const g = barGradient([[10, 20, 30], [40, 50, 60]], { widths: [1, 3], gap: 0.5 });
+    expect(g).toBe("linear-gradient(90deg, rgb(10 20 30) 0% 12.500%, transparent 12.500% 25.000%, rgb(40 50 60) 25.000% 62.500%, transparent 62.500% 100%)");
+  });
+
+  it("prints a word in ink with the same bars as its colours", () => {
+    const ink = inkSlit("Barcode", 6, [239, 233, 223]);
+    const lit = barsFill([[200, 100, 50]], "Barcode", 6, { slit: true })!;
+    const stops = (g: string) => [...g.matchAll(/(\d+\.\d+|0|100)%/g)].map((m) => m[1]);
+    expect(stops(ink)).toEqual(stops(lit));
   });
 });

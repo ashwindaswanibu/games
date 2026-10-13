@@ -191,12 +191,48 @@ export function pressBars(columns: readonly Rgb[], n: number): Rgb[] {
 
 /**
  * Bars as a CSS gradient of hard, flat stripes: each colour held between two stops, so every edge
- * is sharp at any size, with no image smoothing (and WebKit draws it the same).
+ * is sharp at any size, with no image smoothing (and WebKit draws it the same). With a `rhythm`,
+ * the bars take a barcode's widths and slits (see `barRhythm`).
  */
-export function barGradient(bars: readonly Rgb[]): string {
+export function barGradient(bars: readonly Rgb[], rhythm?: BarRhythm): string {
   const n = bars.length;
-  const at = (i: number) => (i === 0 ? "0%" : i === n ? "100%" : `${((100 * i) / n).toFixed(3)}%`);
-  return `linear-gradient(90deg, ${bars.map(([r, g, b], i) => `rgb(${r} ${g} ${b}) ${at(i)} ${at(i + 1)}`).join(", ")})`;
+  const widths = rhythm?.widths.length === n ? rhythm.widths : bars.map(() => 1);
+  const total = widths.reduce((sum, w) => sum + w, 0);
+  const pct = (x: number) => (x <= 0 ? "0%" : x >= total ? "100%" : `${((100 * x) / total).toFixed(3)}%`);
+  const stops: string[] = [];
+  let at = 0;
+  bars.forEach(([r, g, b], i) => {
+    const end = at + widths[i]!;
+    if (rhythm && rhythm.gap > 0) {
+      // A barcode's bar and the space after it: the space is a slit through the letter.
+      const cut = at + widths[i]! * (1 - rhythm.gap);
+      stops.push(`rgb(${r} ${g} ${b}) ${pct(at)} ${pct(cut)}`, `transparent ${pct(cut)} ${pct(end)}`);
+    } else {
+      stops.push(`rgb(${r} ${g} ${b}) ${pct(at)} ${pct(end)}`);
+    }
+    at = end;
+  });
+  return `linear-gradient(90deg, ${stops.join(", ")})`;
+}
+
+/**
+ * A barcode's rhythm for a word: bars one, two or three modules wide, each followed by a slit
+ * (`gap`, a share of its width) that cuts through the letters. Fixed by the word itself, so the
+ * ink before the film and the film's colours after it print the same bars wherever the word is set.
+ */
+export interface BarRhythm {
+  widths: readonly number[];
+  gap: number;
+}
+
+export function barRhythm(word: string, n: number, gap = 0.36): BarRhythm {
+  let seed = 2166136261;
+  for (const ch of word) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const widths = Array.from({ length: n }, () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return [1, 1, 2, 3][seed >>> 30]!;
+  });
+  return { widths, gap };
 }
 
 /** How many bars a title of `letters` letters is pressed into: `perLetter` each, within 12–120. */
@@ -248,7 +284,14 @@ export function letterCount(text: string): number {
 }
 
 /** `text`'s fill (a CSS gradient), `perLetter` bars to a letter; null with no columns to press. */
-export function barsFill(columns: readonly Rgb[] | null | undefined, text: string, perLetter: number): string | null {
+export function barsFill(columns: readonly Rgb[] | null | undefined, text: string, perLetter: number, options: { slit?: boolean } = {}): string | null {
   if (!columns || columns.length === 0) return null;
-  return barGradient(pressBars(columns, barCount(letterCount(text), perLetter)));
+  const n = barCount(letterCount(text), perLetter);
+  return barGradient(pressBars(columns, n), options.slit ? barRhythm(text, n) : undefined);
+}
+
+/** `text` printed as a barcode in one colour (the ink before the film is in): the same bars and slits as `barsFill` with `slit`. */
+export function inkSlit(text: string, perLetter: number, ink: Rgb): string {
+  const n = barCount(letterCount(text), perLetter);
+  return barGradient(Array.from({ length: n }, () => ink), barRhythm(text, n));
 }

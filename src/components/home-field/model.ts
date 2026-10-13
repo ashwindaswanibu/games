@@ -72,7 +72,8 @@ export interface HomeTile {
   /** The game's name as written ("Movie Barcode"), for its title card. */
   title: string;
   /** The same name in its wordmark's parts, italic where the game's own header sets it so ("Movie *Barcode*"). */
-  titleParts: { text: string; italic?: boolean }[];
+  /** `slit`: printed as a barcode (Movie Barcode's "Barcode"). */
+  titleParts: { text: string; italic?: boolean; slit?: boolean }[];
   /** What the game is, in a line ("Name the film from a single frame"). */
   tagline: string;
   /** Under the name: what the game is today, or where you are in it. */

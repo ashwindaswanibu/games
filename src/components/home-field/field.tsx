@@ -4,7 +4,7 @@ import { Bodoni_Moda } from "next/font/google";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { AssetRef } from "@/core/assets";
-import { barsFill, type Rgb } from "@/lib/film-palette";
+import { barsFill, inkSlit, type Rgb } from "@/lib/film-palette";
 import { receiveSealed } from "@/lib/sealed-assets";
 import { clamp, easeInOut, lerp } from "./ease";
 import { at, Material, turn, type Rect, type Stage } from "./materials";
@@ -770,9 +770,12 @@ function TitleCard({ tile, stage, compact, size, lines, opacity }: { tile: HomeT
   );
 }
 
+/** The ink a title's barcode word is printed in. */
+const SLIT_INK: Rgb = [244, 239, 230];
+
 /** A title in its wordmark's parts, broken onto two lines at the space that balances them (as `longestLine` measures). */
 function TitleText({ parts, lines }: { parts: HomeTile["titleParts"]; lines: number }) {
-  const words = parts.flatMap((p) => p.text.split(" ").map((text) => ({ text, italic: p.italic === true })));
+  const words = parts.flatMap((p) => p.text.split(" ").map((text) => ({ text, italic: p.italic === true, slit: p.slit === true })));
   let breakAt = words.length;
   if (lines === 2 && words.length > 1) {
     const length = (ws: typeof words) => ws.map((w) => w.text).join(" ").length;
@@ -788,7 +791,16 @@ function TitleText({ parts, lines }: { parts: HomeTile["titleParts"]; lines: num
   return words.map((w, i) => (
     <Fragment key={i}>
       {i === breakAt ? <br /> : i > 0 ? " " : null}
-      {w.italic ? <i>{w.text}</i> : w.text}
+      {w.slit ? (
+        // Printed as a barcode, the way its game prints it (theater/wordmark.tsx).
+        <span className={styles.slit} style={{ "--slit": inkSlit(w.text, 6, SLIT_INK) } as CSSProperties}>
+          {w.text}
+        </span>
+      ) : w.italic ? (
+        <i>{w.text}</i>
+      ) : (
+        w.text
+      )}
     </Fragment>
   ));
 }

@@ -219,6 +219,14 @@
   grid-area: 1 / 1;
 }
 
+/* "Barcode" in ink before the film is in: the same bars and slits, in one colour. */
+.wmInk {
+  color: transparent;
+  background: var(--slit) 0 0 / 100% 100% repeat-y;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
 /* Padded past the word so no stroke is ever clipped; the padding is given back by the margin. */
 .wmPress {
   position: relative;
