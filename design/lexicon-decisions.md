@@ -20,10 +20,15 @@ could have been instead, so any of them can be flipped. Yours are marked **(owne
 
 | Decision | Chosen | Alternatives | Why |
 |---|---|---|---|
+| Letters | From a seed: one common nine-letter word on 60% of days, two common words joined (3+6 up to 6+3) on the rest **(owner, 2026-10-13: "start with a nine letter word", "merge 5,4 words too")** | The answer plus letters drawn like English (until 2026-10-13) | Letters that read like words, not a random draw; 801 nine-letter seeds and 1,862 parts make hundreds of thousands of days |
+| Seed commonness | WordNet's tagged corpus: used 3+ times for a nine-letter word, 10+ for a part (short words fill the corpus) | 12dicts frequency groups (download blocked by SourceForge) | Same source as the definitions; outskirts and champagne in, somnolent out |
+| Grim and rude seeds | In, slurs out **(owner: "grim and rude words are fun")**; WordNet-rude words count as common whatever the corpus says | Blocked like answers | The corpus is edited prose and hardly swears; slur senses never count towards commonness |
+| Seed rest | The same nine letters (MOONLIGHT = MOON + LIGHT) not within a year either side | Never again | Pairs are near-endless; the nine-letter words last if they rest |
+| Answer | A common word in the day's dictionary nobody has had, never one the seed spells out as it stands | Any | Finding a seed word shouldn't hand over the day |
 | Dictionary size | 60–120 words a day (`DAY_WORDS`) | Any size; fixed 100 | Days alike in difficulty; under 60 is too easy to halve, over 120 drags |
 | Letter hand | No letter more than twice, at least three vowels (`fairHand`) | Free | A hand like SRTARSSSE spells little and reads as a glitch |
 | Guess list | 12dicts `3of6game` (44,883 words) | ENABLE/TWL (many obscure words); Wiktionary | Common words a person would type; public domain |
-| Answer list | 12dicts `2+2+3frq` 5–7 letters (1,913 answers) | Same as guesses | Answers should be words everyone knows |
+| Answer list | 12dicts `2+2+3frq` 5–7 letters (1,913 answers, about five years) | Same as guesses | Answers should be words everyone knows |
 | Definitions | WordNet 3.1, first clause, ≤160 characters | Wiktionary (licence + parsing); none | Clean licence, consistent register |
 | Offensive words | WordNet usage-domain pointers (`;u`) plus a short `BLOCKED` list of grim words | Big external blocklist | Precise for definitions we already load; the short list catches what tags miss |
 | Credits | 12dicts (Alan Beale, AGID © Kevin Atkinson) and WordNet © Princeton on the entry | Footer only | The licences ask for a visible notice |

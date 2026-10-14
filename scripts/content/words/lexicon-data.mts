@@ -26,6 +26,7 @@ import {
   parseGameList,
   parseWordNetData,
   parseWordNetIndex,
+  usageDomains,
   WORDNET_FILES,
   type IndexEntry,
   type Synset,
@@ -69,8 +70,7 @@ function main() {
     // Offsets are per file, so key synsets by part of speech too.
     for (const [offset, synset] of parseWordNetData(read(wordnet, `data.${WORDNET_FILES[pos]}`))) data.set(`${pos}:${offset}`, synset);
   }
-  const offensive = new Set<string>();
-  for (const lemma of OFFENSIVE_USAGE_LEMMAS) for (const offset of index.get("noun")!.get(lemma)?.offsets ?? []) offensive.add(offset);
+  const offensive = usageDomains(index.get("noun")!, OFFENSIVE_USAGE_LEMMAS);
 
   const maxGroup = Number(args["max-group"]);
   const answers: string[] = [];

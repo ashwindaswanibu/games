@@ -45,6 +45,11 @@ export const lexiconSolutionSchema = z.strictObject({
   /** Today's dictionary, in order, today's word among them. */
   words: z.array(word).min(2).max(2000),
   entry: lexiconEntrySchema,
+  /**
+   * What the nine letters were made from: one nine-letter word, or two words joined (owner,
+   * 2026-10-13). Written on days from 13 October 2026; older days drew letters at random.
+   */
+  seed: z.array(word).min(1).max(2).optional(),
 });
 export type LexiconSolution = z.infer<typeof lexiconSolutionSchema>;
 
@@ -59,13 +64,15 @@ export function thumbIndex(words: readonly string[]): LexiconPuzzle["tabs"] {
 
 /** The puzzle and solution agree (checked when puzzles are written). */
 export function isConsistentLexicon(puzzle: LexiconPuzzle, solution: LexiconSolution): boolean {
-  const { words, answer } = solution;
+  const { words, answer, seed } = solution;
+  const sortedLetters = (letters: string) => [...letters].sort().join("");
   const sorted = words.every((w, i) => i === 0 || compareWords(words[i - 1]!, w) < 0);
   return (
     sorted &&
     words.every((w) => canSpell(w, puzzle.letters)) &&
     words.includes(answer) &&
     (puzzle.length === undefined || answer.length === puzzle.length) &&
+    (seed === undefined || sortedLetters(seed.join("")) === sortedLetters(puzzle.letters)) &&
     puzzle.total === words.length &&
     JSON.stringify(puzzle.tabs) === JSON.stringify(thumbIndex(words))
   );

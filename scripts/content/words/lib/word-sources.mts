@@ -108,5 +108,45 @@ export function definitionOf(gloss: string, max = 160): string {
   return first.length > max ? `${first.slice(0, max - 1).replace(/\s+\S*$/, "")}…` : first;
 }
 
-/** The usage domains that keep a word out of the answers: vulgarisms, obscenities, slurs, disparagement. */
-export const OFFENSIVE_USAGE_LEMMAS = ["vulgarism", "obscenity", "ethnic_slur", "slur", "disparagement", "derogation", "profanity"] as const;
+/** Usage domains marking a sense as rude: vulgarisms, obscenities, profanity. */
+export const RUDE_USAGE_LEMMAS = ["vulgarism", "obscenity", "profanity"] as const;
+/** Usage domains marking a sense as aimed at people: slurs and disparagement. */
+export const SLUR_USAGE_LEMMAS = ["ethnic_slur", "slur", "disparagement", "derogation"] as const;
+/** The usage domains that keep a word out of the answers: rude senses and slurs alike. */
+export const OFFENSIVE_USAGE_LEMMAS = [...RUDE_USAGE_LEMMAS, ...SLUR_USAGE_LEMMAS] as const;
+
+/** The synsets naming these usage domains (the targets of `;u` pointers that mark a sense with them). */
+export function usageDomains(nouns: ReadonlyMap<string, IndexEntry>, lemmas: readonly string[]): Set<string> {
+  return new Set(lemmas.flatMap((lemma) => nouns.get(lemma)?.offsets ?? []));
+}
+
+/** `index.sense`'s synset types; 5 is an adjective satellite, kept with the adjectives in `data.adj`. */
+const SENSE_POS: Record<string, WordNetPos> = { "1": "noun", "2": "verb", "3": "adjective", "4": "adverb", "5": "adjective" };
+
+export interface SenseCount {
+  lemma: string;
+  pos: WordNetPos;
+  /** The sense's synset in its part of speech's data file. */
+  offset: string;
+  /** How many times WordNet's tagged corpus (edited prose) used the word in this sense. */
+  tagged: number;
+}
+
+/**
+ * index.sense: one line per sense of a word, `lemma%type:… offset sense-number tag-count`. Summed
+ * over a word's senses, the tag counts say how common it is. Phrases (`ice_cream`) and names with
+ * capitals are skipped.
+ */
+export function parseSenseIndex(text: string): SenseCount[] {
+  const senses: SenseCount[] = [];
+  for (const line of lines(text)) {
+    const [key, offset, , count] = line.trim().split(" ");
+    const at = key?.indexOf("%") ?? -1;
+    if (!key || !offset || count === undefined || at < 0) continue;
+    const lemma = key.slice(0, at);
+    const pos = SENSE_POS[key[at + 1]!];
+    if (!pos || !/^[a-z]+$/.test(lemma)) continue;
+    senses.push({ lemma, pos, offset, tagged: Number(count) });
+  }
+  return senses;
+}

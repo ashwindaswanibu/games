@@ -40,6 +40,9 @@ describe("letters", () => {
     expect(isConsistentLexicon(puzzle, solution)).toBe(true);
     expect(isConsistentLexicon({ ...puzzle, total: 3 }, solution)).toBe(false);
     expect(isConsistentLexicon(puzzle, { ...solution, answer: "stars" })).toBe(false);
+    // A seed must be the day's nine letters, in any order.
+    expect(isConsistentLexicon(puzzle, { ...solution, seed: ["xyst", "qaezr"] })).toBe(true);
+    expect(isConsistentLexicon(puzzle, { ...solution, seed: ["xyst", "qaezz"] })).toBe(false);
   });
 });
 

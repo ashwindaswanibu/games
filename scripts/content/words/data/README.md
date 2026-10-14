@@ -9,6 +9,13 @@ Built by `../lexicon-data.mts` from two free sources (see its header to rebuild)
   sense of their commonest part of speech from WordNet 3.1, minus words WordNet marks vulgar,
   obscene, a slur or disparaging, and a short blocklist.
 
+Built by `../lexicon-seed-data.mts` from WordNet's tagged-corpus counts and the guess list:
+
+- **`lexicon-seeds.txt`**: the common nine-letter words a day's letters may be (used 3+ times in
+  WordNet's tagged corpus).
+- **`lexicon-seed-parts.txt`**: the common 3–6-letter words, two of which may make a day's nine
+  (used 10+ times, or marked rude; senses marked as slurs don't count).
+
 ## 12dicts
 
 The 12dicts lists were compiled by Alan Beale, who released them to the public domain and asks for
